@@ -1,0 +1,20 @@
+# Agent Factory — Python Dependencies
+# Install with: pip install -r requirements.txt
+
+# ── Core LLM ──────────────────────────────────────────────────
+anthropic>=0.40.0          # Claude API SDK
+
+# ── HTTP & scraping ───────────────────────────────────────────
+requests>=2.31.0           # HTTP client for all API calls
+beautifulsoup4>=4.12.0     # HTML parsing for Amazon scraping
+lxml>=5.0.0                # Faster HTML/XML parser (BS4 backend)
+
+# ── Literature APIs ───────────────────────────────────────────
+# arXiv and Semantic Scholar use plain requests (no extra lib needed)
+# PubMed uses requests + stdlib xml.etree
+
+# ── Terminal UI ───────────────────────────────────────────────
+rich>=13.0.0               # Pretty terminal output (optional but recommended)
+
+# ── Stdlib only (no extra install needed) ─────────────────────
+# json, os, argparse, datetime, re, time, xml.etree.ElementTree
