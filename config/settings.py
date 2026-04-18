@@ -4,6 +4,10 @@
 # ──────────────────────────────────────────────────────────────
 
 import os
+from dotenv import load_dotenv
+
+# Load .env file if it exists
+load_dotenv()
 
 # ── Claude / Anthropic ─────────────────────────────────────────
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "YOUR_API_KEY_HERE")

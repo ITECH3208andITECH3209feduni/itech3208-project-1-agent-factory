@@ -8,6 +8,8 @@ anthropic>=0.40.0          # Claude API SDK
 requests>=2.31.0           # HTTP client for all API calls
 beautifulsoup4>=4.12.0     # HTML parsing for Amazon scraping
 lxml>=5.0.0                # Faster HTML/XML parser (BS4 backend)
+playwright>=1.40.0         # Automated browser for robust scraping
+playwright-stealth>=1.0.6  # Makes the browser invisible to bot detectors
 
 # ── Literature APIs ───────────────────────────────────────────
 # arXiv and Semantic Scholar use plain requests (no extra lib needed)
@@ -16,5 +18,5 @@ lxml>=5.0.0                # Faster HTML/XML parser (BS4 backend)
 # ── Terminal UI ───────────────────────────────────────────────
 rich>=13.0.0               # Pretty terminal output (optional but recommended)
 
-# ── Stdlib only (no extra install needed) ─────────────────────
-# json, os, argparse, datetime, re, time, xml.etree.ElementTree
+# ── Utils ─────────────────────────────────────────────────────
+python-dotenv>=1.0.0       # Support for .env files

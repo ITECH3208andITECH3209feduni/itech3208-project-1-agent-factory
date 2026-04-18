@@ -69,11 +69,45 @@ class AmazonSkill(BaseSkill):
 
     # ── Core scraper ───────────────────────────────────────────
     def _scrape_amazon(self, query: str) -> list[dict]:
-        url  = self._build_search_url(query)
-        resp = requests.get(url, headers=AMAZON_HEADERS, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
+        url = self._build_search_url(query)
+        html = ""
 
-        soup     = BeautifulSoup(resp.text, "html.parser")
+        try:
+            from playwright.sync_api import sync_playwright
+            from playwright_stealth import stealth_sync
+            
+            with sync_playwright() as p:
+                # Launch a hidden browser
+                browser = p.chromium.launch(headless=True)
+                
+                # Use a realistic user agent
+                context = browser.new_context(
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+                )
+                
+                page = context.new_page()
+                
+                # Apply stealth plugin to hide automation traces
+                stealth_sync(page)
+                
+                # Navigate and wait for content to load
+                page.goto(url, wait_until="domcontentloaded", timeout=REQUEST_TIMEOUT * 1000)
+                
+                # Smoothly scroll down to trigger lazy-loaded items (optional but good for hardening)
+                page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+                time.sleep(1)
+                
+                html = page.content()
+                browser.close()
+                
+        except Exception as e:
+            # Fallback to requests if Playwright fails
+            import requests
+            resp = requests.get(url, headers=AMAZON_HEADERS, timeout=REQUEST_TIMEOUT)
+            resp.raise_for_status()
+            html = resp.text
+
+        soup = BeautifulSoup(html, "html.parser")
         products = []
 
         # Amazon search result cards
