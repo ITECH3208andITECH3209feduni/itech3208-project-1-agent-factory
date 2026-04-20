@@ -1,13 +1,16 @@
 # Dependencies
 node_modules/
 .npm-cache/
+
 # Build output
 dist/
+build/
 
 # Local data & auth
 store/
 data/
 logs/
+*.log
 
 # Groups - only track base structure and specific CLAUDE.md files
 groups/*
@@ -21,18 +24,48 @@ groups/global/*
 # Secrets
 *.keys.json
 .env
+*.env
+config/local_settings.py
 
 # Temp files
 .tmp-*
+*.md.bak
 
 # OS
 .DS_Store
+Thumbs.db
 
 # IDE
 .idea/
 .vscode/
+*.swp
+*.swo
 
 # Skills system (local per-installation state)
 .nanoclaw/
 
 agents-sdk-docs
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+
+# Agent outputs
+outputs/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
