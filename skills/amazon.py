@@ -1,12 +1,17 @@
 # skills/amazon.py
 # ──────────────────────────────────────────────────────────────
 # Amazon Product Research Skill
-# Uses scraping (requests + BeautifulSoup)
-# Respects rate limits — adds delay between requests
+# Uses scraping (Playwright + BeautifulSoup)
+# Fix (PROJ-81): Auto-installs Playwright Chromium if missing,
+#   reuses browser context across queries, adds human-like delay
+#   between requests to avoid Amazon bot detection.
 # ──────────────────────────────────────────────────────────────
 
 import re
 import time
+import random
+import subprocess
+import sys
 import requests
 from urllib.parse import quote_plus
 
@@ -18,6 +23,28 @@ except ImportError:
 
 from skills.base_skill import BaseSkill, SkillResult
 from config.settings import AMAZON_BASE_URL, AMAZON_HEADERS, MAX_RESULTS, REQUEST_TIMEOUT
+
+
+def _ensure_playwright_chromium():
+    """Auto-install Playwright Chromium browser if not already installed."""
+    try:
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            browser.close()
+    except Exception:
+        try:
+            subprocess.run(
+                [sys.executable, "-m", "playwright", "install", "chromium"],
+                capture_output=True,
+                check=True,
+            )
+        except Exception:
+            pass  # Will fall back to requests if Playwright still fails
+
+
+# Run once at import time so all queries benefit
+_ensure_playwright_chromium()
 
 
 class AmazonSkill(BaseSkill):
@@ -32,6 +59,23 @@ class AmazonSkill(BaseSkill):
         "rating", "recommend", "purchase", "shop", "deal", "sale",
         "under $", "budget", "affordable", "top rated", "bestseller",
     ]
+
+    # Class-level browser reused across all queries in one session
+    _browser     = None
+    _pw_context  = None
+
+    @classmethod
+    def _get_browser(cls):
+        """Launch browser once and reuse. Reconnect if browser was closed."""
+        try:
+            from playwright.sync_api import sync_playwright
+            if cls._pw_context is None:
+                cls._pw_context = sync_playwright().start()
+            if cls._browser is None or not cls._browser.is_connected():
+                cls._browser = cls._pw_context.chromium.launch(headless=True)
+            return cls._browser
+        except Exception:
+            return None
 
     def run(self, query: str) -> SkillResult:
         if not BS4_AVAILABLE:
@@ -61,64 +105,58 @@ class AmazonSkill(BaseSkill):
             results    = products,
             summary    = self._build_summary(query, products),
             metadata   = {
-                "source":        "Amazon.com (scraped)",
-                "total_found":   len(products),
-                "search_url":    self._build_search_url(query),
+                "source":      "Amazon.com (scraped)",
+                "total_found": len(products),
+                "search_url":  self._build_search_url(query),
             },
         )
 
     # ── Core scraper ───────────────────────────────────────────
     def _scrape_amazon(self, query: str) -> list[dict]:
-        url = self._build_search_url(query)
+        url  = self._build_search_url(query)
         html = ""
+
+        # Human-like delay: 1.5–3s between queries to avoid bot detection
+        time.sleep(random.uniform(1.5, 3.0))
 
         try:
             from playwright.sync_api import sync_playwright
             from playwright_stealth import stealth_sync
-            
-            with sync_playwright() as p:
-                # Launch a hidden browser
-                browser = p.chromium.launch(headless=True)
-                
-                # Use a realistic user agent
-                context = browser.new_context(
-                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+
+            browser = self._get_browser()
+            if browser is None:
+                raise Exception("Playwright browser unavailable")
+
+            context = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/122.0.0.0 Safari/537.36"
                 )
-                
-                page = context.new_page()
-                
-                # Apply stealth plugin to hide automation traces
-                stealth_sync(page)
-                
-                # Navigate and wait for content to load
-                page.goto(url, wait_until="domcontentloaded", timeout=REQUEST_TIMEOUT * 1000)
-                
-                # Smoothly scroll down to trigger lazy-loaded items (optional but good for hardening)
-                page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
-                time.sleep(1)
-                
-                html = page.content()
-                browser.close()
-                
-        except Exception as e:
+            )
+            page = context.new_page()
+            stealth_sync(page)
+            page.goto(url, wait_until="domcontentloaded", timeout=REQUEST_TIMEOUT * 1000)
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight / 2)")
+            time.sleep(random.uniform(0.8, 1.5))
+            html = page.content()
+            context.close()   # Close context (not browser) — browser stays warm
+
+        except Exception:
             # Fallback to requests if Playwright fails
-            import requests
             resp = requests.get(url, headers=AMAZON_HEADERS, timeout=REQUEST_TIMEOUT)
             resp.raise_for_status()
             html = resp.text
 
-        soup = BeautifulSoup(html, "html.parser")
+        soup     = BeautifulSoup(html, "html.parser")
         products = []
 
-        # Amazon search result cards
         cards = soup.select('[data-component-type="s-search-result"]')
-
         for card in cards:
             product = self._parse_card(card)
             if product and product.get("title"):
                 products.append(product)
 
-        # Fallback: try alternate selectors if main ones fail
         if not products:
             products = self._fallback_parse(soup)
 
@@ -126,11 +164,9 @@ class AmazonSkill(BaseSkill):
 
     def _parse_card(self, card) -> dict | None:
         try:
-            # Title
             title_el = card.select_one("h2 a span") or card.select_one(".a-size-medium")
             title    = title_el.get_text(strip=True) if title_el else ""
 
-            # Price
             price_whole = card.select_one(".a-price-whole")
             price_frac  = card.select_one(".a-price-fraction")
             if price_whole:
@@ -141,7 +177,6 @@ class AmazonSkill(BaseSkill):
                 price_el = card.select_one(".a-price .a-offscreen")
                 price    = price_el.get_text(strip=True) if price_el else "Price not listed"
 
-            # Rating
             rating_el = card.select_one(".a-icon-star-small .a-icon-alt") or \
                         card.select_one("[aria-label*='out of 5 stars']")
             rating = ""
@@ -150,44 +185,38 @@ class AmazonSkill(BaseSkill):
                 match = re.search(r"[\d.]+", rating_text)
                 rating = f"{match.group()} / 5" if match else rating_text
 
-            # Review count
             reviews_el = card.select_one(".a-size-small .a-link-normal")
             reviews    = reviews_el.get_text(strip=True) if reviews_el else ""
 
-            # Product link
             link_el = card.select_one("h2 a") or card.select_one("a.a-link-normal")
             href    = link_el.get("href", "") if link_el else ""
             link    = f"{AMAZON_BASE_URL}{href}" if href.startswith("/") else href
 
-            # Prime badge
             prime = bool(card.select_one(".s-prime") or card.select_one("[aria-label='Amazon Prime']"))
 
-            # Thumbnail
             img_el = card.select_one("img.s-image")
             image  = img_el.get("src", "") if img_el else ""
 
-            # ASIN
             asin = card.get("data-asin", "")
 
             return {
-                "title":    title,
-                "price":    price,
-                "rating":   rating,
-                "reviews":  reviews,
-                "prime":    prime,
-                "asin":     asin,
-                "link":     link,
-                "image":    image,
-                "source":   "Amazon",
+                "title":   title,
+                "price":   price,
+                "rating":  rating,
+                "reviews": reviews,
+                "prime":   prime,
+                "asin":    asin,
+                "link":    link,
+                "image":   image,
+                "source":  "Amazon",
             }
         except Exception:
             return None
 
     def _fallback_parse(self, soup) -> list[dict]:
-        """Fallback parser if primary selectors don't match."""
         products = []
         for el in soup.select(".s-result-item[data-asin]")[:MAX_RESULTS]:
-            asin  = el.get("data-asin", "")
+            asin = el.get("data-asin", "")
             if not asin:
                 continue
             title_el = el.select_one(".a-text-normal")
@@ -215,8 +244,6 @@ class AmazonSkill(BaseSkill):
                 f"No Amazon products found for '{query}'. "
                 "Amazon may have blocked the request — try again or use a VPN/proxy."
             )
-
-        # Find price range
         prices = []
         for p in products:
             raw = re.sub(r"[^\d.]", "", p.get("price", ""))
@@ -225,14 +252,8 @@ class AmazonSkill(BaseSkill):
             except ValueError:
                 pass
 
-        price_info = ""
-        if prices:
-            price_info = f" Price range: ${min(prices):.2f} – ${max(prices):.2f}."
-
-        # Count Prime-eligible
+        price_info  = f" Price range: ${min(prices):.2f} – ${max(prices):.2f}." if prices else ""
         prime_count = sum(1 for p in products if p.get("prime"))
         prime_info  = f" {prime_count} Prime-eligible." if prime_count else ""
 
-        return (
-            f"Found {len(products)} Amazon products for '{query}'.{price_info}{prime_info}"
-        )
+        return f"Found {len(products)} Amazon products for '{query}'.{price_info}{prime_info}"
