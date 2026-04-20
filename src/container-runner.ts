@@ -64,7 +64,7 @@ function buildVolumeMounts(
   isMain: boolean,
 ): VolumeMount[] {
   const mounts: VolumeMount[] = [];
-  const projectRoot = process.cwd();
+  const projectRoot = process.env.HOST_PROJECT_PATH ?? process.cwd();
   const groupDir = resolveGroupFolderPath(group.folder);
 
   if (isMain) {
