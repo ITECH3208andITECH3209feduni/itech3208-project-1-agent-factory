@@ -2,8 +2,11 @@
 # ──────────────────────────────────────────────────────────────
 # Literature Research Skill
 # Sources: arXiv, Semantic Scholar, PubMed
+# Fix (PROJ-81): Added retry + exponential backoff for 429 rate
+#   limits and connection errors on all API calls.
 # ──────────────────────────────────────────────────────────────
 
+import time
 import requests
 import xml.etree.ElementTree as ET
 from urllib.parse import quote_plus
@@ -33,6 +36,29 @@ class LiteratureSkill(BaseSkill):
         "meta-analysis", "systematic review",
     ]
 
+    # ── Retry helper ───────────────────────────────────────────
+    def _retry_get(self, url: str, params: dict = None, retries: int = 3, backoff: float = 2.0) -> requests.Response:
+        """GET with automatic retry and exponential backoff.
+        Handles 429 rate limits and transient connection / timeout errors."""
+        last_error = None
+        for attempt in range(retries):
+            try:
+                resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
+                if resp.status_code == 429:
+                    wait = backoff * (2 ** attempt)   # 2s, 4s, 8s
+                    time.sleep(wait)
+                    last_error = Exception(f"429 rate-limited (waited {wait}s before retry)")
+                    continue
+                resp.raise_for_status()
+                return resp
+            except (requests.exceptions.ConnectionError,
+                    requests.exceptions.Timeout) as e:
+                last_error = e
+                if attempt < retries - 1:
+                    time.sleep(backoff * (attempt + 1))
+        raise last_error or Exception(f"Request failed after {retries} attempts")
+
+    # ── Main entry point ───────────────────────────────────────
     def run(self, query: str) -> SkillResult:
         results = []
         errors  = []
@@ -47,7 +73,6 @@ class LiteratureSkill(BaseSkill):
         # ── 2. Semantic Scholar ────────────────────────────────
         try:
             ss_results = self._search_semantic_scholar(query)
-            # Merge — avoid duplicates by title
             existing_titles = {r["title"].lower() for r in results}
             for r in ss_results:
                 if r["title"].lower() not in existing_titles:
@@ -57,7 +82,7 @@ class LiteratureSkill(BaseSkill):
             errors.append(f"Semantic Scholar: {e}")
 
         # ── 3. PubMed (medical/life sciences queries) ──────────
-        if any(kw in query.lower() for kw in ["medicine","health","clinical","drug","disease","patient","trial"]):
+        if any(kw in query.lower() for kw in ["medicine", "health", "clinical", "drug", "disease", "patient", "trial"]):
             try:
                 pubmed_results = self._search_pubmed(query)
                 existing_titles = {r["title"].lower() for r in results}
@@ -91,8 +116,7 @@ class LiteratureSkill(BaseSkill):
             "sortBy":       "relevance",
             "sortOrder":    "descending",
         }
-        resp = requests.get(ARXIV_BASE_URL, params=params, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
+        resp = self._retry_get(ARXIV_BASE_URL, params=params)
 
         ns   = {"atom": "http://www.w3.org/2005/Atom"}
         root = ET.fromstring(resp.text)
@@ -126,8 +150,7 @@ class LiteratureSkill(BaseSkill):
             "limit":  MAX_RESULTS,
             "fields": "title,authors,year,abstract,url,citationCount",
         }
-        resp = requests.get(SEMANTIC_SCHOLAR_URL, params=params, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
+        resp = self._retry_get(SEMANTIC_SCHOLAR_URL, params=params)
         data = resp.json().get("data", [])
         out  = []
         for paper in data:
@@ -145,33 +168,27 @@ class LiteratureSkill(BaseSkill):
 
     # ── PubMed ─────────────────────────────────────────────────
     def _search_pubmed(self, query: str) -> list[dict]:
-        # Step 1: get IDs
-        search_resp = requests.get(
+        search_resp = self._retry_get(
             PUBMED_SEARCH_URL,
             params={"db": "pubmed", "term": query, "retmax": 5, "retmode": "json"},
-            timeout=REQUEST_TIMEOUT,
         )
-        search_resp.raise_for_status()
         ids = search_resp.json().get("esearchresult", {}).get("idlist", [])
         if not ids:
             return []
 
-        # Step 2: fetch details
-        fetch_resp = requests.get(
+        fetch_resp = self._retry_get(
             PUBMED_FETCH_URL,
             params={"db": "pubmed", "id": ",".join(ids), "retmode": "xml"},
-            timeout=REQUEST_TIMEOUT,
         )
-        fetch_resp.raise_for_status()
         root = ET.fromstring(fetch_resp.text)
         out  = []
 
         for article in root.findall(".//PubmedArticle"):
-            title_el   = article.find(".//ArticleTitle")
-            abstract_el= article.find(".//AbstractText")
-            year_el    = article.find(".//PubDate/Year")
-            pmid_el    = article.find(".//PMID")
-            author_els = article.findall(".//Author")
+            title_el    = article.find(".//ArticleTitle")
+            abstract_el = article.find(".//AbstractText")
+            year_el     = article.find(".//PubDate/Year")
+            pmid_el     = article.find(".//PMID")
+            author_els  = article.findall(".//Author")
 
             title    = title_el.text    if title_el    is not None else ""
             abstract = abstract_el.text if abstract_el is not None else ""
