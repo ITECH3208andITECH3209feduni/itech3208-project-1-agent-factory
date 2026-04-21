@@ -137,6 +137,25 @@ Skills we'd like to see:
 **Communication Channels**
 - `/add-signal` - Add Signal as a channel
 
+### Windows Users
+
+Use `python` instead of `python3`:
+
+```cmd
+set ANTHROPIC_API_KEY=your-key-here
+python main.py
+```
+
+### Running with Docker (NanoClaw)
+
+```cmd
+docker-compose up
+```
+
+The agent will be available at http://localhost:8080
+
+---
+
 ## Requirements
 
 - macOS, Linux, or Windows (via WSL2)
