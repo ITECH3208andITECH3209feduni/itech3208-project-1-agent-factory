@@ -245,3 +245,39 @@ See [CHANGELOG.md](CHANGELOG.md) for breaking changes, or the [full release hist
 ## License
 
 MIT
+---
+
+# Agent Factory Setup (Sprint 1 - Windows)
+
+## Prerequisites
+- Python 3.9+
+- pip
+- Git
+
+## Installation
+
+git clone https://github.com/ITECH3208andITECH3209feduni/itech3208-project-1-agent-factory.git
+cd itech3208-project-1-agent-factory
+pip install -r requirements.txt
+
+## API Key Setup (Windows)
+
+set ANTHROPIC_API_KEY=your-key
+
+## Run Project
+
+python main.py
+
+## Example Queries
+
+- Find research papers on AI
+- Search laptop under $1000
+
+## Troubleshooting
+
+- If python3 not found → use python
+- If pip not working → use python -m pip install -r requirements.txt
+- If playwright error:
+  playwright install chromium
+- If permission error:
+  pip install --user -r requirements.txt
