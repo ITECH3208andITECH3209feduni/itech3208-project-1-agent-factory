@@ -281,3 +281,6 @@ python main.py
   playwright install chromium
 - If permission error:
   pip install --user -r requirements.txt
+  ## PROJ-48 Validation
+
+Cross-machine testing (PROJ-47) verified that the system runs successfully across macOS and Windows environments. All core features (Literature and Amazon skills) executed without errors, and no critical environment issues were identified.
