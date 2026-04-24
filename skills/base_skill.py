@@ -71,5 +71,9 @@ class BaseSkill(ABC):
         """Execute the skill and return a SkillResult."""
         ...
 
+    def get_name(self) -> str:
+        """Return the skill's name. Spec-compat wrapper around the `name` class attribute (PROJ-32)."""
+        return self.name
+
     def __repr__(self) -> str:
         return f"<Skill: {self.name}>"

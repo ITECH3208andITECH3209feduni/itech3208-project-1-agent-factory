@@ -45,6 +45,15 @@ SKILL: amazon
 CLARIFY: <your clarifying question>"""
 
 
+# Module-level skill registry (PROJ-32 spec). Mirrors the instance-level
+# self.skills in Orchestrator.__init__ — both point to the same skill classes.
+# Kept for spec compatibility and external imports.
+SKILLS = {
+    "literature": LiteratureSkill(),
+    "amazon":     AmazonSkill(),
+}
+
+
 class Orchestrator:
     def __init__(self, output_format: str = "markdown"):
         self.client    = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
