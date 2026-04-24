@@ -86,8 +86,9 @@ class Orchestrator:
         if result.success and result.results:
             result.summary = self._summarise(query, result)
 
-        # 5. Persist to memory
-        self.memory.add(query, skill_name, result.summary)
+        # 5. Persist to memory (PROJ-33: use spec method save_context)
+        if result.success:
+            self.memory.save_context(query, skill_name, result.summary)
 
         # 6. Format and return
         rendered = self.formatter.render(result)

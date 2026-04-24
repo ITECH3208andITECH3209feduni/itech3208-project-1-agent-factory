@@ -31,6 +31,28 @@ class Memory:
         self._data["total_queries"] = self._data.get("total_queries", 0) + 1
         self._save()
 
+    def save_context(self, query: str, skill: str, summary: str):
+        """
+        PROJ-33: Save query context with timestamp, query, skill name,
+        and first 200 chars of the result summary.
+
+        This is the spec-compliant entry point for the orchestrator to
+        persist context after a successful agent.run(). Internally it
+        delegates to add() so behavior stays consistent with the rest
+        of the Memory API.
+        """
+        truncated = (summary or "")[:200]
+        self.add(query=query, skill_used=skill, result_summary=truncated)
+
+    def get_last_context(self) -> dict | None:
+        """
+        PROJ-33: Return the most recently saved context entry,
+        or None if no history exists yet.
+        """
+        if not self._data["history"]:
+            return None
+        return self._data["history"][-1]
+
     def get_history(self, last_n: int = 5) -> list[dict]:
         """Return the last N queries."""
         return self._data["history"][-last_n:]
