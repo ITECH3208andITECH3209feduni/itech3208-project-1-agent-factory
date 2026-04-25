@@ -1,0 +1,17 @@
+Query: latest research on CRISPR gene editing
+Expected Skill: literature
+----------------------------------------
+
+⏳ Processing: latest research on CRISPR gene editing
+
+                         📚 Literature Research Report                         
+
+Query: latest research on CRISPR gene editing  |  Generated: 2026-04-25 22:15  
+|  Duration: 21.46s                                                            
+
+▌ No papers found for 'latest research on CRISPR gene editing'.              
+
+-------------------------------------------------------------------------------
+
+❌ No results found.                                                           
+Semantic Scholar: 429 rate-limited (waited 8.0s before retry)                  

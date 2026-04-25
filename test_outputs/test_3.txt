@@ -1,0 +1,194 @@
+Query: research on quantum computing
+Expected Skill: literature
+----------------------------------------
+
+⏳ Processing: research on quantum computing
+
+                         📚 Literature Research Report                         
+
+Query: research on quantum computing  |  Generated: 2026-04-25 22:14  |        
+Duration: 19.88s                                                               
+
+▌ Summary of Findings                                                        
+
+The most relevant starting point is "Quantum Computing: Vision and Challenges" 
+(2024) by Gill et al., as it provides a comprehensive, up-to-date overview of  
+the entire quantum computing landscape, covering current capabilities, open    
+problems, and future directions — ideal for building a broad understanding. For
+more applied perspectives, "Programming Tools for Analogue Quantum Computing"  
+(2025) and the Snowmass White Paper (2022) explore practical tooling and       
+domain-specific applications in high-performance and high-energy physics       
+computing, respectively. If your interest leans more theoretical, the papers by
+Mottonen & Vartiainen on gate decompositions and Díaz-Caro on computational    
+quantum logic offer deeper dives into the mathematical and foundational        
+underpinnings of the field.                                                    
+
+-------------------------------------------------------------------------------
+
+1. Quantum Computing: Vision and Challenges                                    
+
+Authors: Sukhpal Singh Gill, Oktay Cetinkaya, Stefano Marrone et al.  |  Year: 
+2024  |  Source: arXiv                                                         
+
+The recent development of quantum computing, which uses entanglement,          
+superposition, and other quantum fundamental concepts, can provide substantial 
+processing advantages over traditional computing. These quantum features help  
+solve many complex problems that cannot be solved otherwise with conventional  
+computing methods. These problems include modeling quantum mechanics,          
+logistics, chemical-based...                                                   
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+2. Snowmass White Paper: Quantum Computing Systems and Software for High-energy
+Physics Research                                                               
+
+Authors: Travis S. Humble, Andrea Delgado, Raphael Pooser et al.  |  Year: 2022
+|  Source: arXiv                                                               
+
+Quantum computing offers a new paradigm for advancing high-energy physics      
+research by enabling novel methods for representing and reasoning about        
+fundamental quantum mechanical phenomena. Realizing these ideals will require  
+the development of novel computational tools for modeling and simulation,      
+detection and classification, data analysis, and forecasting of high-energy    
+physics (HEP) experiments....                                                  
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+3. Decompositions of general quantum gates                                     
+
+Authors: M. Mottonen, J. J. Vartiainen  |  Year: 2005  |  Source: arXiv        
+
+Quantum algorithms may be described by sequences of unitary transformations    
+called quantum gates and measurements applied to the quantum register of n     
+quantum bits, qubits. A collection of quantum gates is called universal if it  
+can be used to construct any n-qubit gate. In 1995, the universality of the set
+of one-qubit gates and controlled NOT gate was shown by Barenco et al. using QR
+decompositi...                                                                 
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+4. Programming tools for Analogue Quantum Computing in the High-Performance    
+Computing Context -- A Review                                                  
+
+Authors: Mateusz Meller, Vendel Szeremi, Oliver Thomson Brown  |  Year: 2025  |
+Source: arXiv                                                                  
+
+Recent advances in quantum computing have brought us closer to realizing the   
+potential of this transformative technology. While significant strides have    
+been made in quantum error correction, many challenges persist, particularly in
+the realm of noise and scalability. Analogue quantum computing schemes, such as
+Analogue Hamiltonian Simulation and Quantum Annealing, offer a promising       
+approach to ad...                                                              
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+5. Towards a Computational Quantum Logic: An Overview of an Ongoing Research   
+Program                                                                        
+
+Authors: Alejandro Díaz-Caro  |  Year: 2025  |  Source: arXiv                  
+
+This invited paper presents an overview of an ongoing research program aimed at
+extending the Curry-Howard-Lambek correspondence to quantum computation. We    
+explore two key frameworks that provide both logical and computational         
+foundations for quantum programming languages. The first framework, the        
+Lambda-$S$ calculus, extends the lambda calculus by incorporating quantum      
+superposition, enforcing li...                                                 
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+6. Cavity QED and Quantum Computation in the Weak Coupling Regime II : Complete
+Construction of the Controlled-Controlled NOT Gate                             
+
+Authors: Kazuyuki Fujii, Kyoko Higashida, Ryosuke Kato et al.  |  Year: 2005  |
+Source: arXiv                                                                  
+
+In this paper we treat a cavity QED quantum computation. Namely, we consider a 
+model of quantum computation based on n atoms of laser-cooled and trapped      
+linearly in a cavity and realize it as the n atoms Tavis-Cummings Hamiltonian  
+interacting with n external (laser) fields. We solve the Schr{" o}dinger       
+equation of the model in the weak coupling regime to construct the controlled  
+NOT gate in the...                                                             
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+7. Warm-Starting and Quantum Computing: A Systematic Mapping Study             
+
+Authors: Felix Truger, Johanna Barzen, Marvin Bechtold et al.  |  Year: 2023  |
+Source: arXiv                                                                  
+
+Due to low numbers of qubits and their error-proneness, Noisy                  
+Intermediate-Scale Quantum (NISQ) computers impose constraints on the size of  
+quantum algorithms they can successfully execute. State-of-the-art research    
+introduces various techniques addressing these limitations by utilizing known  
+or inexpensively generated approximations, solutions, or models as a starting  
+point to approach a task ins...                                                
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+8. The Virtual Quantum Device (VQD): A tool for detailed emulation of quantum  
+computers                                                                      
+
+Authors: Cica Gustiani, Tyson Jones, Simon C. Benjamin  |  Year: 2023  |       
+Source: arXiv                                                                  
+
+We present the Virtual Quantum Device (VQD) platform, a system based on the    
+QuEST quantum emulator. Through the use of VQDs, non-expert users can emulate  
+specific quantum computers with detailed error models, bespoke gate sets and   
+connectivities. The platform boasts an intuitive interface, powerful           
+visualisation, and compatibility with high-performance computation for         
+effective testing and optimis...                                               
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+9. NP-hard but no longer hard to solve? Using quantum computing to tackle      
+optimization problems                                                          
+
+Authors: Rhonda Au-Yeung, Nicholas Chancellor, Pascal Halffmann  |  Year: 2022 
+|  Source: arXiv                                                               
+
+In the last decade, public and industrial research funding has moved quantum   
+computing from the early promises of Shor's algorithm through experiments to   
+the era of noisy intermediate scale quantum devices (NISQ) for solving         
+real-world problems. It is likely that quantum methods can efficiently solve   
+certain (NP-)hard optimization problems where classical approaches fail. In our
+perspective, we ex...                                                          
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+10. Semisupervised Anomaly Detection using Support Vector Regression with      
+Quantum Kernel                                                                 
+
+Authors: Kilian Tscharke, Sebastian Issel, Pascal Debus  |  Year: 2023  |      
+Source: arXiv                                                                  
+
+Anomaly detection (AD) involves identifying observations or events that deviate
+in some way from the rest of the data. Machine learning techniques have shown  
+success in automating this process by detecting hidden patterns and deviations 
+in large-scale data. The potential of quantum computing for machine learning   
+has been widely recognized, leading to extensive research efforts to develop   
+suitable ...                                                                   
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+⚠️ Partial errors: Semantic Scholar: 429 rate-limited (waited 8.0s before      
+retry)                                                                         

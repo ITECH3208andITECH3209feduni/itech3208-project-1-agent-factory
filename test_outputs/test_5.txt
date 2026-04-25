@@ -1,0 +1,193 @@
+Query: find papers on neural networks
+Expected Skill: literature
+----------------------------------------
+
+⏳ Processing: find papers on neural networks
+
+                         📚 Literature Research Report                         
+
+Query: find papers on neural networks  |  Generated: 2026-04-25 22:14  |       
+Duration: 3.16s                                                                
+
+▌ Summary of Results                                                         
+
+These papers span a diverse range of neural network topics, from biological    
+plausibility and architectural design to optimization and applications. If     
+you're interested in foundational neural network architecture, I'd recommend   
+starting with Rethinking the Artificial Neural Networks (2019) by Ahmad et al.,
+as it proposes a novel mesh-based subnet architecture with a central storage   
+mechanism, which challenges traditional ANN design. For those focused on       
+optimizing neural network structures, Saito & Shirakawa's 2019 paper on        
+probabilistic model-based dynamic optimization is also highly relevant, as it  
+addresses the critical challenge of controlling model complexity during        
+training.                                                                      
+
+Would you like me to narrow the search to a specific area of neural networks   
+(e.g., deep learning, convolutional networks, transformers, or a particular    
+application domain)?                                                           
+
+-------------------------------------------------------------------------------
+
+1. Implementing a Bayes Filter in a Neural Circuit: The Case of Unknown        
+Stimulus Dynamics                                                              
+
+Authors: Sacha Sokoloski  |  Year: 2015  |  Source: arXiv                      
+
+In order to interact intelligently with objects in the world, animals must     
+first transform neural population responses into estimates of the dynamic,     
+unknown stimuli which caused them. The Bayesian solution to this problem is    
+known as a Bayes filter, which applies Bayes' rule to combine population       
+responses with the predictions of an internal model. In this paper we present a
+method for learning t...                                                       
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+2. Rethinking the Artificial Neural Networks: A Mesh of Subnets with a Central 
+Mechanism for Storing and Predicting the Data                                  
+
+Authors: Usman Ahmad, Hong Song, Awais Bilal et al.  |  Year: 2019  |  Source: 
+arXiv                                                                          
+
+The Artificial Neural Networks (ANNs) have been originally designed to function
+like a biological neural network, but does an ANN really work in the same way  
+as a biological neural network? As we know, the human brain holds information  
+in its memory cells, so if the ANNs use the same model as our brains, they     
+should store datasets in a similar manner. The most popular type of ANN        
+architecture is b...                                                           
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+3. Finding Syntactic Representations in Neural Stacks                          
+
+Authors: William Merrill, Lenny Khazan, Noah Amsel et al.  |  Year: 2019  |    
+Source: arXiv                                                                  
+
+Neural network architectures have been augmented with differentiable stacks in 
+order to introduce a bias toward learning hierarchy-sensitive regularities. It 
+has, however, proven difficult to assess the degree to which such a bias is    
+effective, as the operation of the differentiable stack is not always          
+interpretable. In this paper, we attempt to detect the presence of latent      
+representations of hie...                                                      
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+4. PSO-Optimized Hopfield Neural Network-Based Multipath Routing for Mobile    
+Ad-hoc Networks                                                                
+
+Authors: Mansour Sheikhan, Ehsan Hemmati  |  Year: 2017  |  Source: arXiv      
+
+Mobile ad-hoc network (MANET) is a dynamic collection of mobile computers      
+without the need for any existing infrastructure. Nodes in a MANET act as hosts
+and routers. Designing of robust routing algorithms for MANETs is a challenging
+task. Disjoint multipath routing protocols address this problem and increase   
+the reliability, security and lifetime of network. However, selecting an       
+optimal multipat...                                                            
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+5. Controlling Model Complexity in Probabilistic Model-Based Dynamic           
+Optimization of Neural Network Structures                                      
+
+Authors: Shota Saito, Shinichi Shirakawa  |  Year: 2019  |  Source: arXiv      
+
+A method of simultaneously optimizing both the structure of neural networks and
+the connection weights in a single training loop can reduce the enormous       
+computational cost of neural architecture search. We focus on the probabilistic
+model-based dynamic neural network structure optimization that considers the   
+probability distribution of structure parameters and simultaneously optimizes  
+both the dis...                                                                
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+6. Automatic Model Selection for Neural Networks                               
+
+Authors: David Laredo, Yulin Qin, Oliver Schütze et al.  |  Year: 2019  |      
+Source: arXiv                                                                  
+
+Neural networks and deep learning are changing the way that artificial         
+intelligence is being done. Efficiently choosing a suitable network            
+architecture and fine-tune its hyper-parameters for a specific dataset is a    
+time-consuming task given the staggering number of possible alternatives. In   
+this paper, we address the problem of model selection by means of a fully      
+automated framework for efficientl...                                          
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+7. Context-Free Transductions with Neural Stacks                               
+
+Authors: Yiding Hao, William Merrill, Dana Angluin et al.  |  Year: 2018  |    
+Source: arXiv                                                                  
+
+This paper analyzes the behavior of stack-augmented recurrent neural network   
+(RNN) models. Due to the architectural similarity between stack RNNs and       
+pushdown transducers, we train stack RNN models on a number of tasks, including
+string reversal, context-free language modelling, and cumulative XOR           
+evaluation. Examining the behavior of our networks, we show that               
+stack-augmented RNNs can discover in...                                        
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+8. Arguments for the Unsuitability of Convolutional Neural Networks for        
+Non--Local Tasks                                                               
+
+Authors: Sebastian Stabinger, David Peer, Antonio Rodríguez-Sánchez  |  Year:  
+2021  |  Source: arXiv                                                         
+
+Convolutional neural networks have established themselves over the past years  
+as the state of the art method for image classification, and for many datasets,
+they even surpass humans in categorizing images. Unfortunately, the same       
+architectures perform much worse when they have to compare parts of an image to
+each other to correctly classify this image. Until now, no well-formed         
+theoretical argu...                                                            
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+9. A Novel Neural Network-Based Symbolic Regression Method: Neuro-Encoded      
+Expression Programming                                                         
+
+Authors: Aftab Anjum, Fengyang Sun, Lin Wang et al.  |  Year: 2019  |  Source: 
+arXiv                                                                          
+
+Neuro-encoded expression programming(NEEP) that aims to offer a novel          
+continuous representation of combinatorial encoding for genetic programming    
+methods is proposed in this paper. Genetic programming with linear             
+representation uses nature-inspired operators (e.g., crossover, mutation) to   
+tune expressions and finally search out the best explicit function to simulate 
+data. The encoding mechanism is...                                             
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+10. Liquid Time-constant Recurrent Neural Networks as Universal Approximators  
+
+Authors: Ramin M. Hasani, Mathias Lechner, Alexander Amini et al.  |  Year:    
+2018  |  Source: arXiv                                                         
+
+In this paper, we introduce the notion of liquid time-constant (LTC) recurrent 
+neural networks (RNN)s, a subclass of continuous-time RNNs, with varying       
+neuronal time-constant realized by their nonlinear synaptic transmission model.
+This feature is inspired by the communication principles in the nervous system 
+of small species. It enables the model to approximate continuous mapping with a
+small num...                                                                   
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+

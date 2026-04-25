@@ -1,0 +1,123 @@
+Query: search amazon for wireless mouse
+Expected Skill: amazon
+----------------------------------------
+
+⏳ Processing: search amazon for wireless mouse
+
+                       🛒 Amazon Product Research Report                       
+
+Query: search amazon for wireless mouse  |  Generated: 2026-04-25 22:13  |     
+Duration: 4.87s                                                                
+
+▌ Wireless Mouse — Top Amazon Results                                        
+
+Here are 5 popular wireless mice currently available on Amazon:                
+
+                                                                        
+ #  Product                                            Price   Rating   
+ ────────────────────────────────────────────────────────────────────── 
+ 1  VssoPlor Wireless Mouse (Black & Gold)             $12.59  ⭐ 4.5/5 
+ 2  Lenovo Go USB-C Essential Wireless Mouse           $42.03  ⭐ 4.4/5 
+ 3  Amazon Basics Wireless Mouse (USB Nano)            $15.40  ⭐ 4.5/5 
+ 4  Amazon Basics Portable Wireless Mouse (Ergonomic)  $14.56  ⭐ 4.3/5 
+ 5                                                                      
+                                                                        
+
+-------------------------------------------------------------------------------
+
+1. VssoPlor Wireless Mouse, 2.4G Slim Portable Computer Laptop Mouse with Nano 
+Receiver Quiet Silent Optical Mice for Notebook, PC, Laptop, Computer-Black and
+Gold                                                                           
+
+Price: $12.59  |  Rating: 4.5 / 5  |  Reviews: (28.2K)                         
+
+🔗 View on Amazon                                                              
+
+-------------------------------------------------------------------------------
+
+2. Lenovo Go USB-C Essential Wireless Mouse, 2.4 GHz Nano USB-C Receiver,      
+Adjustable DPI, Rechargeable Battery, Ambidextrous, GY51C21210, Grey           
+
+Price: $42.03  |  Rating: 4.4 / 5  |  Reviews: (292)                           
+
+🔗 View on Amazon                                                              
+
+-------------------------------------------------------------------------------
+
+3. Amazon Basics 2.4 Ghz Wireless Optical Computer Mouse with USB Nano         
+Receiver, Black                                                                
+
+Price: $15.40  |  Rating: 4.5 / 5  |  Reviews: (56.4K)                         
+
+🔗 View on Amazon                                                              
+
+-------------------------------------------------------------------------------
+
+4. Amazon Basics Portable Wireless Computer Mouse, Ergonomic, 2.4 GHz Optical, 
+DPI Adjustable, Easy to Use, Compatible With PC, Mac, Laptop, Black            
+
+Price: $14.56  |  Rating: 4.3 / 5  |  Reviews: (30.1K)                         
+
+🔗 View on Amazon                                                              
+
+-------------------------------------------------------------------------------
+
+5. Logitech M185 Wireless Mouse, 2.4GHz with USB Mini Receiver, 12-Month       
+Battery Life, 1000 DPI Optical Tracking, Ambidextrous PC/Mac/Laptop - Swift    
+Grey                                                                           
+
+Price: $20.88  |  Rating: 4.5 / 5  |  Reviews: (41.5K)                         
+
+🔗 View on Amazon                                                              
+
+-------------------------------------------------------------------------------
+
+6. Logitech M196 Bluetooth Wireless Mouse, Compact and Portable Mouse for      
+Laptops, Tablets and More, 12-Month Battery, Smooth Tracking, Compatible with  
+PC and Mac, Windows and macOS - Graphite                                       
+
+Price: $20.81  |  Rating: 4.5 / 5  |  Reviews: (5K)                            
+
+🔗 View on Amazon                                                              
+
+-------------------------------------------------------------------------------
+
+7. 2.4G Wireless Mouse 3D Car Shape Wireless Optical Mouse with USB Receiver   
+for PC Computer Laptop(F-car, Pink)                                            
+
+Price: $13.44  |  Rating: 4.3 / 5  |  Reviews: (140)                           
+
+🔗 View on Amazon                                                              
+
+-------------------------------------------------------------------------------
+
+8. VssoPlor Wireless Mouse, 2.4G Slim Portable Computer Laptop Mouse with Nano 
+Receiver Quiet Silent Optical Mice for Notebook, PC, Laptop, Computer-Black and
+Gold                                                                           
+
+Price: $12.59  |  Rating: 4.5 / 5  |  Reviews: (28.2K)                         
+
+🔗 View on Amazon                                                              
+
+-------------------------------------------------------------------------------
+
+9. Wireless Bluetooth Mouse, Rechargeable, LED, Silent, Ultra-thin Design      
+(Bluetooth 5.2 and 2.4GHz USB Receiver) | Portable Computer Mouse for Laptops, 
+iPads, MacBooks and Apple Devices (Black)                                      
+
+Price: $8.40  |  Rating: 4.4 / 5  |  Reviews: (3.2K)                           
+
+🔗 View on Amazon                                                              
+
+-------------------------------------------------------------------------------
+
+10. TECKNET Wireless Mouse (BT5.0/3.0 & 2.4G) Rechargeable 4800 DPI Silent USB 
+A & Bluetooth Mouse 6 Buttons, Wide Compatibility - Grey                       
+
+Price: $21.01  |  Rating: 4.6 / 5  |  Reviews: (13K)                           
+
+🔗 View on Amazon                                                              
+
+-------------------------------------------------------------------------------
+
+🔍 See all results on Amazon                                                   

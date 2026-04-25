@@ -1,0 +1,17 @@
+Query: meta-analysis of sleep and cognition
+Expected Skill: literature
+----------------------------------------
+
+⏳ Processing: meta-analysis of sleep and cognition
+
+                         📚 Literature Research Report                         
+
+Query: meta-analysis of sleep and cognition  |  Generated: 2026-04-25 22:16  | 
+Duration: 20.30s                                                               
+
+▌ No papers found for 'meta-analysis of sleep and cognition'.                
+
+-------------------------------------------------------------------------------
+
+❌ No results found.                                                           
+Semantic Scholar: 429 rate-limited (waited 8.0s before retry)                  

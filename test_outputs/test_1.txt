@@ -1,0 +1,191 @@
+Query: papers on transformer architecture
+Expected Skill: literature
+----------------------------------------
+
+⏳ Processing: papers on transformer architecture
+
+                         📚 Literature Research Report                         
+
+Query: papers on transformer architecture  |  Generated: 2026-04-25 22:13  |   
+Duration: 18.75s                                                               
+
+▌ Summary                                                                    
+
+The most relevant paper to your query is "Preference Transformer: Modeling     
+Human Preferences using Transformers for RL" (2023) by Changyeon Kim et al.,   
+which directly applies the transformer architecture to model human preferences 
+in reinforcement learning. You should also prioritize "DNT: a Deeply Normalized
+Transformer" (2025) by Xianbiao Qi et al., as it proposes improvements to      
+transformer training dynamics — a core architectural concern. The remaining    
+papers focus on unrelated architectures (FFT/FPGA, network search, 6G/Open     
+RAN), so unless those domains interest you, I'd recommend starting with the two
+transformer-specific papers above.                                             
+
+▌ Note: If you're looking for the foundational work on transformers (e.g.,   
+▌ "Attention Is All You Need" by Vaswani et al., 2017),                      
+
+-------------------------------------------------------------------------------
+
+1. A Novel Architecture of Area Efficient FFT Algorithm for FPGA Implementation
+
+Authors: Atin Mukherjee, Amitabha Sinha, Debesh Choudhury  |  Year: 2015  |    
+Source: arXiv                                                                  
+
+Fast Fourier transform (FFT) of large number of samples requires huge hardware 
+resources of field programmable gate arrays (FPGA), which needs more area and  
+power. In this paper, we present an area efficient architecture of FFT         
+processor that reuses the butterfly elements several times. The FFT processor  
+is simulated using VHDL and the results are validated on a Virtex-6 FPGA. The  
+proposed archite...                                                            
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+2. Efficient Architecture Search by Network Transformation                     
+
+Authors: Han Cai, Tianyao Chen, Weinan Zhang et al.  |  Year: 2017  |  Source: 
+arXiv                                                                          
+
+Techniques for automatically designing deep neural network architectures such  
+as reinforcement learning based approaches have recently shown promising       
+results. However, their success is based on vast computational resources (e.g. 
+hundreds of GPUs), making them difficult to be widely used. A noticeable       
+limitation is that they still design and train each network from scratch during
+the exploration o...                                                           
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+3. Preference Transformer: Modeling Human Preferences using Transformers for RL
+
+Authors: Changyeon Kim, Jongjin Park, Jinwoo Shin et al.  |  Year: 2023  |     
+Source: arXiv                                                                  
+
+Preference-based reinforcement learning (RL) provides a framework to train     
+agents using human preferences between two behaviors. However, preference-based
+RL has been challenging to scale since it requires a large amount of human     
+feedback to learn a reward function aligned with human intent. In this paper,  
+we present Preference Transformer, a neural architecture that models human     
+preferences using...                                                           
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+4. Empowering the 6G Cellular Architecture with Open RAN                       
+
+Authors: Michele Polese, Mischa Dohler, Falko Dressler et al.  |  Year: 2023  |
+Source: arXiv                                                                  
+
+Innovation and standardization in 5G have brought advancements to every facet  
+of the cellular architecture. This ranges from the introduction of new         
+frequency bands and signaling technologies for the radio access network (RAN), 
+to a core network underpinned by micro-services and network function           
+virtualization (NFV). However, like any emerging technology, the pace of       
+real-world deployments does no...                                              
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+5. DNT: a Deeply Normalized Transformer that can be trained by Momentum SGD    
+
+Authors: Xianbiao Qi, Marco Chen, Wenjie Xiao et al.  |  Year: 2025  |  Source:
+arXiv                                                                          
+
+Transformers have become the de facto backbone of modern deep learning, yet    
+their training typically demands an advanced optimizer with adaptive learning  
+rate like AdamW, rather than a momentum SGDW (mSGDW). Previous works show that 
+it is mainly due to a heavy-tailed distribution of the gradients. In this      
+paper, we introduce a Deeply Normalized Transformer (DNT), which is            
+meticulously engineered t...                                                   
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+6. MOMCC: Market-Oriented Architecture for Mobile Cloud Computing Based on     
+Service Oriented Architecture                                                  
+
+Authors: Saeid Abolfazli, Zohreh Sanaei, Abdullah Gani et al.  |  Year: 2012  |
+Source: arXiv                                                                  
+
+The vision of augmenting computing capabilities of mobile devices, especially  
+smartphones with least cost is likely transforming to reality leveraging cloud 
+computing. Cloud exploitation by mobile devices breeds a new research domain   
+called Mobile Cloud Computing (MCC). However, issues like portability and      
+interoperability should be addressed for mobile augmentation which is a        
+non-trivial task usi...                                                        
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+7. Transformers as Unsupervised Learning Algorithms: A study on Gaussian       
+Mixtures                                                                       
+
+Authors: Zhiheng Chen, Ruofan Wu, Guanhua Fang  |  Year: 2025  |  Source: arXiv
+
+The transformer architecture has demonstrated remarkable capabilities in modern
+artificial intelligence, among which the capability of implicitly learning an  
+internal model during inference time is widely believed to play a key role in  
+the under standing of pre-trained large language models. However, most recent  
+works have been focusing on studying supervised learning topics such as        
+in-context lea...                                                              
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+8. Geometric Algebra Transformer                                               
+
+Authors: Johann Brehmer, Pim de Haan, Sönke Behrends et al.  |  Year: 2023  |  
+Source: arXiv                                                                  
+
+Problems involving geometric data arise in physics, chemistry, robotics,       
+computer vision, and many other fields. Such data can take numerous forms, for 
+instance points, direction vectors, translations, or rotations, but to date    
+there is no single architecture that can be applied to such a wide variety of  
+geometric types while respecting their symmetries. In this paper we introduce  
+the Geometric Al...                                                            
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+9. A Functional Software Reference Architecture for LLM-Integrated Systems     
+
+Authors: Alessio Bucaioni, Martin Weyssow, Junda He et al.  |  Year: 2025  |   
+Source: arXiv                                                                  
+
+The integration of large language models into software systems is transforming 
+capabilities such as natural language understanding, decision-making, and      
+autonomous task execution. However, the absence of a commonly accepted software
+reference architecture hinders systematic reasoning about their design and     
+quality attributes. This gap makes it challenging to address critical concerns 
+like privacy,...                                                               
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+10. Leveraging ASIC AI Chips for Homomorphic Encryption                        
+
+Authors: Jianming Tong, Tianhao Huang, Jingtian Dang et al.  |  Year: 2025  |  
+Source: arXiv                                                                  
+
+Homomorphic Encryption (HE) provides strong data privacy for cloud services but
+at the cost of prohibitive computational overhead. While GPUs have emerged as a
+practical platform for accelerating HE, there remains an order-of-magnitude    
+energy-efficiency gap compared to specialized (but expensive) HE ASICs. This   
+paper explores an alternate direction: leveraging existing AI accelerators,    
+like Google...                                                                 
+
+🔗 Read paper                                                                  
+
+-------------------------------------------------------------------------------
+
+⚠️ Partial errors: Semantic Scholar: 429 rate-limited (waited 8.0s before      
+retry)                                                                         
