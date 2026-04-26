@@ -636,7 +636,7 @@ VERDICT: <one-sentence buyer verdict>"""
         """Use Claude to score a product's seller opportunity on a 1–10 scale."""
         client = self._get_claude()
         if not client:
-            return {"score": "N/A", "reason": "Claude AI not available"}
+            return {"score": "N/A", "reason": "Claude AI not available — set ANTHROPIC_API_KEY in .env"}
 
         title     = product.get("title", "Unknown product")[:120]
         price     = product.get("price", "N/A")
@@ -738,7 +738,7 @@ REASON: <2-3 sentence explanation covering demand signals, competition level, an
                 header_style="bold cyan",
                 show_lines=True,
             )
-            table.add_column("Product",           style="white",      max_width=35, no_wrap=False)
+            table.add_column("Product",           style="white",      max_width=40, no_wrap=False)
             table.add_column("Price",             style="green",      justify="right")
             table.add_column("Rating",            style="yellow",     justify="center")
             table.add_column("Reviews",           style="cyan",       justify="right")
@@ -747,7 +747,7 @@ REASON: <2-3 sentence explanation covering demand signals, competition level, an
             table.add_column("Opportunity (1-10)", style="bold green", justify="center")
 
             for p in products:
-                title = (p.get("title") or p.get("search_query", "?"))[:35]
+                title = (p.get("title") or p.get("search_query", "?"))[:40]
                 table.add_row(
                     title,
                     p.get("price", "N/A"),
@@ -772,7 +772,7 @@ REASON: <2-3 sentence explanation covering demand signals, competition level, an
             "|---------|-------|--------|---------|-----|-------|-------------------|",
         ]
         for p in products:
-            title = (p.get("title") or p.get("search_query", "?"))[:40]
+            title = (p.get("title") or p.get("search_query", "?"))[:50]
             title = title.replace("|", "")
             md_lines.append(
                 f"| {title} | {p.get('price','N/A')} | {p.get('rating','N/A')} "
@@ -836,7 +836,7 @@ REASON: <2-3 sentence explanation covering demand signals, competition level, an
         lines = [f"## Review Analysis: {title}\n"]
 
         if not reviews:
-            lines.append("Could not retrieve reviews. Try again or check the product URL.")
+            lines.append("Could not retrieve reviews. Amazon may have blocked the review page — try again or check the ASIN.")
             return "\n".join(lines)
 
         lines.append(f"Analysed **{len(reviews)} reviews**.\n")
@@ -868,6 +868,7 @@ REASON: <2-3 sentence explanation covering demand signals, competition level, an
             # Basic stats without Claude
             avg_stars = sum(r.get("stars", 0) for r in reviews) / len(reviews) if reviews else 0
             lines.append(f"Average rating from scraped reviews: {avg_stars:.1f} / 5.0")
+            lines.append("\n(Set ANTHROPIC_API_KEY in .env to enable full AI sentiment analysis)")
 
         return "\n".join(lines)
 
@@ -943,8 +944,17 @@ REASON: <2-3 sentence explanation covering demand signals, competition level, an
     def _parse_card(self, card) -> dict | None:
         """Parse a search result card into a product dict."""
         try:
-            title_el = card.select_one("h2 a span") or card.select_one(".a-size-medium")
-            title    = title_el.get_text(strip=True) if title_el else ""
+            # Use multiple selectors to capture the full product title
+            # Amazon uses different span classes depending on the result type
+            title_el = (
+                card.select_one("h2 span.a-size-medium.a-color-base.a-text-normal") or
+                card.select_one("h2 span.a-size-base-plus.a-color-base.a-text-normal") or
+                card.select_one("h2 span.a-color-base.a-text-normal") or
+                card.select_one("h2 a span") or
+                card.select_one(".a-size-medium.a-color-base") or
+                card.select_one(".a-size-medium")
+            )
+            title = title_el.get_text(strip=True) if title_el else ""
 
             price_whole = card.select_one(".a-price-whole")
             price_frac  = card.select_one(".a-price-fraction")

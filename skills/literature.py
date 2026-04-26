@@ -174,8 +174,12 @@ class LiteratureSkill(BaseSkill):
         extra_sections = []
         if synthesis_text:
             extra_sections.append(synthesis_text)
+        elif any(t in q_lower for t in SYNTHESIS_TRIGGERS):
+            extra_sections.append("(Set ANTHROPIC_API_KEY in .env to enable multi-paper synthesis)")
         if gaps_text:
             extra_sections.append(gaps_text)
+        elif any(t in q_lower for t in GAP_TRIGGERS):
+            extra_sections.append("(Set ANTHROPIC_API_KEY in .env to enable research gap analysis)")
 
         final_summary = base_summary
         if extra_sections:
@@ -468,9 +472,10 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
             ).strip()
 
             if not title_query:
+                msg = "Could not extract a paper title or ID from your query. Try: 'citations for ARXIV:1706.03762'"
                 return SkillResult(
                     skill_name=self.name, query=query, success=False,
-                    error="Could not extract a paper title or ID to look up citations for.",
+                    error=msg, summary=msg,
                 )
 
             # Search for the paper to get its ID
@@ -479,32 +484,47 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
                 if ss_results and ss_results[0].get("paper_id"):
                     paper_id = ss_results[0]["paper_id"]
                 else:
+                    msg = (
+                        f"Could not find '{title_query}' in Semantic Scholar. "
+                        f"Try using the arXiv ID directly, e.g.: "
+                        f"'citations for ARXIV:1706.03762'"
+                    )
                     return SkillResult(
                         skill_name=self.name, query=query, success=False,
-                        error=f"Could not find paper '{title_query}' in Semantic Scholar.",
+                        error=msg, summary=msg,
                     )
             except Exception as e:
+                msg = f"Semantic Scholar search failed: {e}"
                 return SkillResult(
-                    skill_name=self.name, query=query, success=False, error=str(e),
+                    skill_name=self.name, query=query, success=False,
+                    error=msg, summary=msg,
                 )
 
         # Now fetch forward citations
         try:
             citing_papers = self._get_forward_citations(paper_id)
         except Exception as e:
+            msg = f"Citation fetch failed for '{paper_id}': {e}"
             return SkillResult(
-                skill_name=self.name, query=query, success=False, error=str(e),
+                skill_name=self.name, query=query, success=False,
+                error=msg, summary=msg,
             )
 
-        summary = (
-            f"Found **{len(citing_papers)} papers** that cite paper `{paper_id}`.\n"
-            + (
-                "\n".join(
-                    f"- {p['title']} ({p.get('year','?')}) by {p.get('authors','?')} — {p.get('link','')}"
-                    for p in citing_papers[:10]
-                ) if citing_papers else "No citing papers found in Semantic Scholar."
+        if not citing_papers:
+            summary = (
+                f"No citing papers found for `{paper_id}` in Semantic Scholar. "
+                f"The paper may be too new, or not indexed. "
+                f"Try searching directly at https://www.semanticscholar.org"
             )
-        )
+        else:
+            summary = (
+                f"Found **{len(citing_papers)} papers** that cite `{paper_id}`.\n\n"
+                + "\n".join(
+                    f"- **{p['title']}** ({p.get('year','?')}) by {p.get('authors','?')} "
+                    f"— {p.get('citations',0)} citations — {p.get('link','')}"
+                    for p in citing_papers[:10]
+                )
+            )
 
         return SkillResult(
             skill_name = self.name,

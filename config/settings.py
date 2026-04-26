@@ -4,6 +4,7 @@
 # ──────────────────────────────────────────────────────────────
 
 import os
+import warnings
 from dotenv import load_dotenv
 
 # Load .env file if it exists
@@ -12,6 +13,18 @@ load_dotenv()
 # ── Claude / Anthropic ─────────────────────────────────────────
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "YOUR_API_KEY_HERE")
 CLAUDE_MODEL      = "claude-opus-4-6"   # swap to claude-haiku-4-5-20251001 for speed
+
+# Warn loudly if API key is still the placeholder
+if ANTHROPIC_API_KEY == "YOUR_API_KEY_HERE":
+    warnings.warn(
+        "\n\n⚠️  ANTHROPIC_API_KEY not set!\n"
+        "   Create a .env file in the project root:\n"
+        "   echo 'ANTHROPIC_API_KEY=sk-ant-api03-...' > .env\n"
+        "   Get your key at: https://console.anthropic.com\n"
+        "   Claude AI features (synthesis, sentiment, opportunity scoring) will be disabled.\n",
+        UserWarning,
+        stacklevel=2,
+    )
 
 # ── Agent behaviour ────────────────────────────────────────────
 MAX_RESULTS       = 10     # max items returned per skill call
