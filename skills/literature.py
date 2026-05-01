@@ -33,6 +33,7 @@ from config.settings import (
     REQUEST_TIMEOUT,
     ANTHROPIC_API_KEY,
     CLAUDE_MODEL,
+    SEMANTIC_SCHOLAR_API_KEY,
 )
 
 # How many papers to fetch for synthesis (PROJ-92) — more than normal MAX_RESULTS
@@ -84,17 +85,26 @@ class LiteratureSkill(BaseSkill):
         return cls._claude_client
 
     # ── Retry helper ──────────────────────────────────────────
-    def _retry_get(self, url: str, params: dict = None, retries: int = 3, backoff: float = 2.0) -> requests.Response:
+    def _retry_get(self, url: str, params: dict = None, headers: dict = None,
+                   retries: int = 5, backoff: float = 2.0) -> requests.Response:
         """GET with automatic retry and exponential backoff.
-        Handles 429 rate limits and transient connection / timeout errors."""
+        Handles 429 rate limits (respects Retry-After header) and transient errors."""
         last_error = None
         for attempt in range(retries):
             try:
-                resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
+                resp = requests.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
                 if resp.status_code == 429:
-                    wait = backoff * (2 ** attempt)   # 2s, 4s, 8s
+                    # Honour the server's requested wait time if provided
+                    retry_after = resp.headers.get("Retry-After") or resp.headers.get("X-RateLimit-Reset-After")
+                    if retry_after:
+                        try:
+                            wait = float(retry_after)
+                        except ValueError:
+                            wait = backoff * (2 ** attempt)
+                    else:
+                        wait = backoff * (2 ** attempt)   # 2s, 4s, 8s, 16s, 32s
                     time.sleep(wait)
-                    last_error = Exception(f"429 rate-limited (waited {wait}s before retry)")
+                    last_error = Exception(f"429 rate-limited (waited {wait:.1f}s before retry)")
                     continue
                 resp.raise_for_status()
                 return resp
@@ -129,6 +139,9 @@ class LiteratureSkill(BaseSkill):
             errors.append(f"arXiv: {e}")
 
         # ── 2. Semantic Scholar ───────────────────────────────
+        # Small delay to avoid hitting the 1 req/s rate limit when no API key is set
+        if not SEMANTIC_SCHOLAR_API_KEY:
+            time.sleep(1.0)
         try:
             ss_results = self._search_semantic_scholar(query, limit=paper_count)
             existing_titles = {r["title"].lower() for r in results}
@@ -137,7 +150,12 @@ class LiteratureSkill(BaseSkill):
                     results.append(r)
                     existing_titles.add(r["title"].lower())
         except Exception as e:
-            errors.append(f"Semantic Scholar: {e}")
+            err_str = str(e)
+            # Rate-limit failures are non-critical — arXiv results still returned
+            if "429" in err_str:
+                errors.append("Semantic Scholar: rate-limited (results still available from arXiv)")
+            else:
+                errors.append(f"Semantic Scholar: {e}")
 
         # ── 3. PubMed (medical/life sciences queries) ─────────
         if any(kw in q_lower for kw in ["medicine", "health", "clinical", "drug",
@@ -255,6 +273,12 @@ class LiteratureSkill(BaseSkill):
         return out
 
     # ── Semantic Scholar ──────────────────────────────────────
+    def _ss_headers(self) -> dict | None:
+        """Return API key header for Semantic Scholar if configured."""
+        if SEMANTIC_SCHOLAR_API_KEY:
+            return {"x-api-key": SEMANTIC_SCHOLAR_API_KEY}
+        return None
+
     def _search_semantic_scholar(self, query: str, limit: int = None) -> list[dict]:
         if limit is None:
             limit = MAX_RESULTS
@@ -263,7 +287,7 @@ class LiteratureSkill(BaseSkill):
             "limit":  limit,
             "fields": "title,authors,year,abstract,url,citationCount,paperId",
         }
-        resp = self._retry_get(SEMANTIC_SCHOLAR_URL, params=params)
+        resp = self._retry_get(SEMANTIC_SCHOLAR_URL, params=params, headers=self._ss_headers())
         data = resp.json().get("data", [])
         out  = []
         for paper in data:
@@ -553,7 +577,7 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
             "limit":  limit,
         }
 
-        resp = self._retry_get(url, params=params)
+        resp = self._retry_get(url, params=params, headers=self._ss_headers())
         data = resp.json().get("data", [])
 
         out = []

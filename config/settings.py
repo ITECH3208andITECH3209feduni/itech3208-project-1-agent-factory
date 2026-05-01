@@ -32,10 +32,13 @@ REQUEST_TIMEOUT   = 15     # seconds before HTTP requests time out
 MAX_RETRIES       = 3      # retry attempts on network failure
 
 # ── Literature search ──────────────────────────────────────────
-ARXIV_BASE_URL          = "http://export.arxiv.org/api/query"
-SEMANTIC_SCHOLAR_URL    = "https://api.semanticscholar.org/graph/v1/paper/search"
-PUBMED_SEARCH_URL       = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
-PUBMED_FETCH_URL        = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+ARXIV_BASE_URL              = "http://export.arxiv.org/api/query"
+SEMANTIC_SCHOLAR_URL        = "https://api.semanticscholar.org/graph/v1/paper/search"
+PUBMED_SEARCH_URL           = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
+PUBMED_FETCH_URL            = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
+# Optional: get a free key at https://www.semanticscholar.org/product/api
+# raises rate limit from 1 req/s to 100 req/s
+SEMANTIC_SCHOLAR_API_KEY    = os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "")
 
 # ── Amazon scraping ────────────────────────────────────────────
 AMAZON_BASE_URL   = "https://www.amazon.com"
