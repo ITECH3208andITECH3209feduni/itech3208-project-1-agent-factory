@@ -33,7 +33,6 @@ from config.settings import (
     REQUEST_TIMEOUT,
     ANTHROPIC_API_KEY,
     CLAUDE_MODEL,
-    SEMANTIC_SCHOLAR_API_KEY,
 )
 
 # How many papers to fetch for synthesis (PROJ-92) — more than normal MAX_RESULTS
@@ -85,26 +84,17 @@ class LiteratureSkill(BaseSkill):
         return cls._claude_client
 
     # ── Retry helper ──────────────────────────────────────────
-    def _retry_get(self, url: str, params: dict = None, headers: dict = None,
-                   retries: int = 5, backoff: float = 2.0) -> requests.Response:
+    def _retry_get(self, url: str, params: dict = None, retries: int = 3, backoff: float = 2.0) -> requests.Response:
         """GET with automatic retry and exponential backoff.
-        Handles 429 rate limits (respects Retry-After header) and transient errors."""
+        Handles 429 rate limits and transient connection / timeout errors."""
         last_error = None
         for attempt in range(retries):
             try:
-                resp = requests.get(url, params=params, headers=headers, timeout=REQUEST_TIMEOUT)
+                resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
                 if resp.status_code == 429:
-                    # Honour the server's requested wait time if provided
-                    retry_after = resp.headers.get("Retry-After") or resp.headers.get("X-RateLimit-Reset-After")
-                    if retry_after:
-                        try:
-                            wait = float(retry_after)
-                        except ValueError:
-                            wait = backoff * (2 ** attempt)
-                    else:
-                        wait = backoff * (2 ** attempt)   # 2s, 4s, 8s, 16s, 32s
+                    wait = backoff * (2 ** attempt)   # 2s, 4s, 8s
                     time.sleep(wait)
-                    last_error = Exception(f"429 rate-limited (waited {wait:.1f}s before retry)")
+                    last_error = Exception(f"429 rate-limited (waited {wait}s before retry)")
                     continue
                 resp.raise_for_status()
                 return resp
@@ -139,9 +129,6 @@ class LiteratureSkill(BaseSkill):
             errors.append(f"arXiv: {e}")
 
         # ── 2. Semantic Scholar ───────────────────────────────
-        # Small delay to avoid hitting the 1 req/s rate limit when no API key is set
-        if not SEMANTIC_SCHOLAR_API_KEY:
-            time.sleep(1.0)
         try:
             ss_results = self._search_semantic_scholar(query, limit=paper_count)
             existing_titles = {r["title"].lower() for r in results}
@@ -150,12 +137,7 @@ class LiteratureSkill(BaseSkill):
                     results.append(r)
                     existing_titles.add(r["title"].lower())
         except Exception as e:
-            err_str = str(e)
-            # Rate-limit failures are non-critical — arXiv results still returned
-            if "429" in err_str:
-                errors.append("Semantic Scholar: rate-limited (results still available from arXiv)")
-            else:
-                errors.append(f"Semantic Scholar: {e}")
+            errors.append(f"Semantic Scholar: {e}")
 
         # ── 3. PubMed (medical/life sciences queries) ─────────
         if any(kw in q_lower for kw in ["medicine", "health", "clinical", "drug",
@@ -228,7 +210,7 @@ class LiteratureSkill(BaseSkill):
         if max_results is None:
             max_results = MAX_RESULTS
         params = {
-            "search_query": f"all:{quote_plus(query)}",
+            "search_query": f"all:{query}",   # requests encodes params — no manual quote_plus
             "start":        0,
             "max_results":  max_results,
             "sortBy":       "relevance",
@@ -273,12 +255,6 @@ class LiteratureSkill(BaseSkill):
         return out
 
     # ── Semantic Scholar ──────────────────────────────────────
-    def _ss_headers(self) -> dict | None:
-        """Return API key header for Semantic Scholar if configured."""
-        if SEMANTIC_SCHOLAR_API_KEY:
-            return {"x-api-key": SEMANTIC_SCHOLAR_API_KEY}
-        return None
-
     def _search_semantic_scholar(self, query: str, limit: int = None) -> list[dict]:
         if limit is None:
             limit = MAX_RESULTS
@@ -287,7 +263,7 @@ class LiteratureSkill(BaseSkill):
             "limit":  limit,
             "fields": "title,authors,year,abstract,url,citationCount,paperId",
         }
-        resp = self._retry_get(SEMANTIC_SCHOLAR_URL, params=params, headers=self._ss_headers())
+        resp = self._retry_get(SEMANTIC_SCHOLAR_URL, params=params)
         data = resp.json().get("data", [])
         out  = []
         for paper in data:
@@ -362,14 +338,13 @@ class LiteratureSkill(BaseSkill):
         if not client or not results:
             return ""
 
-        # Build a structured input for Claude
         paper_list = "\n\n".join(
             f"[{i+1}] **{r['title']}** ({r.get('year','?')}) — {r.get('authors','?')}\n"
             f"Abstract: {r.get('abstract','No abstract available.')}"
             for i, r in enumerate(results[:10])
         )
 
-        prompt = f"""You are a research librarian. Synthesise the following {len(results[:10])} academic papers on the topic: "{query}"
+        prompt = f"""You are a research librarian. Synthesise the following {len(results[:10])} academic papers on the topic: \"{query}\"
 
 Papers:
 {paper_list}
@@ -427,7 +402,7 @@ Keep the synthesis concise but insightful (under 400 words)."""
         years = [r.get("year","") for r in results if r.get("year","").isdigit()]
         year_range = f"{min(years)}–{max(years)}" if years else "unknown range"
 
-        prompt = f"""You are a research strategist analysing the literature on: "{query}"
+        prompt = f"""You are a research strategist analysing the literature on: \"{query}\"
 
 The papers below span {year_range}. Based on what IS covered, identify what is NOT yet covered — the research gaps, open problems, and future directions.
 
@@ -478,17 +453,15 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
         """
         import re
 
-        # Try to extract a Semantic Scholar paper ID or arXiv ID from the query
         paper_id = None
         arxiv_match = re.search(r"ARXIV:([\d.v]+)", query, re.IGNORECASE)
-        ss_match    = re.search(r"\b([0-9a-f]{40})\b", query)  # 40-char hex SS paper ID
+        ss_match    = re.search(r"\b([0-9a-f]{40})\b", query)
 
         if arxiv_match:
             paper_id = f"ARXIV:{arxiv_match.group(1)}"
         elif ss_match:
             paper_id = ss_match.group(1)
         else:
-            # No explicit ID — search for the paper title first
             title_query = re.sub(
                 r"(cited by|citations for|citations of|who cited|citing papers for"
                 r"|forward citation|forward citations|citing works of)\s*",
@@ -502,7 +475,6 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
                     error=msg, summary=msg,
                 )
 
-            # Search for the paper to get its ID
             try:
                 ss_results = self._search_semantic_scholar(title_query, limit=1)
                 if ss_results and ss_results[0].get("paper_id"):
@@ -524,7 +496,6 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
                     error=msg, summary=msg,
                 )
 
-        # Now fetch forward citations
         try:
             citing_papers = self._get_forward_citations(paper_id)
         except Exception as e:
@@ -565,24 +536,17 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
         )
 
     def _get_forward_citations(self, paper_id: str, limit: int = 20) -> list[dict]:
-        """
-        Retrieve papers that cite `paper_id` via the Semantic Scholar citations API.
-
-        Endpoint: GET /paper/{paper_id}/citations
-        Returns list of dicts matching the standard paper dict schema.
-        """
         url    = SEMANTIC_SCHOLAR_CITATIONS_URL.format(paper_id=paper_id)
         params = {
             "fields": "title,authors,year,url,citationCount,paperId",
             "limit":  limit,
         }
 
-        resp = self._retry_get(url, params=params, headers=self._ss_headers())
+        resp = self._retry_get(url, params=params)
         data = resp.json().get("data", [])
 
         out = []
         for item in data:
-            # Each item has a "citingPaper" key
             paper = item.get("citingPaper", {})
             if not paper:
                 continue
@@ -591,14 +555,13 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
                 "title":     paper.get("title", ""),
                 "authors":   ", ".join(authors[:3]) + (" et al." if len(authors) > 3 else ""),
                 "year":      str(paper.get("year") or ""),
-                "abstract":  "",   # not fetched in citation list to keep it fast
+                "abstract":  "",
                 "link":      paper.get("url", ""),
                 "source":    "Semantic Scholar (citing)",
                 "citations": paper.get("citationCount", 0),
                 "paper_id":  paper.get("paperId", ""),
             })
 
-        # Sort by citation count descending (most influential citing papers first)
         out.sort(key=lambda x: x.get("citations", 0), reverse=True)
         return out
 
@@ -610,7 +573,6 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
         years  = [r["year"] for r in results if r.get("year")]
         recent = max(years) if years else "N/A"
 
-        # Highlight highly-cited papers if available
         high_cited = [r for r in results if r.get("citations", 0) > 100]
         cited_note = (
             f" {len(high_cited)} papers with 100+ citations." if high_cited else ""
