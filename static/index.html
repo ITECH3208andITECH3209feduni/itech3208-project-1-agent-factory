@@ -8,6 +8,8 @@
 </head>
 <body>
 <div id="app">
+
+  <!-- Header -->
   <header>
     <div>
       <div class="logo">🤖 Agent Factory</div>
@@ -15,20 +17,32 @@
     </div>
     <div id="status-dot" title="Checking agent status…"></div>
   </header>
+
+  <!-- Chat messages -->
   <div id="chat-area" role="log" aria-live="polite">
     <div class="chat-bubble agent-bubble">
       👋 Hi! I'm your 24/7 Research AI. Ask me to find academic papers or Amazon products.<br>
       <small style="opacity:0.6">Try: "best wireless earbuds under $50" or "papers on transformer architecture"</small>
     </div>
   </div>
+
+  <!-- Result cards -->
   <div id="cards-section" class="hidden">
     <div id="cards-title">Results</div>
     <div id="cards-grid"></div>
   </div>
+
+  <!-- Input bar -->
   <div id="input-bar">
-    <textarea id="query-input" placeholder="Ask about research papers or Amazon products…" rows="1" aria-label="Query input"></textarea>
+    <textarea
+      id="query-input"
+      placeholder="Ask about research papers or Amazon products…"
+      rows="1"
+      aria-label="Query input"
+    ></textarea>
     <button class="send-btn" id="send-btn" title="Send (Enter)" aria-label="Send">&#9654;</button>
   </div>
+
 </div>
 <script src="/static/js/app.js"></script>
 </body>

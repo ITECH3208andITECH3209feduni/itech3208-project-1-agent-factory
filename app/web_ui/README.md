@@ -1,7 +1,15 @@
 # Agent Factory — Web UI
 
 Browser-based chat interface for the Agent Factory research assistant.
-Built with **FastAPI** + plain HTML/CSS/JS.
+Built with **FastAPI** + plain HTML/CSS/JS (no frontend framework needed).
+
+## Overview
+
+The Web UI wraps the existing CLI agent in a REST API and serves a dark-themed chat interface at `http://localhost:8000`.
+
+- Type a query → agent routes to Amazon or Literature skill automatically
+- Results appear as rich cards (product cards with score badges, paper cards with citation counts)
+- Chat history loads on page open
 
 ## Install
 
@@ -15,26 +23,18 @@ pip install -r requirements_web.txt
 python -m app.web_ui.main
 ```
 
-Open **http://localhost:8000**
+Then open **http://localhost:8000** in your browser.
+
+For hot-reload during development:
+```bash
+uvicorn app.web_ui.main:app --reload --port 8000
+```
 
 ## Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/` | Chat UI (index.html) |
-| POST | `/query` | Run query, returns `{response, cards, type}` |
-| GET | `/history` | Last 20 queries |
-| GET | `/status` | `{status: "ok", agent: "ready"}` |
-
-## File Structure
-
-```
-app/web_ui/main.py       FastAPI entry point
-app/web_ui/routes.py     API endpoints
-components/amazon_cards.py    ProductCard dataclass
-components/literature_cards.py PaperCard dataclass
-static/index.html        Chat UI
-static/css/style.css     Dark theme
-static/js/app.js         sendMessage, loadHistory, renderCards
-requirements_web.txt     fastapi uvicorn python-multipart jinja2
-```
+| Method | Path       | Description                                      |
+|--------|------------|--------------------------------------------------|
+| GET    | `/`        | Serves `static/index.html` (chat UI)            |
+| POST   | `/query`   | Run a research query, returns response + cards   |
+| GET    | `/history` | Last 20 queries from session memory             |
+| GET    | `/status`  | Health check — `{"status": "ok", "agent": "ready"}` |
