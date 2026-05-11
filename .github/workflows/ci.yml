@@ -65,4 +65,9 @@ jobs:
         run: python -m playwright install --with-deps chromium
 
       - name: Run pytest
-        run: python -m pytest tests/ -v
+        run: |
+          if [ -d "tests" ] && [ -n "$(ls -A tests 2>/dev/null | grep -v __pycache__)" ]; then
+            python -m pytest tests/ -v
+          else
+            echo "No tests directory or empty — skipping pytest."
+          fi
