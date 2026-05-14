@@ -154,6 +154,15 @@ class LiteratureSkill(BaseSkill):
 
         results = results[:paper_count]
 
+        # ── Always-on: quick AI synthesis paragraph ───────────
+        # 2-3 sentences using Sonnet; runs on every successful search.
+        quick_synthesis = ""
+        if results:
+            try:
+                quick_synthesis = self._quick_synthesis(query, results)
+            except Exception as e:
+                errors.append(f"Quick synthesis: {e}")
+
         # ── Mode: Multi-paper synthesis (PROJ-92) ─────────────
         synthesis_text = ""
         if any(t in q_lower for t in SYNTHESIS_TRIGGERS) and results:
@@ -200,9 +209,10 @@ class LiteratureSkill(BaseSkill):
                                                    "drug", "disease", "patient", "trial"]
                     ) else []
                 ),
-                "total_found":      len(results),
-                "synthesis_done":   bool(synthesis_text),
+                "total_found":       len(results),
+                "synthesis_done":    bool(synthesis_text),
                 "gap_analysis_done": bool(gaps_text),
+                "quick_synthesis":   quick_synthesis,
             },
         )
 
@@ -331,6 +341,41 @@ class LiteratureSkill(BaseSkill):
                 "paper_id":  f"PMID:{pmid}" if pmid else "",
             })
         return out
+
+    # ── Quick AI synthesis paragraph (always-on) ─────────────
+    def _quick_synthesis(self, query: str, results: list[dict]) -> str:
+        """2-3 sentence Sonnet paragraph summarising the top-5 results.
+        Runs on every successful search; stored in metadata['quick_synthesis']."""
+        client = self._get_claude()
+        if not client or not results:
+            return ""
+
+        top5 = results[:5]
+        paper_list = "\n".join(
+            f"[{i+1}] {r['title']} ({r.get('year', '?')}) — {r.get('authors', '?')}: "
+            f"{r.get('abstract', '')[:200]}"
+            for i, r in enumerate(top5)
+        )
+
+        prompt = (
+            f"A researcher searched for: \"{query}\"\n\n"
+            f"Top {len(top5)} papers found:\n{paper_list}\n\n"
+            "Write a single paragraph of exactly 2–3 sentences that:\n"
+            "1. Identifies the key themes across these papers\n"
+            "2. Conveys what the literature reveals about this topic\n"
+            "3. Gives the researcher immediate orientation\n\n"
+            "Write only the paragraph — no headers, no bullet points, no preamble."
+        )
+
+        try:
+            msg = client.messages.create(
+                model      = CLAUDE_MODEL,
+                max_tokens = 180,
+                messages   = [{"role": "user", "content": prompt}],
+            )
+            return msg.content[0].text.strip()
+        except Exception:
+            return ""
 
     # ── Multi-paper synthesis (PROJ-92) ───────────────────────
     def _synthesise_papers(self, query: str, results: list[dict]) -> str:

@@ -161,11 +161,12 @@ async def search_literature(body: LiteratureRequest):
         except Exception:
             pass
 
-    synthesis = (
-        result.summary
-        if result.metadata.get("synthesis_done") or result.metadata.get("gap_analysis_done")
-        else ""
-    )
+    # Full structured synthesis/gap output takes precedence; fall back to the
+    # always-on quick paragraph so the UI always has something to show.
+    if result.metadata.get("synthesis_done") or result.metadata.get("gap_analysis_done"):
+        synthesis = result.summary
+    else:
+        synthesis = result.metadata.get("quick_synthesis", "")
 
     return LiteratureResponse(
         query=body.topic,
