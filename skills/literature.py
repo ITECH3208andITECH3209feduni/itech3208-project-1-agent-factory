@@ -43,6 +43,10 @@ SYNTHESIS_PAPER_COUNT = 10
 SEMANTIC_SCHOLAR_CITATIONS_URL = "https://api.semanticscholar.org/graph/v1/paper/{paper_id}/citations"
 SEMANTIC_SCHOLAR_PAPER_URL     = "https://api.semanticscholar.org/graph/v1/paper/search"
 
+class _RateLimitedError(Exception):
+    """Raised by _retry_get when all retry attempts are exhausted due to HTTP 429."""
+
+
 # Trigger keywords for each enhanced mode
 SYNTHESIS_TRIGGERS  = {"synthesise", "synthesize", "synthesis", "overview", "summarise papers",
                         "summarize papers", "aggregate", "survey"}
@@ -87,23 +91,31 @@ class LiteratureSkill(BaseSkill):
     # ── Retry helper ──────────────────────────────────────────
     def _retry_get(self, url: str, params: dict = None, retries: int = 3, backoff: float = 2.0) -> requests.Response:
         """GET with automatic retry and exponential backoff.
-        Handles 429 rate limits and transient connection / timeout errors."""
+        Raises _RateLimitedError when all attempts are exhausted due to HTTP 429."""
         last_error = None
+        was_rate_limited = False
         for attempt in range(retries):
             try:
                 resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
                 if resp.status_code == 429:
                     wait = backoff * (2 ** attempt)   # 2s, 4s, 8s
                     time.sleep(wait)
-                    last_error = Exception(f"429 rate-limited (waited {wait}s before retry)")
+                    last_error = Exception(f"HTTP 429 (waited {wait}s)")
+                    was_rate_limited = True
                     continue
+                was_rate_limited = False
                 resp.raise_for_status()
                 return resp
             except (requests.exceptions.ConnectionError,
                     requests.exceptions.Timeout) as e:
                 last_error = e
+                was_rate_limited = False
                 if attempt < retries - 1:
                     time.sleep(backoff * (attempt + 1))
+        if was_rate_limited:
+            raise _RateLimitedError(
+                f"Rate limited after {retries} attempts — try again in about a minute."
+            )
         raise last_error or Exception(f"Request failed after {retries} attempts")
 
     # ── Main entry point ──────────────────────────────────────
@@ -123,34 +135,49 @@ class LiteratureSkill(BaseSkill):
         errors  = []
 
         # ── 1. arXiv ─────────────────────────────────────────
+        arxiv_count = 0
         try:
             arxiv_results = self._search_arxiv(query, max_results=paper_count)
+            arxiv_count = len(arxiv_results)
             results.extend(arxiv_results)
+        except _RateLimitedError:
+            errors.append("arXiv is temporarily rate-limited — try again in about a minute.")
         except Exception as e:
-            errors.append(f"arXiv: {e}")
+            errors.append(f"Could not reach arXiv: {e}")
 
         # ── 2. Semantic Scholar ───────────────────────────────
+        ss_count = 0
         try:
             ss_results = self._search_semantic_scholar(query, limit=paper_count)
+            ss_count = len(ss_results)
             existing_titles = {r["title"].lower() for r in results}
             for r in ss_results:
                 if r["title"].lower() not in existing_titles:
                     results.append(r)
                     existing_titles.add(r["title"].lower())
+        except _RateLimitedError:
+            errors.append(
+                "Semantic Scholar is temporarily rate-limited — results may be incomplete. "
+                "Try again in about a minute."
+            )
         except Exception as e:
-            errors.append(f"Semantic Scholar: {e}")
+            errors.append(f"Could not reach Semantic Scholar: {e}")
 
         # ── 3. PubMed (medical/life sciences queries) ─────────
+        pubmed_count = 0
         if any(kw in q_lower for kw in ["medicine", "health", "clinical", "drug",
                                          "disease", "patient", "trial"]):
             try:
                 pubmed_results = self._search_pubmed(query)
+                pubmed_count = len(pubmed_results)
                 existing_titles = {r["title"].lower() for r in results}
                 for r in pubmed_results:
                     if r["title"].lower() not in existing_titles:
                         results.append(r)
+            except _RateLimitedError:
+                errors.append("PubMed is temporarily rate-limited — try again in about a minute.")
             except Exception as e:
-                errors.append(f"PubMed: {e}")
+                errors.append(f"Could not reach PubMed: {e}")
 
         results = results[:paper_count]
 
@@ -209,6 +236,11 @@ class LiteratureSkill(BaseSkill):
                                                    "drug", "disease", "patient", "trial"]
                     ) else []
                 ),
+                "per_source_counts": {
+                    "arXiv":            arxiv_count,
+                    "Semantic Scholar": ss_count,
+                    "PubMed":           pubmed_count,
+                },
                 "total_found":       len(results),
                 "synthesis_done":    bool(synthesis_text),
                 "gap_analysis_done": bool(gaps_text),
@@ -614,7 +646,11 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
     # ── Summary builder ───────────────────────────────────────
     def _build_summary(self, query: str, results: list[dict]) -> str:
         if not results:
-            return f"No papers found for '{query}'."
+            return (
+                f"No papers found for \"{query}\". "
+                "Try shorter or broader search terms, check spelling, "
+                "or search a single concept at a time."
+            )
 
         years  = [r["year"] for r in results if r.get("year")]
         recent = max(years) if years else "N/A"

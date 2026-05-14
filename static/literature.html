@@ -70,7 +70,19 @@
 
   <!-- Empty state -->
   <div class="lit-empty" id="empty-box">
-    No papers found for that topic. Try broader keywords or check your spelling.
+    <div style="font-size:36px;margin-bottom:12px">📭</div>
+    <strong>No papers found</strong>
+    <p style="margin-top:8px;margin-bottom:12px">Try these suggestions:</p>
+    <ul class="empty-suggestions">
+      <li>Use fewer or broader keywords</li>
+      <li>Check spelling of technical terms or author names</li>
+      <li>Search a single concept at a time</li>
+      <li>Search directly on
+        <a href="https://arxiv.org/search/" target="_blank" rel="noopener">arXiv</a>,
+        <a href="https://www.semanticscholar.org" target="_blank" rel="noopener">Semantic Scholar</a>,
+        or <a href="https://pubmed.ncbi.nlm.nih.gov" target="_blank" rel="noopener">PubMed</a>
+      </li>
+    </ul>
   </div>
 
 </div>
@@ -235,7 +247,19 @@
 
   /* ── Helpers ──────────────────────────────────────────────── */
   function showError(msg) {
-    errorBox.textContent = msg;
+    const lower = msg.toLowerCase();
+    let icon = "⚠️";
+    let tip  = "";
+    if (lower.includes("rate-limited") || lower.includes("rate limit")) {
+      icon = "🔄";
+      tip  = " Results shown are from other available sources.";
+    } else if (lower.includes("could not reach") || lower.includes("timeout") || lower.includes("connection")) {
+      icon = "🌐";
+      tip  = " Check your internet connection and try again.";
+    }
+    errorBox.innerHTML =
+      `<strong>${icon} Search notice:</strong> ${esc(msg)}` +
+      (tip ? `<br><small style="opacity:0.8">${esc(tip)}</small>` : "");
     errorBox.style.display = "block";
   }
 

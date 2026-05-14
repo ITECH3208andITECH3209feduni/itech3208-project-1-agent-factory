@@ -453,10 +453,28 @@ header .subtitle {
 
 .lit-empty {
   text-align: center;
-  padding: 48px;
+  padding: 48px 32px;
   color: var(--text-dim);
   font-size: 14px;
   display: none;
+}
+
+.empty-suggestions {
+  list-style: none;
+  display: inline-block;
+  text-align: left;
+  margin: 0 auto;
+  padding: 0;
+}
+.empty-suggestions li {
+  padding: 4px 0 4px 20px;
+  position: relative;
+}
+.empty-suggestions li::before {
+  content: "→";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
 }
 
 @media (max-width: 600px) {

@@ -47,24 +47,65 @@ class Formatter:
             f"\n> {result.summary}",
             "\n---\n",
         ]
+
         if not result.success or not result.results:
-            lines.append(f"❌ **No results found.**  \n{result.error}")
+            lines += [
+                "**No papers were found.**",
+                "",
+                "**Suggestions:**",
+                "- Use fewer or broader keywords",
+                "  _(e.g. `transformers` instead of `transformer attention NLP 2024`)_",
+                "- Check spelling of technical terms or author names",
+                "- Search a single concept at a time",
+                "- Try a direct source search:",
+                "  - arXiv: https://arxiv.org/search/",
+                "  - Semantic Scholar: https://www.semanticscholar.org",
+                "  - PubMed: https://pubmed.ncbi.nlm.nih.gov _(medical topics)_",
+            ]
+            lines += self._render_errors(result.error)
             return "\n".join(lines)
 
         for i, paper in enumerate(result.results, 1):
             lines.append(f"## {i}. {paper.get('title', 'Untitled')}")
-            lines.append(f"**Authors:** {paper.get('authors', 'Unknown')}  |  **Year:** {paper.get('year', 'N/A')}  |  **Source:** {paper.get('source', '')}")
+            lines.append(
+                f"**Authors:** {paper.get('authors', 'Unknown')}  |  "
+                f"**Year:** {paper.get('year', 'N/A')}  |  "
+                f"**Source:** {paper.get('source', '')}"
+            )
             if paper.get("citations"):
-                lines.append(f"**Citations:** {paper['citations']}")
+                lines.append(f"**Citations:** {paper['citations']:,}")
             if paper.get("abstract"):
                 lines.append(f"\n{paper['abstract']}...")
             if paper.get("link"):
                 lines.append(f"\n🔗 [Read paper]({paper['link']})")
             lines.append("\n---")
 
-        if result.error:
-            lines.append(f"\n⚠️ **Partial errors:** {result.error}")
+        lines += self._render_errors(result.error)
         return "\n".join(lines)
+
+    def _render_errors(self, error_str: str) -> list[str]:
+        """Translate raw error strings into user-facing notices with actionable tips."""
+        if not error_str:
+            return []
+        lines = ["\n### ⚠️ Search Notices"]
+        for msg in error_str.split("; "):
+            msg = msg.strip()
+            if not msg:
+                continue
+            if "rate-limited" in msg.lower():
+                lines.append(
+                    f"- **{msg}**  \n"
+                    "  _Tip: wait ~1 minute and search again. "
+                    "Semantic Scholar allows ~100 requests per 5 minutes._"
+                )
+            elif "could not reach" in msg.lower() or "timeout" in msg.lower():
+                lines.append(
+                    f"- **{msg}**  \n"
+                    "  _Tip: check your internet connection and try again._"
+                )
+            else:
+                lines.append(f"- {msg}")
+        return lines
 
     def _render_amazon(self, result: SkillResult) -> str:
         ts    = datetime.now().strftime("%Y-%m-%d %H:%M")
