@@ -14,8 +14,9 @@ load_dotenv()
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # ── Claude / Anthropic ─────────────────────────────────────────
-ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "YOUR_API_KEY_HERE")
-CLAUDE_MODEL      = "claude-sonnet-4-6"   # faster + cheaper than opus
+ANTHROPIC_API_KEY  = os.environ.get("ANTHROPIC_API_KEY", "YOUR_API_KEY_HERE")
+CLAUDE_MODEL       = "claude-sonnet-4-6"         # orchestrator routing + result summarisation
+CLAUDE_HAIKU_MODEL = "claude-haiku-4-5-20251001"  # synthesis engine — fast, low cost per paper batch
 
 # Warn loudly if API key is still the placeholder
 if ANTHROPIC_API_KEY == "YOUR_API_KEY_HERE":

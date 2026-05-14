@@ -33,6 +33,7 @@ from config.settings import (
     REQUEST_TIMEOUT,
     ANTHROPIC_API_KEY,
     CLAUDE_MODEL,
+    CLAUDE_HAIKU_MODEL,
 )
 
 # How many papers to fetch for synthesis (PROJ-92) — more than normal MAX_RESULTS
@@ -378,7 +379,7 @@ Keep the synthesis concise but insightful (under 400 words)."""
 
         try:
             message = client.messages.create(
-                model      = CLAUDE_MODEL,
+                model      = CLAUDE_HAIKU_MODEL,
                 max_tokens = 600,
                 messages   = [{"role": "user", "content": prompt}],
             )
@@ -434,7 +435,7 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
 
         try:
             message = client.messages.create(
-                model      = CLAUDE_MODEL,
+                model      = CLAUDE_HAIKU_MODEL,
                 max_tokens = 500,
                 messages   = [{"role": "user", "content": prompt}],
             )
