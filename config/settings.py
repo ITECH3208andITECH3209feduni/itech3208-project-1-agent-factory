@@ -57,7 +57,8 @@ AMAZON_HEADERS    = {
 }
 
 # ── Memory / persistence ───────────────────────────────────────
-MEMORY_FILE       = os.path.join(_BASE_DIR, "outputs", "memory.json")
+MEMORY_DB         = os.path.join(_BASE_DIR, "outputs", "memory.db")
+MEMORY_FILE       = os.path.join(_BASE_DIR, "outputs", "memory.json")  # kept for one-shot migration
 MAX_HISTORY_ITEMS = 50    # keep last N queries in memory
 
 # ── Output ─────────────────────────────────────────────────────
