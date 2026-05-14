@@ -19,11 +19,14 @@ from pydantic import BaseModel
 from agent.orchestrator import Orchestrator
 from components.amazon_cards import ProductCard
 from components.literature_cards import PaperCard
+from skills.literature import LiteratureSkill
 
 router = APIRouter()
 
 # Shared orchestrator instance (one per process)
 _orchestrator = Orchestrator()
+# Dedicated skill instance for /literature — bypasses orchestrator routing
+_lit_skill = LiteratureSkill()
 
 
 # ── Pydantic models ────────────────────────────────────────────
@@ -47,6 +50,28 @@ class HistoryItem(BaseModel):
 class StatusResponse(BaseModel):
     status: str
     agent: str
+
+
+class LiteratureRequest(BaseModel):
+    topic: str
+
+
+class PaperResult(BaseModel):
+    title:     str
+    authors:   str
+    year:      str
+    abstract:  str
+    source:    str
+    url:       str
+    citations: int
+
+
+class LiteratureResponse(BaseModel):
+    query:     str
+    total:     int
+    papers:    list[PaperResult]
+    synthesis: str
+    error:     str
 
 
 # ── Routes ─────────────────────────────────────────────────────
@@ -105,6 +130,50 @@ async def get_history():
         )
         for h in history
     ]
+
+
+@router.post("/literature", response_model=LiteratureResponse)
+async def search_literature(body: LiteratureRequest):
+    """
+    Search academic literature by topic.
+    Calls LiteratureSkill directly — no orchestrator routing needed.
+
+    Returns up to MAX_RESULTS papers with title, authors, year,
+    abstract snippet, source, url, and citation count.
+    If the topic contains synthesis/gap keywords the skill activates
+    those modes automatically and the result is returned in `synthesis`.
+    """
+    result = _lit_skill(body.topic)
+
+    papers: list[PaperResult] = []
+    for raw in result.results:
+        try:
+            card = PaperCard.from_skill_result(raw)
+            papers.append(PaperResult(
+                title=card.title,
+                authors=card.authors,
+                year=card.year,
+                abstract=card.truncate_abstract(300),
+                source=card.source,
+                url=card.url,
+                citations=card.citations,
+            ))
+        except Exception:
+            pass
+
+    synthesis = (
+        result.summary
+        if result.metadata.get("synthesis_done") or result.metadata.get("gap_analysis_done")
+        else ""
+    )
+
+    return LiteratureResponse(
+        query=body.topic,
+        total=len(papers),
+        papers=papers,
+        synthesis=synthesis,
+        error=result.error,
+    )
 
 
 @router.get("/status", response_model=StatusResponse)

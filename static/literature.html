@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Literature Search — Agent Factory</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+<div class="lit-page">
+
+  <!-- Nav -->
+  <nav class="lit-nav">
+    <div class="logo">🤖 Agent Factory</div>
+    <span style="color:var(--text-dim);font-size:13px;">Literature Search</span>
+    <span id="nav-status-dot" class="lit-status-dot" title="Checking…"></span>
+    <a href="/" class="back-link">← Back to Chat</a>
+  </nav>
+
+  <!-- Hero -->
+  <div class="lit-hero">
+    <h1>Literature Search</h1>
+    <p>Search arXiv, Semantic Scholar, and PubMed — enter a topic to find relevant papers.</p>
+  </div>
+
+  <!-- Search form -->
+  <form class="lit-form" id="search-form" autocomplete="off">
+    <input
+      type="text"
+      id="topic-input"
+      class="lit-input"
+      placeholder="e.g. retrieval-augmented generation, CRISPR gene editing, diffusion models…"
+      aria-label="Research topic"
+      required
+    />
+    <button type="submit" class="lit-btn" id="search-btn">Search</button>
+  </form>
+
+  <!-- Error banner -->
+  <div class="lit-error" id="error-box" role="alert"></div>
+
+  <!-- Loading -->
+  <div class="lit-loading" id="loading-box">
+    <div class="spinner"></div>
+    Searching arXiv, Semantic Scholar…
+  </div>
+
+  <!-- Results meta row -->
+  <div class="lit-meta" id="meta-row" style="display:none">
+    <span class="result-count" id="result-count"></span>
+    <span id="source-list"></span>
+    <div class="lit-sort">
+      Sort by
+      <select id="sort-select" aria-label="Sort papers">
+        <option value="relevance">Relevance</option>
+        <option value="citations">Citations</option>
+        <option value="year">Year (newest)</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Synthesis / gap analysis block (shown when Claude enriches the results) -->
+  <div class="lit-synthesis" id="synthesis-box">
+    <div class="lit-synthesis-title">AI Synthesis</div>
+    <div id="synthesis-body"></div>
+  </div>
+
+  <!-- Paper list -->
+  <div class="paper-list" id="paper-list"></div>
+
+  <!-- Empty state -->
+  <div class="lit-empty" id="empty-box">
+    No papers found for that topic. Try broader keywords or check your spelling.
+  </div>
+
+</div>
+
+<script>
+  /* ── state ────────────────────────────────────────────────── */
+  let _papers = [];
+
+  /* ── DOM refs ─────────────────────────────────────────────── */
+  const form        = document.getElementById("search-form");
+  const topicInput  = document.getElementById("topic-input");
+  const searchBtn   = document.getElementById("search-btn");
+  const errorBox    = document.getElementById("error-box");
+  const loadingBox  = document.getElementById("loading-box");
+  const metaRow     = document.getElementById("meta-row");
+  const resultCount = document.getElementById("result-count");
+  const sourceList  = document.getElementById("source-list");
+  const sortSelect  = document.getElementById("sort-select");
+  const paperList   = document.getElementById("paper-list");
+  const emptyBox    = document.getElementById("empty-box");
+  const synthesisBox  = document.getElementById("synthesis-box");
+  const synthesisBody = document.getElementById("synthesis-body");
+  const navDot      = document.getElementById("nav-status-dot");
+
+  /* ── Init ─────────────────────────────────────────────────── */
+  document.addEventListener("DOMContentLoaded", () => {
+    checkStatus();
+    form.addEventListener("submit", onSubmit);
+    sortSelect.addEventListener("change", () => renderList(_papers));
+
+    // Pre-fill from ?q= URL param so links can deep-link to a search
+    const q = new URLSearchParams(location.search).get("q");
+    if (q) { topicInput.value = q; doSearch(q); }
+  });
+
+  /* ── Status dot ───────────────────────────────────────────── */
+  async function checkStatus() {
+    try {
+      const r = await fetch("/status");
+      const d = await r.json();
+      navDot.className = "lit-status-dot " + (d.status === "ok" ? "online" : "offline");
+      navDot.title = d.status === "ok" ? "Agent ready" : "Agent error";
+    } catch {
+      navDot.className = "lit-status-dot offline";
+      navDot.title = "Agent offline";
+    }
+  }
+
+  /* ── Form submit ──────────────────────────────────────────── */
+  async function onSubmit(e) {
+    e.preventDefault();
+    const topic = topicInput.value.trim();
+    if (!topic) return;
+    // Update URL without reload so the user can share/bookmark
+    history.replaceState(null, "", "?q=" + encodeURIComponent(topic));
+    doSearch(topic);
+  }
+
+  /* ── Search ───────────────────────────────────────────────── */
+  async function doSearch(topic) {
+    setLoading(true);
+    hideAll();
+
+    try {
+      const res = await fetch("/literature", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ topic }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Server error ${res.status}`);
+      }
+      const data = await res.json();
+      _papers = data.papers || [];
+
+      if (data.error) showError("Warning: " + data.error);
+
+      if (_papers.length === 0) {
+        emptyBox.style.display = "block";
+      } else {
+        const sources = [...new Set(_papers.map(p => fmtSource(p.source)))].join(", ");
+        resultCount.textContent = `${data.total} paper${data.total !== 1 ? "s" : ""} found`;
+        sourceList.textContent  = "Sources: " + sources;
+        metaRow.style.display = "flex";
+        renderList(_papers);
+      }
+
+      if (data.synthesis) {
+        synthesisBody.textContent = data.synthesis;
+        synthesisBox.style.display = "block";
+      }
+
+    } catch (err) {
+      showError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  /* ── Render paper list ────────────────────────────────────── */
+  function renderList(papers) {
+    const sorted = [...papers].sort(comparator(sortSelect.value));
+    paperList.innerHTML = "";
+    sorted.forEach(p => {
+      const el = document.createElement("article");
+      el.className = "paper-item";
+      el.innerHTML = buildPaperHTML(p);
+      paperList.appendChild(el);
+    });
+  }
+
+  function comparator(mode) {
+    if (mode === "citations") return (a, b) => (b.citations || 0) - (a.citations || 0);
+    if (mode === "year")      return (a, b) => (b.year || "0").localeCompare(a.year || "0");
+    return () => 0; // relevance = server order
+  }
+
+  function buildPaperHTML(p) {
+    const badge    = sourceBadge(p.source);
+    const titleEl  = p.url
+      ? `<a href="${esc(p.url)}" target="_blank" rel="noopener" class="paper-title">${esc(p.title)}</a>`
+      : `<span class="paper-title">${esc(p.title)}</span>`;
+    const citations = p.citations
+      ? `<span class="paper-citations">📚 ${p.citations.toLocaleString()} citations</span>`
+      : "";
+    const year = p.year ? `<span class="paper-year">${esc(p.year)}</span>` : "";
+
+    return `
+      <div class="paper-item-header">
+        ${badge}
+        ${titleEl}
+      </div>
+      <div class="paper-item-meta">
+        <span class="paper-authors" title="${esc(p.authors)}">${esc(p.authors)}</span>
+        ${year}
+        ${citations}
+      </div>
+      ${p.abstract ? `<p class="paper-abstract">${esc(p.abstract)}</p>` : ""}
+    `;
+  }
+
+  function sourceBadge(src) {
+    const classMap = {
+      arxiv:            "badge-arxiv",
+      semantic_scholar: "badge-semantic_scholar",
+      pubmed:           "badge-pubmed",
+    };
+    const cls   = classMap[src] || "badge-default";
+    const label = fmtSource(src);
+    return `<span class="paper-source-badge ${cls}">${esc(label)}</span>`;
+  }
+
+  function fmtSource(src) {
+    const map = {
+      arxiv:            "arXiv",
+      semantic_scholar: "Semantic Scholar",
+      pubmed:           "PubMed",
+    };
+    return map[src] || src;
+  }
+
+  /* ── Helpers ──────────────────────────────────────────────── */
+  function showError(msg) {
+    errorBox.textContent = msg;
+    errorBox.style.display = "block";
+  }
+
+  function hideAll() {
+    errorBox.style.display    = "none";
+    metaRow.style.display     = "none";
+    synthesisBox.style.display = "none";
+    emptyBox.style.display    = "none";
+    paperList.innerHTML       = "";
+    _papers = [];
+  }
+
+  function setLoading(on) {
+    loadingBox.style.display = on ? "block" : "none";
+    searchBtn.disabled       = on;
+    topicInput.disabled      = on;
+    searchBtn.textContent    = on ? "Searching…" : "Search";
+  }
+
+  function esc(str) {
+    return String(str ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+</script>
+</body>
+</html>

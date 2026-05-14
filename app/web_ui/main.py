@@ -51,6 +51,16 @@ async def serve_index():
     return {"message": "Agent Factory API is running. Static files not found."}
 
 
+# ── /literature — serve the dedicated literature search page ────
+@app.get("/literature", include_in_schema=False)
+async def serve_literature():
+    """Serve the standalone literature search interface."""
+    page = os.path.join(_STATIC_DIR, "literature.html")
+    if os.path.exists(page):
+        return FileResponse(page)
+    return {"message": "literature.html not found."}
+
+
 # ── Dev server ─────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
