@@ -1,8 +1,25 @@
 services:
-  nanoclaw:
-    image: hello-world
-    environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+  agent:
+    build: .
+    container_name: agent-factory
+    env_file:
+      - .env
     volumes:
-      - ./outputs:/data/memory
+      - ./outputs:/app/outputs
+    stdin_open: true
+    tty: true
     restart: unless-stopped
+
+  # web-ui:                          # Uncomment when web UI is added
+  #   build: .
+  #   container_name: agent-factory-web
+  #   command: python -m uvicorn app.web_ui.main:app --host 0.0.0.0 --port 8000
+  #   env_file:
+  #     - .env
+  #   ports:
+  #     - "8000:8000"
+  #   volumes:
+  #     - ./outputs:/app/outputs
+  #   depends_on:
+  #     - agent
+  #   restart: unless-stopped
