@@ -20,3 +20,6 @@ rich>=13.0.0               # Pretty terminal output (optional but recommended)
 
 # ── Utils ─────────────────────────────────────────────────────
 python-dotenv>=1.0.0       # Support for .env files
+
+# ── OpenClaw SDK ───────────────────────────────────────────────
+openclaw-sdk>=0.1.0        # OpenClaw runtime integration
