@@ -247,40 +247,98 @@ See [CHANGELOG.md](CHANGELOG.md) for breaking changes, or the [full release hist
 MIT
 ---
 
-# Agent Factory Setup (Sprint 1 - Windows)
+# Agent Factory — Setup Guide
 
 ## Prerequisites
+
 - Python 3.9+
 - pip
 - Git
+- Docker Desktop (optional, for containerised run)
 
 ## Installation
 
+```bash
 git clone https://github.com/ITECH3208andITECH3209feduni/itech3208-project-1-agent-factory.git
 cd itech3208-project-1-agent-factory
 pip install -r requirements.txt
+```
 
-## API Key Setup (Windows)
+## Environment Variables
 
-set ANTHROPIC_API_KEY=your-key
+Copy `.env.example` to `.env` and fill in your values:
 
-## Run Project
+```bash
+cp .env.example .env
+```
 
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `ANTHROPIC_API_KEY` | **Yes** | — | Claude API key. Get one at [console.anthropic.com](https://console.anthropic.com) |
+| `SEMANTIC_SCHOLAR_API_KEY` | No | `""` (empty) | Semantic Scholar API key. Raises rate limit from 1 req/s to 100 req/s. Get a free key at [semanticscholar.org/product/api](https://www.semanticscholar.org/product/api) |
+| `MAX_RESULTS` | No | `10` | Maximum number of results returned per skill call |
+| `REQUEST_TIMEOUT` | No | `15` | HTTP request timeout in seconds |
+| `MAX_RETRIES` | No | `3` | Number of retry attempts on network failure |
+
+> **Note:** `MAX_RESULTS`, `REQUEST_TIMEOUT`, and `MAX_RETRIES` can be overridden by setting them in your `.env` file or by editing `config/settings.py` directly.
+
+## Running the Agent
+
+**Interactive mode:**
+```bash
 python main.py
+```
+
+**Single query mode:**
+```bash
+python main.py -q "Find papers on transformer architecture"
+python main.py -q "Best wireless earbuds under $50"
+```
+
+**Save output to file:**
+```bash
+python main.py -q "RAG architecture" --save
+```
+
+**Show query history:**
+```bash
+python main.py --history
+```
+
+**Windows users** — use `python` instead of `python3`:
+```cmd
+set ANTHROPIC_API_KEY=your-key-here
+python main.py
+```
+
+## Running with Docker
+
+```bash
+docker compose up
+```
+
+Outputs are saved to `./outputs` on your host machine.
 
 ## Example Queries
 
-- Find research papers on AI
-- Search laptop under $1000
+**Literature search:**
+- `Find research papers on AI`
+- `Research on CRISPR gene editing 2024`
+
+**Amazon product research:**
+- `Search laptop under $1000`
+- `Best wireless earbuds under $50`
 
 ## Troubleshooting
 
-- If python3 not found → use python
-- If pip not working → use python -m pip install -r requirements.txt
-- If playwright error:
-  playwright install chromium
-- If permission error:
-  pip install --user -r requirements.txt
-  ## PROJ-48 Validation
+| Problem | Fix |
+|---------|-----|
+| `python3` not found | Use `python` instead |
+| pip not working | Run `python -m pip install -r requirements.txt` |
+| Playwright browser error | Run `playwright install chromium` |
+| Permission error on pip | Run `pip install --user -r requirements.txt` |
+| `ANTHROPIC_API_KEY not set` warning | Create a `.env` file with your key (see above) |
+
+## PROJ-48 Validation
 
 Cross-machine testing (PROJ-47) verified that the system runs successfully across macOS and Windows environments. All core features (Literature and Amazon skills) executed without errors, and no critical environment issues were identified.
