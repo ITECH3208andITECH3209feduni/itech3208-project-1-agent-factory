@@ -21,3 +21,19 @@ class LiteratureResponse(BaseModel):
     query:  str
     count:  int
     papers: list[Paper]
+
+
+class Product(BaseModel):
+    """A single Amazon product result returned by GET /api/amazon."""
+    title:  str
+    price:  str = ""
+    rating: str = ""
+    asin:   str = ""
+    url:    str = ""
+
+
+class AmazonResponse(BaseModel):
+    """Response envelope for GET /api/amazon."""
+    query:    str
+    count:    int
+    products: list[Product]
