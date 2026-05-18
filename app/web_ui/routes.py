@@ -166,10 +166,24 @@ async def query_agent(body: QueryRequest):
             except Exception:
                 pass
 
+    elif skill_type == "amazon_seller" and result.results:
+        mode = result.metadata.get("mode", "")
+        for raw in result.results:
+            try:
+                if mode == "supplier_finder":
+                    card = SupplierCard.from_skill_result(raw)
+                else:
+                    card = CampaignCard.from_skill_result(raw)
+                cards.append(card.to_dict())
+            except Exception:
+                pass
+
     return QueryResponse(
         response=rendered,
         cards=cards,
-        type=skill_type if skill_type in ("amazon", "literature") else "unknown",
+        type="amazon_seller" if skill_type == "amazon_seller" else (
+            skill_type if skill_type in ("amazon", "literature") else "unknown"
+        ),
     )
 
 

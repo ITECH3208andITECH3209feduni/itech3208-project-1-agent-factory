@@ -117,9 +117,8 @@ def _mock_suppliers(product: str) -> list[dict]:
             "verified_supplier": random.random() > 0.2,
             "trade_assurance":   random.random() > 0.3,
             "url":               (
-                f"https://www.alibaba.com/product-detail/"
-                f"{quote_plus(product.lower().replace(' ', '-'))}"
-                f"_{60000000000 + i * 111111111}.html"
+                f"https://www.alibaba.com/trade/search?SearchText="
+                f"{quote_plus(product)}&tab=all"
             ),
             "demo_data":         True,
         })
@@ -847,13 +846,22 @@ Guidelines:
     @staticmethod
     def _parse_subject(query: str) -> str:
         """
-        Extract the subject/parameters that follow a colon in the query.
+        Extract the product name from a supplier/seller query.
 
-        For example::
+        Handles both colon-delimited and plain-English forms::
 
-            "find alibaba suppliers for: wireless earbuds"
-            → "wireless earbuds"
+            "find alibaba suppliers for: wireless earbuds" → "wireless earbuds"
+            "find suppliers for yoga mats"                 → "yoga mats"
+            "alibaba suppliers wireless earbuds"           → "wireless earbuds"
         """
+        import re
         if ":" in query:
             return query.split(":", 1)[1].strip()
-        return ""
+        # Strip common plain-English prefixes
+        cleaned = re.sub(
+            r"(?i)^(find\s+)?(alibaba\s+)?(suppliers?|manufacturers?|wholesale)\s+"
+            r"(for\s+|of\s+)?",
+            "",
+            query.strip(),
+        ).strip()
+        return cleaned if cleaned else ""

@@ -314,9 +314,11 @@ function appendAgentBubble(area, responseText, cards, type) {
 
   let cardsHtml = "";
   if (cards && cards.length > 0) {
-    cardsHtml = `<div class="cards">${cards.map(c =>
-      type === "amazon" || type === "shopping" ? buildProductCard(c) : buildPaperCard(c)
-    ).join("")}</div>`;
+    cardsHtml = `<div class="cards">${cards.map(c => {
+      if (type === "amazon" || type === "shopping") return buildProductCard(c);
+      if (type === "amazon_seller") return buildSupplierCard(c);
+      return buildPaperCard(c);
+    }).join("")}</div>`;
   }
 
   const renderedText = (typeof marked !== "undefined" && responseText)
@@ -330,6 +332,7 @@ function appendAgentBubble(area, responseText, cards, type) {
     : "";
 
   const skillLabel = type === "amazon" ? "Shopping"
+    : type === "amazon_seller" ? "Suppliers"
     : type === "literature" ? "Literature"
     : type === "integrity" ? "Integrity"
     : "Agent";
@@ -464,6 +467,28 @@ function appendCampaignCards(area, campaigns) {
 /* ══════════════════════════════════════════════════════════
    CARD BUILDERS
 ══════════════════════════════════════════════════════════ */
+function buildSupplierCard(card) {
+  const verified = card.verified
+    ? `<span class="badge b-arxiv">✔ Verified</span>` : "";
+  const ta = card.trade_assurance
+    ? `<span class="badge b-pubmed">Trade Assurance</span>` : "";
+  const demo = card.demo_data
+    ? `<span class="badge" style="background:#6b7280">Demo</span>` : "";
+  const href = card.url ? ` href="${escHtml(card.url)}" target="_blank" rel="noopener"` : "";
+  return `
+    <div class="card">
+      <div class="card-body">
+        <a class="card-title"${href}>${escHtml(card.supplier_name || "Supplier")}</a>
+        <div class="card-meta">${escHtml(card.product_title || "")}  ${verified}${ta}${demo}</div>
+        <div class="card-meta" style="margin-top:4px">
+          <span style="color:var(--emerald)">💰 ${escHtml(card.price_range || "N/A")}</span>
+          &nbsp;·&nbsp; MOQ: ${escHtml(String(card.moq || "N/A"))}
+          &nbsp;·&nbsp; ⭐ ${escHtml(String(card.rating || "N/A"))}
+        </div>
+      </div>
+    </div>`;
+}
+
 function buildPaperCard(card) {
   const src    = (card.source || "arxiv").toLowerCase().replace(/[^a-z0-9]/g, "_");
   const bClass = src.includes("arxiv") ? "b-arxiv"
