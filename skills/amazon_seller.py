@@ -87,9 +87,9 @@ def _mock_suppliers(product: str) -> list[dict]:
     """
     Return a list of 10 realistic-looking mock supplier records.
 
-    Used as a fallback when Alibaba scraping fails or BeautifulSoup
-    is unavailable.  All records are clearly flagged with
-    ``demo_data: True`` so callers can surface a notice to users.
+    Each supplier gets a unique product variant + Alibaba search URL so
+    the links return relevant live results rather than a single generic page.
+    All records are flagged with ``demo_data: True``.
     """
     base_names = [
         "Shenzhen TechSource Co., Ltd.",
@@ -103,14 +103,29 @@ def _mock_suppliers(product: str) -> list[dict]:
         "Suzhou BrightCraft Co., Ltd.",
         "Wuhan EastWind Manufacturing Co.",
     ]
+    # Product-specific variant suffixes — each gives a unique, targeted search
+    variant_suffixes = [
+        "wholesale manufacturer",
+        "bulk factory price",
+        "OEM custom logo",
+        "private label supplier",
+        "low MOQ wholesale",
+        "certified manufacturer",
+        "export quality supplier",
+        "dropship wholesale",
+        "custom design factory",
+        "branded bulk order",
+    ]
     product_title_prefix = product.title()
     results = []
     for i, name in enumerate(base_names):
         low = round(random.uniform(1.5, 8.0), 2)
         high = round(low * random.uniform(1.5, 3.0), 2)
+        variant = variant_suffixes[i % len(variant_suffixes)]
+        search_term = f"{product} {variant}"
         results.append({
             "supplier_name":     name,
-            "product_title":     f"{product_title_prefix} — Model {chr(65 + i)}",
+            "product_title":     f"{product_title_prefix} — {variant.title()}",
             "price_range":       f"${low:.2f} - ${high:.2f}",
             "min_order_qty":     str(random.choice([50, 100, 200, 500, 1000])),
             "rating":            f"{random.uniform(4.0, 5.0):.1f}",
@@ -118,7 +133,7 @@ def _mock_suppliers(product: str) -> list[dict]:
             "trade_assurance":   random.random() > 0.3,
             "url":               (
                 f"https://www.alibaba.com/trade/search?SearchText="
-                f"{quote_plus(product)}&tab=all"
+                f"{quote_plus(search_term)}&tab=all"
             ),
             "demo_data":         True,
         })
