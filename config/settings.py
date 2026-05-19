@@ -64,3 +64,8 @@ MAX_HISTORY_ITEMS = 50    # keep last N queries in memory
 # ── Output ─────────────────────────────────────────────────────
 OUTPUT_DIR        = os.path.join(_BASE_DIR, "outputs")
 DEFAULT_FORMAT    = "markdown"   # "markdown" | "json"
+
+
+# -- RapidAPI (Amazon fallback) ----------------------------------
+RAPIDAPI_KEY        = os.environ.get("RAPIDAPI_KEY", "")
+RAPIDAPI_AMAZON_HOST = "real-time-amazon-data.p.rapidapi.com"
