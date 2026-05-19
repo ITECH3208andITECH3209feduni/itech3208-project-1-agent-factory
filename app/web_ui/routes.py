@@ -27,6 +27,7 @@ from components.literature_cards import PaperCard
 from components.integrity_cards import IntegrityCard
 from components.seller_cards import SupplierCard, CampaignCard
 from skills.literature import LiteratureSkill
+import app.skills.amazon_skill as amazon_ui_skill
 from skills.academic_integrity import AcademicIntegritySkill
 from skills.amazon_seller import AmazonSellerSkill
 from skills.export import ExportSkill, export_to_pdf, export_to_excel
@@ -84,6 +85,19 @@ class LiteratureResponse(BaseModel):
     papers:    list[PaperResult]
     synthesis: str
     error:     str
+
+
+class AmazonRequest(BaseModel):
+    query: str
+
+
+class AmazonResponse(BaseModel):
+    query:    str
+    total:    int
+    cards:    list[dict]
+    response: str
+    type:     str
+    error:    str
 
 
 class IntegrityRequest(BaseModel):
@@ -242,6 +256,40 @@ async def search_literature(body: LiteratureRequest):
         papers=papers,
         synthesis=synthesis,
         error=result.error,
+    )
+
+
+@router.post("/amazon", response_model=AmazonResponse)
+async def search_amazon(body: AmazonRequest):
+    """
+    Search Amazon products by query.
+    Calls app.skills.amazon_skill.search() directly (PROJ-166 adapter).
+
+    Returns a list of ProductCard dicts plus a short summary.
+    Always returns type="amazon"; cards=[] on failure with the
+    error string populated.
+    """
+    result = amazon_ui_skill.search(body.query)
+
+    cards = [c.to_dict() for c in result.get("results", [])]
+
+    summary = result.get("summary") or ""
+    if not summary:
+        n = len(cards)
+        if n == 0:
+            summary = "No products found."
+        elif n == 1:
+            summary = "Found 1 product."
+        else:
+            summary = "Found " + str(n) + " products."
+
+    return AmazonResponse(
+        query=body.query,
+        total=len(cards),
+        cards=cards,
+        response=summary,
+        type="amazon",
+        error=result.get("error", "") or "",
     )
 
 
