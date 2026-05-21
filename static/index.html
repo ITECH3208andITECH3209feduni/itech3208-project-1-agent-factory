@@ -86,17 +86,11 @@
 
     <div class="nav-section">
       <div class="nav-section-label">Workspace</div>
-      <div class="nav-item active" data-tab="chat">
-        <span class="nav-icon">💬</span> Chat
-      </div>
-      <div class="nav-item" data-tab="research">
-        <span class="nav-icon">📚</span> Research
-      </div>
-      <div class="nav-item" data-tab="shopping">
-        <span class="nav-icon">🛒</span> Shopping
+      <div class="nav-item active" data-tab="shopping">
+        <span class="nav-icon">🛒</span> Seller Tools
       </div>
       <div class="nav-item" data-tab="integrity">
-        <span class="nav-icon">🧠</span> Integrity
+        <span class="nav-icon">🧠</span> Academic Integrity
       </div>
     </div>
 
@@ -117,134 +111,11 @@
   <!-- ══ MAIN ══ -->
   <main class="main">
 
-    <!-- ── Chat Tab ── -->
-    <div class="tab-panel active" id="tab-chat">
+    <!-- ── Seller Tools Tab ── -->
+    <div class="tab-panel active" id="tab-shopping">
       <div class="topbar">
         <div class="topbar-left">
-          <div class="topbar-title">Chat</div>
-        </div>
-        <div class="topbar-right">
-          <div class="source-chip active"><span class="source-chip-dot"></span> arXiv</div>
-          <div class="source-chip active"><span class="source-chip-dot"></span> Semantic Scholar</div>
-          <div class="source-chip"><span class="source-chip-dot"></span> PubMed</div>
-        </div>
-      </div>
-
-      <div class="messages" id="chat-area" role="log" aria-live="polite">
-        <div class="welcome" id="chat-welcome">
-          <div class="welcome-brain">
-            <!-- Welcome brain SVG (larger, same gradient) -->
-            <svg class="brain-svg" width="54" height="54" viewBox="0 0 100 100" fill="none">
-              <defs>
-                <linearGradient id="bgl-w" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%"   stop-color="#ff3300"/>
-                  <stop offset="26%"  stop-color="#ff8800"/>
-                  <stop offset="50%"  stop-color="#2299ff"/>
-                  <stop offset="74%"  stop-color="#00cc66"/>
-                  <stop offset="100%" stop-color="#aa00ee"/>
-                </linearGradient>
-                <radialGradient id="sheen-w" cx="35%" cy="25%" r="52%">
-                  <stop offset="0%"   stop-color="white" stop-opacity="0.3"/>
-                  <stop offset="100%" stop-color="black" stop-opacity="0"/>
-                </radialGradient>
-                <radialGradient id="rim-w" cx="50%" cy="50%" r="50%">
-                  <stop offset="60%"  stop-color="black" stop-opacity="0"/>
-                  <stop offset="100%" stop-color="black" stop-opacity="0.4"/>
-                </radialGradient>
-                <clipPath id="cLw"><path d="M50,10 C47,9 43,9 39,11 C35,13 31,17 28,22 C25,27 23,32 21,37 C19,42 19,47 20,52 C19,57 19,62 21,67 C23,72 27,76 31,79 C35,82 40,84 45,85 C47,85 49,85 50,85 Z"/></clipPath>
-                <clipPath id="cRw"><path d="M50,10 C53,9 57,9 61,11 C65,13 69,17 72,22 C75,27 77,32 79,37 C81,42 81,47 80,52 C81,57 81,62 79,67 C77,72 73,76 69,79 C65,82 60,84 55,85 C53,85 51,85 50,85 Z"/></clipPath>
-                <filter id="gw-w">
-                  <feGaussianBlur stdDeviation="1.2" result="b"/>
-                  <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
-                </filter>
-              </defs>
-              <g clip-path="url(#cLw)">
-                <rect x="0" y="0" width="50" height="100" fill="url(#bgl-w)"/>
-                <rect x="0" y="0" width="50" height="100" fill="url(#sheen-w)"/>
-                <rect x="0" y="0" width="50" height="100" fill="url(#rim-w)"/>
-              </g>
-              <path d="M50,10 C47,9 43,9 39,11 C35,13 31,17 28,22 C25,27 23,32 21,37 C19,42 19,47 20,52 C19,57 19,62 21,67 C23,72 27,76 31,79 C35,82 40,84 45,85 C47,85 49,85 50,85" stroke="rgba(255,255,255,0.65)" stroke-width="1.5" fill="none" filter="url(#gw-w)"/>
-              <g clip-path="url(#cRw)">
-                <rect x="50" y="0" width="50" height="100" fill="url(#bgl-w)"/>
-                <rect x="50" y="0" width="50" height="100" fill="url(#sheen-w)"/>
-                <rect x="50" y="0" width="50" height="100" fill="url(#rim-w)"/>
-              </g>
-              <path d="M50,10 C53,9 57,9 61,11 C65,13 69,17 72,22 C75,27 77,32 79,37 C81,42 81,47 80,52 C81,57 81,62 79,67 C77,72 73,76 69,79 C65,82 60,84 55,85 C53,85 51,85 50,85" stroke="rgba(255,255,255,0.65)" stroke-width="1.5" fill="none" filter="url(#gw-w)"/>
-              <line x1="50" y1="10" x2="50" y2="85" stroke="rgba(0,0,0,0.6)" stroke-width="1.8"/>
-              <path d="M37,19 C34,24 33,29 35,34" stroke="rgba(255,255,255,0.5)" stroke-width="1.1" stroke-linecap="round" fill="none"/>
-              <path d="M27,38 C26,44 27,50 29,54" stroke="rgba(255,255,255,0.5)" stroke-width="1.1" stroke-linecap="round" fill="none"/>
-              <path d="M29,60 C31,66 35,70 38,73" stroke="rgba(255,255,255,0.5)" stroke-width="1.1" stroke-linecap="round" fill="none"/>
-              <path d="M63,19 C66,24 67,29 65,34" stroke="rgba(255,255,255,0.5)" stroke-width="1.1" stroke-linecap="round" fill="none"/>
-              <path d="M73,38 C74,44 73,50 71,54" stroke="rgba(255,255,255,0.5)" stroke-width="1.1" stroke-linecap="round" fill="none"/>
-              <path d="M71,60 C69,66 65,70 62,73" stroke="rgba(255,255,255,0.5)" stroke-width="1.1" stroke-linecap="round" fill="none"/>
-              <path d="M43,48 C45,44 50,43 55,44 C57,45 59,47 59,49" stroke="rgba(255,255,255,0.5)" stroke-width="1.2" fill="none" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <div class="welcome-heading">What would you like to explore?</div>
-          <div class="welcome-sub">Search research papers, find products, get AI-powered synthesis and citation tracking across arXiv, Semantic Scholar and PubMed.</div>
-          <div class="chips">
-            <div class="chip" onclick="fillInput('Papers on transformer architecture')">📄 Papers on transformer architecture</div>
-            <div class="chip" onclick="fillInput('Research gaps in LLMs')">🔍 Research gaps in LLMs</div>
-            <div class="chip" onclick="fillInput('Yoga mats under $50')">🛒 Yoga mats under $50</div>
-            <div class="chip" onclick="fillInput(&quot;Who cited Attention is All You Need?&quot;)">📊 Who cited "Attention is All You Need"?</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="input-area">
-        <div class="input-box">
-          <textarea id="query-input" placeholder="Ask about research papers, products, citations..." rows="1" aria-label="Query input"></textarea>
-          <button class="send-btn" id="send-btn" aria-label="Send">Send ↑</button>
-        </div>
-        <div class="input-hints">
-          <span class="hint-text">Powered by Claude AI · arXiv · Semantic Scholar · PubMed</span>
-          <span class="hint-text">Press <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Research Tab ── -->
-    <div class="tab-panel" id="tab-research">
-      <div class="topbar">
-        <div class="topbar-left">
-          <div class="topbar-title">Research</div>
-        </div>
-        <div class="topbar-right">
-          <div class="source-chip active"><span class="source-chip-dot"></span> arXiv</div>
-          <div class="source-chip active"><span class="source-chip-dot"></span> Semantic Scholar</div>
-          <div class="source-chip active"><span class="source-chip-dot"></span> PubMed</div>
-        </div>
-      </div>
-
-      <div class="messages" id="research-area">
-        <div class="welcome">
-          <div class="welcome-heading">Literature Search</div>
-          <div class="welcome-sub">Find academic papers with AI synthesis, gap analysis and citation tracking across arXiv, Semantic Scholar and PubMed.</div>
-          <div class="chips">
-            <div class="chip" onclick="fillResearchInput('transformers in NLP')">📄 Transformers in NLP</div>
-            <div class="chip" onclick="fillResearchInput('synthesis: RAG systems')">✦ Synthesise RAG papers</div>
-            <div class="chip" onclick="fillResearchInput('gaps in LLM alignment research')">🔍 Gaps in LLM alignment</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="input-area">
-        <div class="input-box">
-          <input type="text" id="research-input" placeholder="Search papers, or prefix with 'synthesis:' or 'gaps:' …" aria-label="Literature search" />
-          <button class="send-btn" id="research-btn">Search ↑</button>
-        </div>
-        <div class="input-hints">
-          <span class="hint-text">arXiv + Semantic Scholar + PubMed</span>
-          <span class="hint-text">Press <kbd>Enter</kbd> to search</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- ── Shopping Tab ── -->
-    <div class="tab-panel" id="tab-shopping">
-      <div class="topbar">
-        <div class="topbar-left">
-          <div class="topbar-title">Shopping</div>
+          <div class="topbar-title">Seller Tools</div>
         </div>
         <div class="topbar-right">
           <div class="source-chip active"><span class="source-chip-dot"></span> Amazon</div>

@@ -11,18 +11,7 @@ const statusDot    = document.getElementById("status-dot");
 const statusLabel  = document.getElementById("status-label");
 const historyList  = document.getElementById("history-list");
 
-// Chat tab
-const chatArea     = document.getElementById("chat-area");
-const chatWelcome  = document.getElementById("chat-welcome");
-const queryInput   = document.getElementById("query-input");
-const sendBtn      = document.getElementById("send-btn");
-
-// Research tab
-const researchArea  = document.getElementById("research-area");
-const researchInput = document.getElementById("research-input");
-const researchBtn   = document.getElementById("research-btn");
-
-// Shopping tab
+// Seller Tools tab
 const shoppingArea  = document.getElementById("shopping-area");
 const shoppingInput = document.getElementById("shopping-input");
 const shoppingBtn   = document.getElementById("shopping-btn");
@@ -33,7 +22,7 @@ const integrityInput = document.getElementById("integrity-input");
 const integrityBtn   = document.getElementById("integrity-btn");
 
 let isLoading = false;
-let activeTab = "chat";
+let activeTab = "shopping";
 
 /* ══════════════════════════════════════════════════════════
    INIT
@@ -121,10 +110,9 @@ async function loadHistory() {
       el.innerHTML = `<span class="hist-icon">⏱</span>${escHtml(item.query || "")}`;
       el.title = item.query || "";
       el.onclick = () => {
-        switchTab("chat");
-        queryInput.value = item.query || "";
-        autoResize(queryInput);
-        queryInput.focus();
+        switchTab("shopping");
+        shoppingInput.value = item.query || "";
+        shoppingInput.focus();
       };
       historyList.appendChild(el);
     });
@@ -615,9 +603,11 @@ function aiAvatarHtml() {
 
 /* Helper called by welcome chip onclick */
 function fillInput(text) {
-  queryInput.value = text;
-  autoResize(queryInput);
-  queryInput.focus();
+  switchTab("shopping");
+  setTimeout(() => {
+    shoppingInput.value = text;
+    shoppingInput.focus();
+  }, 50);
 }
 
 function fillShoppingInput(text) {
