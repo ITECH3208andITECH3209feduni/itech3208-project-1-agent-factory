@@ -58,6 +58,25 @@ def _safe_name(name: str) -> str:
     return re.sub(r"[^\w\-]", "_", name)[:40]
 
 
+def _pdf_safe(text: str) -> str:
+    """Replace Unicode characters unsupported by Helvetica with ASCII equivalents."""
+    replacements = [
+        ("—", "--"),   # em dash
+        ("–", "-"),    # en dash
+        ("’", "'"),    # right single quotation mark
+        ("‘", "'"),    # left single quotation mark
+        ("“", '"'),    # left double quotation mark
+        ("”", '"'),    # right double quotation mark
+        ("•", "*"),    # bullet
+        ("…", "..."),  # horizontal ellipsis
+        (" ", " "),    # non-breaking space
+    ]
+    s = str(text)
+    for src, dst in replacements:
+        s = s.replace(src, dst)
+    return s.encode("latin-1", errors="replace").decode("latin-1")
+
+
 # ══════════════════════════════════════════════════════════════
 # PDF EXPORT
 # ══════════════════════════════════════════════════════════════
@@ -75,10 +94,9 @@ def export_to_pdf(data: dict, filename: str | None = None) -> str:
     """
     _ensure_exports_dir()
 
-    skill   = data.get("skill", "export")
-    query   = data.get("query", "")
-    ts_str  = _ts()
-    base    = filename or f"{_safe_name(skill)}_{ts_str}"
+    skill    = data.get("skill", "export")
+    ts_str   = _ts()
+    base     = filename or f"{_safe_name(skill)}_{ts_str}"
     out_path = os.path.join(EXPORTS_DIR, f"{base}.pdf")
 
     if FPDF_AVAILABLE:
@@ -93,12 +111,16 @@ def export_to_pdf(data: dict, filename: str | None = None) -> str:
 
 
 def _write_fpdf(data: dict, path: str) -> None:
-    """Render SkillResult data to a PDF file using fpdf2."""
+    """Render a SkillResult dict to a PDF file using fpdf2."""
 
     class AgentPDF(FPDF):
         def header(self):
-            self.set_font("Helvetica", "B", 14)
-            self.cell(0, 10, "Agent Factory — Export Report", align="C", new_x="LMARGIN", new_y="NEXT")
+            self.set_font("Helvetica", "B", 12)
+            self.set_fill_color(60, 80, 140)
+            self.set_text_color(255, 255, 255)
+            self.cell(0, 10, "Agent Factory -- Export Report", fill=True,
+                      new_x="LMARGIN", new_y="NEXT")
+            self.set_text_color(0, 0, 0)
             self.ln(2)
 
         def footer(self):
@@ -110,12 +132,12 @@ def _write_fpdf(data: dict, path: str) -> None:
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
 
-    skill    = data.get("skill", "unknown")
-    query    = data.get("query", "")
+    skill    = _pdf_safe(data.get("skill", "unknown"))
+    query    = _pdf_safe(data.get("query", ""))
     success  = data.get("success", False)
-    summary  = data.get("summary", "")
-    error    = data.get("error", "")
-    duration = data.get("duration", "")
+    summary  = _pdf_safe(data.get("summary", ""))
+    error    = _pdf_safe(data.get("error", ""))
+    duration = _pdf_safe(str(data.get("duration", "")))
     results  = data.get("results", [])
     metadata = data.get("metadata", {})
 
@@ -148,9 +170,7 @@ def _write_fpdf(data: dict, path: str) -> None:
         pdf.set_font("Helvetica", "B", 11)
         pdf.cell(0, 8, "AI Summary", fill=True, new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "", 10)
-        # Sanitise summary: fpdf2 handles UTF-8 but some chars can break the table
-        safe_summary = summary.encode("latin-1", "replace").decode("latin-1")
-        pdf.multi_cell(0, 6, safe_summary)
+        pdf.multi_cell(0, 6, summary)
         pdf.ln(4)
 
     # ── Results table ──────────────────────────────────────────
@@ -181,25 +201,28 @@ def _write_fpdf(data: dict, path: str) -> None:
         pdf.set_text_color(255, 255, 255)
         pdf.set_font("Helvetica", "B", 8)
         for k in display_keys:
-            pdf.cell(col_w, 7, str(k).title()[:18], border=1, fill=True)
+            pdf.cell(col_w, 7, _pdf_safe(str(k).title()[:18]), border=1, fill=True)
         pdf.ln()
         pdf.set_text_color(0, 0, 0)
 
         # Data rows
         pdf.set_font("Helvetica", "", 8)
-        fill = False
+        alt = False
         for row in results[:50]:
-            pdf.set_fill_color(240, 245, 255) if fill else pdf.set_fill_color(255, 255, 255)
+            pdf.set_fill_color(240, 245, 255) if alt else pdf.set_fill_color(255, 255, 255)
             for k in display_keys:
-                val = str(row.get(k, ""))[:30].encode("latin-1", "replace").decode("latin-1")
+                val = _pdf_safe(str(row.get(k, "")))[:30]
                 pdf.cell(col_w, 6, val, border=1, fill=True)
             pdf.ln()
-            fill = not fill
+            alt = not alt
 
         if len(results) > 50:
             pdf.set_font("Helvetica", "I", 9)
-            pdf.cell(0, 6, f"... and {len(results) - 50} more rows (truncated in PDF, use Excel for full data).",
-                     new_x="LMARGIN", new_y="NEXT")
+            pdf.cell(
+                0, 6,
+                f"... and {len(results) - 50} more rows (truncated in PDF, use Excel for full data).",
+                new_x="LMARGIN", new_y="NEXT",
+            )
         pdf.ln(4)
 
     # ── Metadata section ───────────────────────────────────────
@@ -209,9 +232,8 @@ def _write_fpdf(data: dict, path: str) -> None:
         pdf.cell(0, 8, "Metadata", fill=True, new_x="LMARGIN", new_y="NEXT")
         pdf.set_font("Helvetica", "", 9)
         for k, v in metadata.items():
-            line = f"{k}: {v}"
-            safe = line.encode("latin-1", "replace").decode("latin-1")[:120]
-            pdf.cell(0, 6, safe, new_x="LMARGIN", new_y="NEXT")
+            line = _pdf_safe(f"{k}: {v}")[:120]
+            pdf.cell(0, 6, line, new_x="LMARGIN", new_y="NEXT")
 
     pdf.output(path)
 
@@ -220,7 +242,7 @@ def _write_plain_text(data: dict, path: str) -> None:
     """Fallback when fpdf2 is not available: write a plain text report."""
     lines = [
         "=" * 60,
-        "Agent Factory — Export Report",
+        "Agent Factory -- Export Report",
         "=" * 60,
         f"Skill    : {data.get('skill', '')}",
         f"Query    : {data.get('query', '')}",
@@ -418,8 +440,8 @@ class ExportSkill(BaseSkill):
 
     _INSTRUCTIONS = (
         "To export results, send a message in one of these formats:\n"
-        "  • export pdf: <paste JSON data here>\n"
-        "  • export excel: <paste JSON data here>\n\n"
+        "  * export pdf: <paste JSON data here>\n"
+        "  * export excel: <paste JSON data here>\n\n"
         "The JSON data should be a SkillResult dict "
         "(from a previous skill response).\n"
         "Exported files are saved to the exports/ directory."
@@ -429,7 +451,7 @@ class ExportSkill(BaseSkill):
         q = query.strip()
 
         # ── Detect format ──────────────────────────────────────
-        fmt   = None
+        fmt      = None
         json_str = ""
 
         lower = q.lower()

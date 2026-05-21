@@ -186,19 +186,24 @@ class AmazonSellerSkill(BaseSkill):
 
     def run(self, query: str) -> SkillResult:
         """Route the query to the appropriate sub-skill."""
-        q_lower = query.lower()
+        import re as _re
+        # Strip key=value parameter pairs before keyword matching so that
+        # "ads=3.00" doesn't accidentally trigger _PPC_TRIGGERS on "ads"
+        q_stripped = _re.sub(r"\b\w+=[\d.]+", "", query).lower()
 
-        if any(t in q_lower for t in _SUPPLIER_TRIGGERS):
+        if any(t in q_stripped for t in _SUPPLIER_TRIGGERS):
             return self._run_supplier_finder(query)
 
-        if any(t in q_lower for t in _PPC_TRIGGERS):
+        # Check profit BEFORE PPC — "profit", "margin", "roi" are unambiguous;
+        # PPC keywords ("ads", "campaign") can appear in profit queries as params
+        if any(t in q_stripped for t in _PROFIT_TRIGGERS):
+            return self._run_profit_optimiser(query)
+
+        if any(t in q_stripped for t in _PPC_TRIGGERS):
             return self._run_ppc_builder(query)
 
-        if any(t in q_lower for t in _PROGRESS_TRIGGERS):
+        if any(t in q_stripped for t in _PROGRESS_TRIGGERS):
             return self._run_progress_analysis(query)
-
-        if any(t in q_lower for t in _PROFIT_TRIGGERS):
-            return self._run_profit_optimiser(query)
 
         return SkillResult(
             skill_name=self.name,
