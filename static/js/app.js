@@ -36,28 +36,16 @@ document.addEventListener("DOMContentLoaded", () => {
     item.addEventListener("click", () => switchTab(item.dataset.tab));
   });
 
-  // Chat input
-  queryInput.addEventListener("keydown", e => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
-  });
-  queryInput.addEventListener("input", () => autoResize(queryInput));
-  sendBtn.addEventListener("click", sendChatMessage);
-
-  // Research input
-  researchInput.addEventListener("keydown", e => {
-    if (e.key === "Enter") { e.preventDefault(); sendResearchQuery(); }
-  });
-  researchBtn.addEventListener("click", sendResearchQuery);
-
-  // Shopping input
+  // Amazon Seller AI input — Enter to submit
   shoppingInput.addEventListener("keydown", e => {
     if (e.key === "Enter") { e.preventDefault(); sendShoppingQuery(); }
   });
   shoppingBtn.addEventListener("click", sendShoppingQuery);
 
-  // Integrity input — Ctrl+Enter or button
+  // Literature AI input — Enter to submit, Ctrl+Enter for new line
   integrityInput.addEventListener("keydown", e => {
-    if (e.key === "Enter" && e.ctrlKey) { e.preventDefault(); sendIntegrityCheck(); }
+    if (e.key === "Enter" && !e.ctrlKey) { e.preventDefault(); sendIntegrityCheck(); }
+    // Ctrl+Enter inserts a newline
   });
   integrityBtn.addEventListener("click", sendIntegrityCheck);
 });
