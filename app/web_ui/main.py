@@ -21,7 +21,7 @@ if _PROJECT not in sys.path:
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 
 from app.web_ui.routes import router
 
@@ -47,7 +47,7 @@ async def serve_index():
     """Serve the main chat interface."""
     index = os.path.join(_STATIC_DIR, "index.html")
     if os.path.exists(index):
-        return FileResponse(index)
+        return FileResponse(index, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
     return {"message": "Agent Factory API is running. Static files not found."}
 
 
@@ -57,7 +57,7 @@ async def serve_literature():
     """Serve the standalone literature search interface."""
     page = os.path.join(_STATIC_DIR, "literature.html")
     if os.path.exists(page):
-        return FileResponse(page)
+        return FileResponse(page, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
     return {"message": "literature.html not found."}
 
 
