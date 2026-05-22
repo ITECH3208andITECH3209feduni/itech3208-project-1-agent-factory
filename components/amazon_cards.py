@@ -78,8 +78,15 @@ class ProductCard:
         import math
         title        = raw.get("title", "Unknown Product")
         price_str    = raw.get("price", "")
-        rating       = float(raw.get("rating", 0) or 0)
-        review_count = int(raw.get("reviews", raw.get("review_count", 0)) or 0)
+        _rating_raw  = str(raw.get("rating", 0) or 0)
+        # Handle "4.3 / 5" or "4.3 out of 5" formats from scraper
+        import re as _re
+        _rating_match = _re.search(r"[\d.]+", _rating_raw)
+        rating       = float(_rating_match.group()) if _rating_match else 0.0
+        # Handle "12,847" or "12847" or "(12847)" formats from scraper
+        _reviews_raw = str(raw.get("reviews", raw.get("review_count", 0)) or 0)
+        _reviews_digits = _re.sub(r"[^\d]", "", _reviews_raw)
+        review_count = int(_reviews_digits) if _reviews_digits else 0
         url          = raw.get("url", raw.get("link", ""))
         image_url    = raw.get("image_url", raw.get("image", ""))
         bsr          = str(raw.get("bsr", raw.get("best_seller_rank", "")) or "")

@@ -37,6 +37,8 @@ class Formatter:
             return self._render_literature(result)
         elif result.skill_name == "amazon":
             return self._render_amazon(result)
+        elif result.skill_name == "amazon_seller":
+            return self._render_amazon_seller(result)
         return self._render_generic(result)
 
     def _render_literature(self, result: SkillResult) -> str:
@@ -135,6 +137,21 @@ class Formatter:
         if search_url:
             lines.append(f"\n🔍 [See all results on Amazon]({search_url})")
         return "\n".join(lines)
+
+    def _render_amazon_seller(self, result: SkillResult) -> str:
+        mode = result.metadata.get("mode", "")
+        icon = {"supplier_finder": "🏭", "ppc_builder": "📊",
+                "progress_analysis": "📈", "profit_optimiser": "💰"}.get(mode, "🛒")
+        lines = [
+            f"# {icon} Agent Result — Amazon_Seller",
+            f"**Query:** {result.query}",
+            f"**Success:** {'✅' if result.success else '❌'}",
+            f"\n{result.summary}" if result.summary else "",
+        ]
+        # Only show error when there are no results at all (not a scrape fallback)
+        if result.error and not result.results:
+            lines.append(f"\n⚠️ {result.error}")
+        return "\n".join(l for l in lines if l)
 
     def _render_generic(self, result: SkillResult) -> str:
         lines = [
