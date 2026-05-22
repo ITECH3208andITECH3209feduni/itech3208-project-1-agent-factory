@@ -2,8 +2,6 @@
 # ──────────────────────────────────────────────────────────────
 # Tests for GET /api/literature
 # Uses FastAPI TestClient — no real HTTP calls to arXiv/etc.
-# All authenticated calls include the X-API-Key header so they pass
-# the auth dependency added in PROJ-113.
 # ──────────────────────────────────────────────────────────────
 
 from fastapi.testclient import TestClient
@@ -13,9 +11,6 @@ from api.routes import literature as literature_route
 from skills.base_skill import SkillResult
 
 client = TestClient(app)
-
-# Matches the key set by tests/api/conftest.py
-HEADERS = {"X-API-Key": "test-api-key-for-pytest"}
 
 
 def _fake_result(results: list[dict], success: bool = True, error: str = "") -> SkillResult:
@@ -30,7 +25,7 @@ def _fake_result(results: list[dict], success: bool = True, error: str = "") -> 
 
 
 def _patch_skill(monkeypatch, fake_result: SkillResult) -> None:
-    """Replace the skill instance with a stub returning fake_result."""
+    """Replace the skill instance with a stub that returns fake_result."""
     monkeypatch.setattr(
         literature_route,
         "_literature_skill",
@@ -58,11 +53,7 @@ def test_literature_returns_papers(monkeypatch):
     ]
     _patch_skill(monkeypatch, _fake_result(fake_results))
 
-    response = client.get(
-        "/api/literature",
-        params={"q": "transformers"},
-        headers=HEADERS,
-    )
+    response = client.get("/api/literature", params={"q": "transformers"})
 
     assert response.status_code == 200
     body = response.json()
@@ -77,17 +68,13 @@ def test_literature_returns_papers(monkeypatch):
 
 def test_literature_missing_query_returns_422():
     """No q param → FastAPI's automatic validation returns 422."""
-    response = client.get("/api/literature", headers=HEADERS)
+    response = client.get("/api/literature")
     assert response.status_code == 422
 
 
 def test_literature_empty_query_returns_422():
     """Empty q param → 422 because of min_length=1."""
-    response = client.get(
-        "/api/literature",
-        params={"q": ""},
-        headers=HEADERS,
-    )
+    response = client.get("/api/literature", params={"q": ""})
     assert response.status_code == 422
 
 
@@ -101,10 +88,6 @@ def test_literature_skill_failure_returns_502(monkeypatch):
             error="arXiv: timeout; Semantic Scholar: 500",
         ),
     )
-    response = client.get(
-        "/api/literature",
-        params={"q": "anything"},
-        headers=HEADERS,
-    )
+    response = client.get("/api/literature", params={"q": "anything"})
     assert response.status_code == 502
     assert "timeout" in response.json()["detail"].lower()

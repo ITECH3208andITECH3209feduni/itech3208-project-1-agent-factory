@@ -5,9 +5,7 @@
 # Story: PROJ-112
 # ──────────────────────────────────────────────────────────────
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-
-from api.auth import require_api_key
+from fastapi import APIRouter, HTTPException, Query
 
 from api.schemas import LiteratureResponse, Paper
 from skills.literature import LiteratureSkill
@@ -21,7 +19,6 @@ _literature_skill = LiteratureSkill()
 @router.get("/literature", response_model=LiteratureResponse)
 def search_literature(
     q: str = Query(..., min_length=1, description="Search query, e.g. 'transformer attention'"),
-    _auth: str = Depends(require_api_key),
 ) -> LiteratureResponse:
     """Search academic literature across arXiv, Semantic Scholar, and PubMed."""
     result = _literature_skill(q)  # __call__ adds timing + exception safety
