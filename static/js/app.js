@@ -302,15 +302,7 @@ function appendSupplierCards(area, suppliers) {
   if (!suppliers || suppliers.length === 0) return;
   const row = document.createElement("div");
   row.className = "msg-row";
-  const cardsHtml = suppliers.map(s => `
-    <div class="supplier-card card">
-      <span class="badge b-default">Supplier</span>
-      <div class="card-body">
-        <div class="card-title">${escHtml(s.name || s.title || "Supplier")}</div>
-        <div class="card-meta">${escHtml(s.location || "")} ${s.price ? `· ${escHtml(s.price)}` : ""}</div>
-        ${s.description ? `<div class="card-abstract">${escHtml(s.description)}</div>` : ""}
-      </div>
-    </div>`).join("");
+  const cardsHtml = suppliers.map(s => buildSupplierCard(s)).join("");
   row.innerHTML = `
     ${aiAvatarHtml()}
     <div class="msg-content">
@@ -354,15 +346,17 @@ function buildSupplierCard(card) {
   const demo = card.demo_data
     ? `<span class="badge" style="background:#6b7280">Demo</span>` : "";
   const href = card.url ? ` href="${escHtml(card.url)}" target="_blank" rel="noopener"` : "";
+  const price = card.price_range && card.price_range !== "Price on request"
+    ? card.price_range : "Price on request";
   return `
     <div class="card">
       <div class="card-body">
         <a class="card-title"${href}>${escHtml(card.supplier_name || "Supplier")}</a>
-        <div class="card-meta">${escHtml(card.product_title || "")}  ${verified}${ta}${demo}</div>
-        <div class="card-meta" style="margin-top:4px">
-          <span style="color:var(--emerald)">💰 ${escHtml(card.price_range || "N/A")}</span>
-          &nbsp;·&nbsp; MOQ: ${escHtml(String(card.moq || "N/A"))}
-          &nbsp;·&nbsp; ⭐ ${escHtml(String(card.rating || "N/A"))}
+        <div class="card-meta" style="margin-top:2px">${escHtml(card.product_title || "")} ${verified}${ta}${demo}</div>
+        <div style="margin-top:8px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+          <span style="font-size:1.05rem;font-weight:700;color:var(--emerald)">💰 ${escHtml(price)}</span>
+          <span style="color:#aaa;font-size:0.85rem">MOQ: ${escHtml(String(card.moq || "N/A"))}</span>
+          <span style="color:#aaa;font-size:0.85rem">⭐ ${escHtml(String(card.rating || "N/A"))}</span>
         </div>
       </div>
     </div>`;
