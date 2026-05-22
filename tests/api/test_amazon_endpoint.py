@@ -2,8 +2,6 @@
 # ──────────────────────────────────────────────────────────────
 # Tests for GET /api/amazon
 # Uses FastAPI TestClient — no real scraping.
-# All authenticated calls include the X-API-Key header so they pass
-# the auth dependency added in PROJ-113.
 # ──────────────────────────────────────────────────────────────
 
 from fastapi.testclient import TestClient
@@ -13,9 +11,6 @@ from api.routes import amazon as amazon_route
 from skills.base_skill import SkillResult
 
 client = TestClient(app)
-
-# Matches the key set by tests/api/conftest.py
-HEADERS = {"X-API-Key": "test-api-key-for-pytest"}
 
 
 def _fake_result(results: list[dict], success: bool = True, error: str = "") -> SkillResult:
@@ -56,11 +51,7 @@ def test_amazon_returns_products(monkeypatch):
     ]
     _patch_skill(monkeypatch, _fake_result(fake_results))
 
-    response = client.get(
-        "/api/amazon",
-        params={"q": "headphones"},
-        headers=HEADERS,
-    )
+    response = client.get("/api/amazon", params={"q": "headphones"})
 
     assert response.status_code == 200
     body = response.json()
@@ -83,17 +74,13 @@ def test_amazon_returns_products(monkeypatch):
 
 def test_amazon_missing_query_returns_422():
     """No q param → FastAPI's automatic validation returns 422."""
-    response = client.get("/api/amazon", headers=HEADERS)
+    response = client.get("/api/amazon")
     assert response.status_code == 422
 
 
 def test_amazon_empty_query_returns_422():
     """Empty q param → 422 because of min_length=1."""
-    response = client.get(
-        "/api/amazon",
-        params={"q": ""},
-        headers=HEADERS,
-    )
+    response = client.get("/api/amazon", params={"q": ""})
     assert response.status_code == 422
 
 
@@ -107,11 +94,7 @@ def test_amazon_skill_failure_returns_502(monkeypatch):
             error="Playwright unavailable; requests fallback returned 503",
         ),
     )
-    response = client.get(
-        "/api/amazon",
-        params={"q": "anything"},
-        headers=HEADERS,
-    )
+    response = client.get("/api/amazon", params={"q": "anything"})
     assert response.status_code == 502
     assert "playwright" in response.json()["detail"].lower()
 
@@ -119,12 +102,9 @@ def test_amazon_skill_failure_returns_502(monkeypatch):
 def test_amazon_zero_results_with_success_returns_200(monkeypatch):
     """Skill ran successfully but found no products → 200 with empty array."""
     _patch_skill(monkeypatch, _fake_result(results=[], success=True))
-    response = client.get(
-        "/api/amazon",
-        params={"q": "xyznonexistent123"},
-        headers=HEADERS,
-    )
+    response = client.get("/api/amazon", params={"q": "xyznonexistent123"})
     assert response.status_code == 200
     body = response.json()
     assert body["count"] == 0
     assert body["products"] == []
+    

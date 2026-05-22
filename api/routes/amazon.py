@@ -5,9 +5,7 @@
 # Story: PROJ-111
 # ──────────────────────────────────────────────────────────────
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-
-from api.auth import require_api_key
+from fastapi import APIRouter, HTTPException, Query
 
 from api.schemas import AmazonResponse, Product
 from skills.amazon import AmazonSkill
@@ -21,7 +19,6 @@ _amazon_skill = AmazonSkill()
 @router.get("/amazon", response_model=AmazonResponse)
 def search_amazon(
     q: str = Query(..., min_length=1, description="Product search query, e.g. 'wireless headphones'"),
-    _auth: str = Depends(require_api_key),
 ) -> AmazonResponse:
     """Search Amazon for products. Returns up to 10 results."""
     # Call _run_normal_search directly to bypass auto-routing into
