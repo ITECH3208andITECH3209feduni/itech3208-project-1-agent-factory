@@ -1,22 +1,23 @@
-# Agent Factory — Python Dependencies
+﻿# Agent Factory â€” Python Dependencies
 # Install with: pip install -r requirements.txt
 
-# ── Core LLM ──────────────────────────────────────────────────
+# â”€â”€ Core LLM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 anthropic>=0.40.0          # Claude API SDK
 
-# ── HTTP & scraping ───────────────────────────────────────────
+# â”€â”€ HTTP & scraping â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 requests>=2.31.0           # HTTP client for all API calls
 beautifulsoup4>=4.12.0     # HTML parsing for Amazon scraping
 lxml>=5.0.0                # Faster HTML/XML parser (BS4 backend)
 playwright>=1.40.0         # Automated browser for robust scraping
 playwright-stealth>=1.0.6  # Makes the browser invisible to bot detectors
 
-# ── Literature APIs ───────────────────────────────────────────
+# â”€â”€ Literature APIs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # arXiv and Semantic Scholar use plain requests (no extra lib needed)
 # PubMed uses requests + stdlib xml.etree
 
-# ── Terminal UI ───────────────────────────────────────────────
+# â”€â”€ Terminal UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 rich>=13.0.0               # Pretty terminal output (optional but recommended)
+tabulate>=0.10.0           # Formatted tables for demo scripts and CLI output
 
-# ── Utils ─────────────────────────────────────────────────────
+# â”€â”€ Utils â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 python-dotenv>=1.0.0       # Support for .env files
