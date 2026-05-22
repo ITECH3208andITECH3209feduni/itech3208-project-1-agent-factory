@@ -133,7 +133,7 @@ def _mock_suppliers(product: str) -> list[dict]:
             "trade_assurance":   random.random() > 0.3,
             "url":               (
                 f"https://www.alibaba.com/trade/search?SearchText="
-                f"{quote_plus(search_term)}&tab=all"
+                f"{quote_plus(product)}&IndexArea=product_en"
             ),
             "demo_data":         True,
         })
