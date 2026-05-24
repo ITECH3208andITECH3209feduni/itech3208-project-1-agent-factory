@@ -29,6 +29,192 @@ let isLoading = false;
 let activeTab = "shopping";
 let activeLitMode = "search"; // "search" | "integrity"
 
+/* ── Attachment state ─────────────────────────────────────── */
+// Each entry: { name, ext, size, text, dataUrl }
+const attachState = { shopping: [], literature: [], integrity: [] };
+
+/* ══════════════════════════════════════════════════════════
+   ATTACHMENT SYSTEM
+══════════════════════════════════════════════════════════ */
+
+/** Map extension → emoji icon */
+function fileIcon(ext) {
+  const map = {
+    pdf: "📄", docx: "📝", doc: "📝", txt: "📃", md: "📃",
+    csv: "📊", json: "📋", png: "🖼", jpg: "🖼", jpeg: "🖼",
+    gif: "🖼", webp: "🖼", bmp: "🖼",
+  };
+  return map[(ext || "").toLowerCase()] || "📁";
+}
+
+/** Human-readable file size */
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+}
+
+/** Lazily inject a CDN script, returns Promise that resolves when loaded */
+function loadScript(src, globalCheck) {
+  return new Promise((resolve, reject) => {
+    if (globalCheck && window[globalCheck]) return resolve();
+    const s = document.createElement("script");
+    s.src = src; s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+/** Extract text from a PDF file using PDF.js (lazy-loaded) */
+async function extractPdfText(file) {
+  await loadScript(
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+    "pdfjsLib"
+  );
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  const buf = await file.arrayBuffer();
+  const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+  let text = "";
+  for (let i = 1; i <= Math.min(pdf.numPages, 30); i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map(it => it.str).join(" ") + "\n";
+  }
+  return text.trim();
+}
+
+/** Extract text from a DOCX file using mammoth.js (lazy-loaded) */
+async function extractDocxText(file) {
+  await loadScript(
+    "https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js",
+    "mammoth"
+  );
+  const buf = await file.arrayBuffer();
+  const result = await window.mammoth.extractRawText({ arrayBuffer: buf });
+  return result.value.trim();
+}
+
+/** Read file — returns { text, dataUrl } based on type */
+async function readFile(file) {
+  const ext = (file.name.split(".").pop() || "").toLowerCase();
+  const imgExts = ["png", "jpg", "jpeg", "gif", "webp", "bmp"];
+
+  if (ext === "pdf") {
+    try { return { text: await extractPdfText(file), dataUrl: null }; }
+    catch { return { text: `[PDF: ${file.name} — could not extract text]`, dataUrl: null }; }
+  }
+  if (ext === "docx" || ext === "doc") {
+    try { return { text: await extractDocxText(file), dataUrl: null }; }
+    catch { return { text: `[Document: ${file.name} — could not extract text]`, dataUrl: null }; }
+  }
+  if (imgExts.includes(ext)) {
+    return new Promise(resolve => {
+      const fr = new FileReader();
+      fr.onload = () => resolve({ text: null, dataUrl: fr.result });
+      fr.readAsDataURL(file);
+    });
+  }
+  // Plain text types
+  return new Promise(resolve => {
+    const fr = new FileReader();
+    fr.onload = () => resolve({ text: fr.result, dataUrl: null });
+    fr.onerror  = () => resolve({ text: `[${file.name} — could not read]`, dataUrl: null });
+    fr.readAsText(file);
+  });
+}
+
+/** Trigger file picker for a given panel */
+function triggerAttach(panel) {
+  let inp = document.getElementById("attach-file-" + panel);
+  if (!inp) {
+    inp = document.createElement("input");
+    inp.type = "file"; inp.id = "attach-file-" + panel; inp.style.display = "none";
+    inp.multiple = true;
+    inp.accept = ".txt,.md,.csv,.json,.pdf,.docx,.doc,.png,.jpg,.jpeg,.gif,.webp,.bmp";
+    inp.addEventListener("change", () => handleFileSelect(inp.files, panel));
+    document.body.appendChild(inp);
+  }
+  inp.value = ""; // reset so same file can be re-attached
+  inp.click();
+}
+
+/** Process selected files, read contents, render chips */
+async function handleFileSelect(files, panel) {
+  if (!files || files.length === 0) return;
+  for (const file of Array.from(files)) {
+    if (file.size > 20 * 1024 * 1024) {
+      alert(`"${file.name}" is too large (max 20 MB).`); continue;
+    }
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    const { text, dataUrl } = await readFile(file);
+    const attachment = { name: file.name, ext, size: file.size, text, dataUrl };
+    attachState[panel].push(attachment);
+    addAttachChip(panel, attachment, attachState[panel].length - 1);
+  }
+}
+
+/** Render a chip in the attach strip for a given panel */
+function addAttachChip(panel, att, idx) {
+  const strip = document.getElementById(panel + "-attach-strip");
+  if (!strip) return;
+  const chip = document.createElement("div");
+  chip.className = "attach-chip";
+  chip.id = `attach-chip-${panel}-${idx}`;
+
+  let iconHtml;
+  if (att.dataUrl) {
+    iconHtml = `<img class="attach-chip-thumb" src="${att.dataUrl}" alt="">`;
+  } else {
+    iconHtml = `<span class="attach-chip-icon">${fileIcon(att.ext)}</span>`;
+  }
+
+  chip.innerHTML =
+    iconHtml +
+    `<span class="attach-chip-name" title="${escHtml(att.name)}">${escHtml(att.name)}</span>` +
+    `<span class="attach-chip-size">${formatSize(att.size)}</span>` +
+    `<button class="attach-chip-remove" onclick="removeAttachment('${panel}',${idx})" title="Remove">✕</button>`;
+  strip.appendChild(chip);
+}
+
+/** Remove one attachment by index */
+function removeAttachment(panel, idx) {
+  attachState[panel].splice(idx, 1);
+  // Re-render the whole strip
+  renderAttachStrip(panel);
+}
+
+/** Re-render all chips for a panel (called after removal) */
+function renderAttachStrip(panel) {
+  const strip = document.getElementById(panel + "-attach-strip");
+  if (!strip) return;
+  strip.innerHTML = "";
+  attachState[panel].forEach((att, i) => addAttachChip(panel, att, i));
+}
+
+/** Clear all attachments for a panel */
+function clearAttachments(panel) {
+  attachState[panel] = [];
+  const strip = document.getElementById(panel + "-attach-strip");
+  if (strip) strip.innerHTML = "";
+}
+
+/**
+ * Build extra context string from attachments.
+ * Returns { contextText, attachments }
+ */
+function getAttachContext(panel) {
+  const atts = attachState[panel];
+  let contextText = "";
+  for (const att of atts) {
+    if (att.text) {
+      contextText += `\n\n--- Attached file: ${att.name} ---\n${att.text}`;
+    } else if (att.dataUrl) {
+      contextText += `\n[Image attached: ${att.name}]`;
+    }
+  }
+  return { contextText, attachments: [...atts] };
+}
+
 /* ══════════════════════════════════════════════════════════
    INIT
 ══════════════════════════════════════════════════════════ */
@@ -119,10 +305,14 @@ function setLitQuery(query) {
 ══════════════════════════════════════════════════════════ */
 async function sendLiteratureQuery() {
   const query = literatureInput.value.trim();
-  if (!query || isLoading) return;
+  const { contextText, attachments } = getAttachContext("literature");
+  if (!query && !contextText || isLoading) return;
+  const displayQuery = query || "(attached file)";
+  const fullQuery    = query + contextText;
 
-  appendUserMsg(literatureArea, query);
+  appendUserMsg(literatureArea, displayQuery, attachments);
   literatureInput.value = "";
+  clearAttachments("literature");
   setLoading(true, literatureBtn, literatureInput);
   const typingId = showTyping(literatureArea);
 
@@ -130,7 +320,7 @@ async function sendLiteratureQuery() {
     const res = await fetch(`${API_BASE}/literature`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ topic: query }),
+      body: JSON.stringify({ topic: fullQuery }),
     });
     if (!res.ok) throw new Error(`Server error: ${res.status}`);
     const data = await res.json();
@@ -214,10 +404,14 @@ async function loadHistory() {
 ══════════════════════════════════════════════════════════ */
 async function sendShoppingQuery() {
   const query = shoppingInput.value.trim();
-  if (!query || isLoading) return;
+  const { contextText, attachments } = getAttachContext("shopping");
+  if (!query && !contextText || isLoading) return;
+  const displayQuery = query || "(attached file)";
+  const fullQuery    = query + contextText;
 
-  appendUserMsg(shoppingArea, query);
+  appendUserMsg(shoppingArea, displayQuery, attachments);
   shoppingInput.value = "";
+  clearAttachments("shopping");
   setLoading(true, shoppingBtn, shoppingInput);
   const typingId = showTyping(shoppingArea);
 
@@ -225,7 +419,7 @@ async function sendShoppingQuery() {
     const res = await fetch(`${API_BASE}/query`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ query: fullQuery }),
     });
     if (!res.ok) throw new Error(`Server error: ${res.status}`);
     const data = await res.json();
@@ -255,12 +449,17 @@ async function sendShoppingQuery() {
    INTEGRITY TAB — POST /integrity
 ══════════════════════════════════════════════════════════ */
 async function sendIntegrityCheck() {
-  const text = integrityInput.value.trim();
+  const typed = integrityInput.value.trim();
+  const { contextText, attachments } = getAttachContext("integrity");
+  // For integrity, file text replaces or supplements typed text
+  const text = typed + contextText;
   if (!text || isLoading) return;
   const integrityArea = document.getElementById("integrity-area");
 
-  appendUserMsg(integrityArea, text.length > 100 ? text.slice(0, 100) + "…" : text);
+  const displayText = typed || (attachments[0] ? attachments[0].name : "(attached file)");
+  appendUserMsg(integrityArea, displayText.length > 100 ? displayText.slice(0, 100) + "…" : displayText, attachments);
   integrityInput.value = "";
+  clearAttachments("integrity");
   setLoading(true, integrityBtn, integrityInput);
   const typingId = showTyping(integrityArea);
 
@@ -332,13 +531,27 @@ function appendAgentBubble(area, responseText, cards, type) {
   area.appendChild(row);
 }
 
-/** Append a plain user message row. */
-function appendUserMsg(area, text) {
+/** Append a plain user message row, with optional attachment previews. */
+function appendUserMsg(area, text, attachments = []) {
   const row = document.createElement("div");
   row.className = "msg-row user";
+
+  let attachHtml = "";
+  if (attachments.length > 0) {
+    attachHtml = `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;justify-content:flex-end">` +
+      attachments.map(a => {
+        if (a.dataUrl) {
+          return `<img src="${a.dataUrl}" style="max-width:110px;max-height:72px;border-radius:6px;object-fit:cover;border:1px solid rgba(124,58,237,0.3)" title="${escHtml(a.name)}">`;
+        }
+        return `<span style="background:rgba(124,58,237,0.12);border:1px solid rgba(124,58,237,0.28);border-radius:6px;padding:3px 8px;font-size:11px;color:#c4b5fd;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fileIcon(a.ext)} ${escHtml(a.name)}</span>`;
+      }).join("") +
+      "</div>";
+  }
+
   row.innerHTML = `
     <div class="msg-content" style="display:flex;flex-direction:column;align-items:flex-end;">
       <div class="msg-name" style="justify-content:flex-end;">You</div>
+      ${attachHtml}
       <div class="user-bubble">${escHtml(text)}</div>
     </div>
     <div class="avatar user-av">Y</div>`;

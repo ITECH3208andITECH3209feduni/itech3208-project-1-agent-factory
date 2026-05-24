@@ -6,6 +6,8 @@
   <title>Agent Factory</title>
   <link rel="stylesheet" href="/static/css/style.css" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- PDF.js — lazy-loaded on first PDF attach -->
+  <!-- mammoth.js — lazy-loaded on first DOCX attach -->
 </head>
 <body>
 
@@ -137,12 +139,14 @@
       </div>
 
       <div class="input-area">
+        <div class="attach-strip" id="shopping-attach-strip"></div>
         <div class="input-box">
+          <button class="attach-btn" onclick="triggerAttach('shopping')" title="Attach file (PDF, DOCX, image, text)">📎</button>
           <input type="text" id="shopping-input" placeholder="e.g. find products: yoga mat  |  find alibaba suppliers for: …  |  build ppc campaign for: …" aria-label="Shopping search" />
           <button class="send-btn" id="shopping-btn">Search ↑</button>
         </div>
         <div class="input-hints">
-          <span class="hint-text">Amazon · Alibaba · PPC · Profit Optimiser</span>
+          <span class="hint-text">Amazon · Alibaba · PPC · Profit Optimiser · 📎 attach files</span>
           <span class="hint-text">Press <kbd>Enter</kbd> to search</span>
         </div>
       </div>
@@ -179,12 +183,14 @@
           </div>
         </div>
         <div class="input-area">
+          <div class="attach-strip" id="literature-attach-strip"></div>
           <div class="input-box">
+            <button class="attach-btn" onclick="triggerAttach('literature')" title="Attach file (PDF, DOCX, image, text)">📎</button>
             <input type="text" id="literature-input" placeholder="Search research papers, topics, authors…" aria-label="Literature search" />
             <button class="send-btn" id="literature-btn" onclick="sendLiteratureQuery()">Search ↑</button>
           </div>
           <div class="input-hints">
-            <span class="hint-text">arXiv · Semantic Scholar · AI synthesis</span>
+            <span class="hint-text">arXiv · Semantic Scholar · AI synthesis · 📎 attach files</span>
             <span class="hint-text">Press <kbd>Enter</kbd> to search</span>
           </div>
         </div>
@@ -204,12 +210,14 @@
           </div>
         </div>
         <div class="input-area">
+          <div class="attach-strip" id="integrity-attach-strip"></div>
           <div class="input-box">
+            <button class="attach-btn" onclick="triggerAttach('integrity')" title="Attach document to check (PDF, DOCX, TXT)">📎</button>
             <textarea id="integrity-input" placeholder="Paste text to check for AI generation or plagiarism… (min 50 words)" rows="3" aria-label="Integrity check"></textarea>
             <button class="send-btn" id="integrity-btn">Check ↑</button>
           </div>
           <div class="input-hints">
-            <span class="hint-text">AI probability · Plagiarism score · Risk report</span>
+            <span class="hint-text">AI probability · Plagiarism score · Risk report · 📎 attach document</span>
             <span class="hint-text">Press <kbd>Enter</kbd> to submit · <kbd>Ctrl+Enter</kbd> for new line</span>
           </div>
         </div>
@@ -219,6 +227,6 @@
   </main>
 </div>
 
-<script src="/static/js/app.js?v=10"></script>
+<script src="/static/js/app.js?v=11"></script>
 </body>
 </html>

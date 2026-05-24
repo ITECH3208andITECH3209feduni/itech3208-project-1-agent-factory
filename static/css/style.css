@@ -322,6 +322,44 @@ body {
 .send-btn:hover { background: #6d28d9; }
 .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* ── Attach button ─────────────────────────────────────────── */
+.attach-btn {
+  background: transparent; border: none; cursor: pointer;
+  font-size: 1.05rem; padding: 4px 7px; border-radius: 6px;
+  color: var(--text3); transition: background 0.15s, color 0.15s;
+  flex-shrink: 0; line-height: 1;
+}
+.attach-btn:hover { background: var(--surface2); color: var(--violet2); }
+
+/* ── Attachment preview strip ──────────────────────────────── */
+.attach-strip {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 0 2px; margin-bottom: 6px;
+}
+.attach-strip:empty { display: none; }
+
+.attach-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(124,58,237,0.1); border: 1px solid rgba(124,58,237,0.25);
+  border-radius: 8px; padding: 4px 8px 4px 7px;
+  font-size: 12px; color: var(--text2); max-width: 220px;
+}
+.attach-chip-thumb {
+  width: 22px; height: 22px; object-fit: cover;
+  border-radius: 4px; flex-shrink: 0;
+}
+.attach-chip-icon { font-size: 0.85rem; flex-shrink: 0; }
+.attach-chip-name {
+  overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; flex: 1; min-width: 0;
+}
+.attach-chip-size { font-size: 10px; color: var(--text3); flex-shrink: 0; }
+.attach-chip-remove {
+  background: none; border: none; cursor: pointer;
+  color: var(--text3); font-size: 0.85rem; padding: 0; line-height: 1; flex-shrink: 0;
+}
+.attach-chip-remove:hover { color: #ef4444; }
+
 .input-hints { display: flex; justify-content: space-between; margin-top: 8px; padding: 0 2px; }
 .hint-text { font-size: 11px; color: var(--text3); }
 .hint-text kbd {
