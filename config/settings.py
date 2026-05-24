@@ -7,8 +7,8 @@ import os
 import warnings
 from dotenv import load_dotenv
 
-# Load .env file if it exists
-load_dotenv()
+# Load .env file — override=True ensures .env values win over empty shell env vars
+load_dotenv(override=True)
 
 # ── Resolve base directory so all paths work regardless of cwd ─
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

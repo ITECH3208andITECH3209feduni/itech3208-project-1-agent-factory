@@ -17,12 +17,17 @@ const shoppingInput = document.getElementById("shopping-input");
 const shoppingBtn   = document.getElementById("shopping-btn");
 
 // Integrity tab
-const integrityArea  = document.getElementById("integrity-area");
 const integrityInput = document.getElementById("integrity-input");
 const integrityBtn   = document.getElementById("integrity-btn");
 
+// Literature search (inside Literature AI tab)
+const literatureArea  = document.getElementById("literature-area");
+const literatureInput = document.getElementById("literature-input");
+const literatureBtn   = document.getElementById("literature-btn");
+
 let isLoading = false;
 let activeTab = "shopping";
+let activeLitMode = "search"; // "search" | "integrity"
 
 /* ══════════════════════════════════════════════════════════
    INIT
@@ -42,10 +47,15 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   shoppingBtn.addEventListener("click", sendShoppingQuery);
 
-  // Literature AI input — Enter to submit, Ctrl+Enter for new line
+  // Literature search input — Enter to search
+  literatureInput.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); sendLiteratureQuery(); }
+  });
+  literatureBtn.addEventListener("click", sendLiteratureQuery);
+
+  // Integrity check input — Enter to submit, Ctrl+Enter for new line
   integrityInput.addEventListener("keydown", e => {
     if (e.key === "Enter" && !e.ctrlKey) { e.preventDefault(); sendIntegrityCheck(); }
-    // Ctrl+Enter inserts a newline
   });
   integrityBtn.addEventListener("click", sendIntegrityCheck);
 });
@@ -63,6 +73,97 @@ function switchTab(tabName) {
     panel.classList.toggle("active", panel.id === `tab-${tabName}`);
   });
   activeTab = tabName;
+}
+
+/* ══════════════════════════════════════════════════════════
+   LITERATURE AI — MODE SWITCHING
+══════════════════════════════════════════════════════════ */
+/* ── Quick-action chip helpers ──────────────────────────────── */
+function prefillShopping(prefix, hint) {
+  shoppingInput.value = prefix;
+  shoppingInput.placeholder = hint || shoppingInput.placeholder;
+  shoppingInput.focus();
+  // Move cursor to end
+  shoppingInput.setSelectionRange(prefix.length, prefix.length);
+}
+
+function prefillLiterature() {
+  setLitMode("search");
+  literatureInput.placeholder = "e.g. transformers in NLP, quantum computing…";
+  literatureInput.focus();
+}
+
+function switchToIntegrity(mode) {
+  setLitMode("integrity");
+  setIntegrityMode(mode);
+  const integrityInput = document.getElementById("integrity-input");
+  if (integrityInput) integrityInput.focus();
+}
+
+function setLitMode(mode) {
+  activeLitMode = mode;
+  document.getElementById("lit-search-panel").style.display    = mode === "search"    ? "flex" : "none";
+  document.getElementById("lit-integrity-panel").style.display = mode === "integrity" ? "flex" : "none";
+  document.getElementById("lit-mode-search").classList.toggle("active",    mode === "search");
+  document.getElementById("lit-mode-integrity").classList.toggle("active", mode === "integrity");
+}
+
+function setLitQuery(query) {
+  setLitMode("search");
+  literatureInput.value = query;
+  sendLiteratureQuery();
+}
+
+/* ══════════════════════════════════════════════════════════
+   LITERATURE SEARCH — POST /query (literature type)
+══════════════════════════════════════════════════════════ */
+async function sendLiteratureQuery() {
+  const query = literatureInput.value.trim();
+  if (!query || isLoading) return;
+
+  appendUserMsg(literatureArea, query);
+  literatureInput.value = "";
+  setLoading(true, literatureBtn, literatureInput);
+  const typingId = showTyping(literatureArea);
+
+  try {
+    const res = await fetch(`${API_BASE}/literature`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ topic: query }),
+    });
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    const data = await res.json();
+    removeTyping(typingId);
+
+    // /literature returns { papers, synthesis, total, query, error }
+    const cards = data.papers || [];
+    if (data.error && cards.length === 0) {
+      // Both sources failed — show a helpful error
+      appendErrorMsg(literatureArea,
+        "Could not reach academic databases right now. " +
+        (data.error.includes("rate") ? "Semantic Scholar is rate-limited — wait 1 min and try again." :
+         data.error.includes("arXiv") ? "arXiv timed out — try again in a moment." :
+         data.error));
+    } else {
+      let summary = data.synthesis
+        || `Found **${data.total || cards.length}** papers for **"${data.query || query}"**`;
+      // If one source failed but we still got results, append a subtle inline note
+      if (data.error && cards.length > 0) {
+        const note = data.error.includes("rate")
+          ? "_⚠️ Semantic Scholar was rate-limited — showing arXiv results only. Try again in ~1 min for more._"
+          : `_⚠️ Note: ${data.error}_`;
+        summary = summary + "\n\n" + note;
+      }
+      appendAgentBubble(literatureArea, summary, cards, "literature");
+    }
+  } catch (err) {
+    removeTyping(typingId);
+    appendErrorMsg(literatureArea, err.message);
+  } finally {
+    setLoading(false, literatureBtn, literatureInput);
+    scrollToBottom(literatureArea);
+  }
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -156,6 +257,7 @@ async function sendShoppingQuery() {
 async function sendIntegrityCheck() {
   const text = integrityInput.value.trim();
   if (!text || isLoading) return;
+  const integrityArea = document.getElementById("integrity-area");
 
   appendUserMsg(integrityArea, text.length > 100 ? text.slice(0, 100) + "…" : text);
   integrityInput.value = "";
@@ -195,7 +297,8 @@ function appendAgentBubble(area, responseText, cards, type) {
   if (cards && cards.length > 0) {
     cardsHtml = `<div class="cards">${cards.map(c => {
       if (type === "amazon" || type === "shopping") return buildProductCard(c);
-      if (type === "amazon_seller") return buildSupplierCard(c);
+      if (type === "supplier_finder") return buildSupplierCard(c);
+      if (type === "ppc_builder") return buildCampaignCard(c);
       return buildPaperCard(c);
     }).join("")}</div>`;
   }
@@ -211,7 +314,8 @@ function appendAgentBubble(area, responseText, cards, type) {
     : "";
 
   const skillLabel = type === "amazon" ? "Shopping"
-    : type === "amazon_seller" ? "Suppliers"
+    : type === "supplier_finder" ? "Suppliers"
+    : type === "ppc_builder" ? "PPC Campaign"
     : type === "literature" ? "Literature"
     : type === "integrity" ? "Integrity"
     : "Agent";
@@ -357,6 +461,29 @@ function buildSupplierCard(card) {
           <span style="font-size:1.05rem;font-weight:700;color:var(--emerald)">💰 ${escHtml(price)}</span>
           <span style="color:#aaa;font-size:0.85rem">MOQ: ${escHtml(String(card.moq || "N/A"))}</span>
           <span style="color:#aaa;font-size:0.85rem">⭐ ${escHtml(String(card.rating || "N/A"))}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+function buildCampaignCard(card) {
+  const matchColours = { Broad: "#6366f1", Phrase: "#f59e0b", Exact: "#10b981" };
+  const matchIcons   = { Broad: "🔍", Phrase: "💬", Exact: "🎯" };
+  const colour = matchColours[card.match_type] || "#6b7280";
+  const icon   = matchIcons[card.match_type]   || "📌";
+  const clicks = card.estimated_clicks || 0;
+  const bid    = card.suggested_bid || "N/A";
+  return `
+    <div class="card" style="border-left:3px solid ${colour};padding:0">
+      <div class="card-body" style="padding:12px 14px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-size:1rem">${icon}</span>
+          <span style="font-size:0.95rem;font-weight:600;color:#e2e8f0;flex:1">${escHtml(card.keyword || "Keyword")}</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+          <span style="background:${colour};color:#fff;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:4px;letter-spacing:0.05em">${escHtml(card.match_type || "")}</span>
+          <span style="color:#34d399;font-size:0.88rem;font-weight:700">💰 ${escHtml(String(bid))}</span>
+          <span style="color:#94a3b8;font-size:0.82rem">~${escHtml(String(clicks))} clicks/day</span>
         </div>
       </div>
     </div>`;

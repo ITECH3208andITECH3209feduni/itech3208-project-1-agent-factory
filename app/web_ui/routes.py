@@ -192,12 +192,17 @@ async def query_agent(body: QueryRequest):
             except Exception:
                 pass
 
+    # Use mode-specific type for seller skill so the frontend can render correctly
+    if skill_type == "amazon_seller":
+        seller_mode = result.metadata.get("mode", "")
+        response_type = "ppc_builder" if seller_mode == "ppc_builder" else "supplier_finder"
+    else:
+        response_type = skill_type if skill_type in ("amazon", "literature") else "unknown"
+
     return QueryResponse(
         response=rendered,
         cards=cards,
-        type="amazon_seller" if skill_type == "amazon_seller" else (
-            skill_type if skill_type in ("amazon", "literature") else "unknown"
-        ),
+        type=response_type,
     )
 
 

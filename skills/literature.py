@@ -89,14 +89,19 @@ class LiteratureSkill(BaseSkill):
         return cls._claude_client
 
     # ── Retry helper ──────────────────────────────────────────
-    def _retry_get(self, url: str, params: dict = None, retries: int = 3, backoff: float = 2.0) -> requests.Response:
+    def _retry_get(self, url: str, params: dict = None, retries: int = 3,
+                   backoff: float = 2.0, timeout: int = None) -> requests.Response:
         """GET with automatic retry and exponential backoff.
-        Raises _RateLimitedError when all attempts are exhausted due to HTTP 429."""
+        Raises _RateLimitedError when all attempts are exhausted due to HTTP 429.
+        Uses a longer timeout for arXiv which can be slow to respond."""
+        # arXiv gets a longer timeout since it can be slow
+        if timeout is None:
+            timeout = 45 if "arxiv" in url else REQUEST_TIMEOUT
         last_error = None
         was_rate_limited = False
         for attempt in range(retries):
             try:
-                resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
+                resp = requests.get(url, params=params, timeout=timeout)
                 if resp.status_code == 429:
                     wait = backoff * (2 ** attempt)   # 2s, 4s, 8s
                     time.sleep(wait)
@@ -118,8 +123,22 @@ class LiteratureSkill(BaseSkill):
             )
         raise last_error or Exception(f"Request failed after {retries} attempts")
 
+    # ── Query normalisation ───────────────────────────────────
+    @staticmethod
+    def _clean_query(query: str) -> str:
+        """Strip filler phrases and normalise consumer queries to academic terms."""
+        import re
+        q = query.strip()
+        # Strip leading filler: "about X", "tell me about X", "search for X", etc.
+        q = re.sub(r"^(about|tell me about|search for|find papers on|papers on|"
+                   r"research on|what is|what are|latest|recent)\s+", "", q, flags=re.IGNORECASE)
+        # Strip trailing filler
+        q = re.sub(r"\s+(papers?|research|articles?|study|studies)$", "", q, flags=re.IGNORECASE)
+        return q.strip() or query.strip()
+
     # ── Main entry point ──────────────────────────────────────
     def run(self, query: str) -> SkillResult:
+        query  = self._clean_query(query)
         q_lower = query.lower()
 
         # ── Mode: Forward citations (PROJ-94) ─────────────────

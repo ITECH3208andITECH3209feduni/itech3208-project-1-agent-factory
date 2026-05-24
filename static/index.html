@@ -126,19 +126,19 @@
       <div class="messages" id="shopping-area">
         <div class="welcome">
           <div class="welcome-heading">Amazon &amp; Seller Tools</div>
-          <div class="welcome-sub">Find products, compare reviews, score opportunities, find Alibaba suppliers, build PPC campaigns and optimise margins.</div>
+          <div class="welcome-sub">Your AI-powered FBA toolkit — research products, source suppliers, launch PPC campaigns and analyse profit margins.</div>
           <div class="chips">
-            <div class="chip" onclick="fillShoppingInput('best wireless earbuds under $50')">🎧 Earbuds under $50</div>
-            <div class="chip" onclick="fillShoppingInput('find alibaba suppliers for: bamboo toothbrush')">🏭 Find Alibaba suppliers</div>
-            <div class="chip" onclick="fillShoppingInput('build ppc campaign for: yoga mat')">📊 Build PPC campaign</div>
-            <div class="chip" onclick="fillShoppingInput('optimize profit: selling_price=24.99 cost_price=7.00')">💰 Optimise profit</div>
+            <div class="chip" onclick="prefillShopping('find products: ', 'e.g. wireless earbuds under $50')">🛒 Product Research</div>
+            <div class="chip" onclick="prefillShopping('find alibaba suppliers for: ', 'e.g. bamboo toothbrush')">🏭 Supplier Finder</div>
+            <div class="chip" onclick="prefillShopping('build ppc campaign for: ', 'e.g. yoga mat')">📊 PPC Builder</div>
+            <div class="chip" onclick="prefillShopping('analyse profit for: ', 'e.g. selling_price=29.99 cost_price=8.00')">💰 Profit Analyser</div>
           </div>
         </div>
       </div>
 
       <div class="input-area">
         <div class="input-box">
-          <input type="text" id="shopping-input" placeholder="Search products, find suppliers, build campaigns…" aria-label="Shopping search" />
+          <input type="text" id="shopping-input" placeholder="e.g. find products: yoga mat  |  find alibaba suppliers for: …  |  build ppc campaign for: …" aria-label="Shopping search" />
           <button class="send-btn" id="shopping-btn">Search ↑</button>
         </div>
         <div class="input-hints">
@@ -148,38 +148,70 @@
       </div>
     </div>
 
-    <!-- ── Integrity Tab ── -->
+    <!-- ── Literature AI Tab (Research Search + Integrity Check) ── -->
     <div class="tab-panel" id="tab-integrity">
       <div class="topbar">
         <div class="topbar-left">
           <div class="topbar-title">Literature AI</div>
         </div>
         <div class="topbar-right">
-          <div class="source-chip active"><span class="source-chip-dot"></span> AI Detector</div>
-          <div class="source-chip active"><span class="source-chip-dot"></span> Plagiarism</div>
-        </div>
-      </div>
-
-      <div class="messages" id="integrity-area">
-        <div class="welcome">
-          <div class="welcome-heading">Academic Integrity Check</div>
-          <div class="welcome-sub">Detect AI-generated text, scan for plagiarism, and generate full integrity reports with risk scoring.</div>
-          <div class="chips">
-            <div class="chip" onclick="setIntegrityMode('ai_detection')">🤖 AI Detection</div>
-            <div class="chip" onclick="setIntegrityMode('plagiarism')">🔍 Plagiarism Scan</div>
-            <div class="chip" onclick="setIntegrityMode('full_report')">📋 Full Report</div>
+          <div class="source-chip active" id="lit-mode-search" onclick="setLitMode('search')" style="cursor:pointer">
+            <span class="source-chip-dot"></span> Research Search
+          </div>
+          <div class="source-chip" id="lit-mode-integrity" onclick="setLitMode('integrity')" style="cursor:pointer">
+            <span class="source-chip-dot"></span> Integrity Check
           </div>
         </div>
       </div>
 
-      <div class="input-area">
-        <div class="input-box">
-          <textarea id="integrity-input" placeholder="Paste text to check for AI generation or plagiarism… (min 50 words)" rows="3" aria-label="Integrity check"></textarea>
-          <button class="send-btn" id="integrity-btn">Check ↑</button>
+      <!-- Research Search Mode -->
+      <div id="lit-search-panel" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+        <div class="messages" id="literature-area">
+          <div class="welcome">
+            <div class="welcome-heading">Literature AI</div>
+            <div class="welcome-sub">Search academic papers, detect AI-generated content, and run plagiarism checks — all in one place.</div>
+            <div class="chips">
+              <div class="chip" onclick="prefillLiterature()">📚 Research Papers</div>
+              <div class="chip" onclick="switchToIntegrity('ai_detection')">🤖 AI Detector</div>
+              <div class="chip" onclick="switchToIntegrity('plagiarism')">🔍 Plagiarism Check</div>
+              <div class="chip" onclick="switchToIntegrity('full_report')">📋 Full Report</div>
+            </div>
+          </div>
         </div>
-        <div class="input-hints">
-          <span class="hint-text">AI probability · Plagiarism score · Risk report</span>
-          <span class="hint-text">Press <kbd>Enter</kbd> to submit · <kbd>Ctrl+Enter</kbd> for new line</span>
+        <div class="input-area">
+          <div class="input-box">
+            <input type="text" id="literature-input" placeholder="Search research papers, topics, authors…" aria-label="Literature search" />
+            <button class="send-btn" id="literature-btn" onclick="sendLiteratureQuery()">Search ↑</button>
+          </div>
+          <div class="input-hints">
+            <span class="hint-text">arXiv · Semantic Scholar · AI synthesis</span>
+            <span class="hint-text">Press <kbd>Enter</kbd> to search</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Integrity Check Mode -->
+      <div id="lit-integrity-panel" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+        <div class="messages" id="integrity-area">
+          <div class="welcome">
+            <div class="welcome-heading">Academic Integrity Check</div>
+            <div class="welcome-sub">Detect AI-generated text, scan for plagiarism, and generate full integrity reports with risk scoring.</div>
+            <div class="chips">
+              <div class="chip" onclick="setIntegrityMode('ai_detection')">🤖 AI Detection</div>
+              <div class="chip" onclick="setIntegrityMode('plagiarism')">🔍 Plagiarism Scan</div>
+              <div class="chip" onclick="setIntegrityMode('full_report')">📋 Full Report</div>
+            </div>
+          </div>
+        </div>
+        <div class="input-area">
+          <div class="input-box">
+            <textarea id="integrity-input" placeholder="Paste text to check for AI generation or plagiarism… (min 50 words)" rows="3" aria-label="Integrity check"></textarea>
+            <button class="send-btn" id="integrity-btn">Check ↑</button>
+          </div>
+          <div class="input-hints">
+            <span class="hint-text">AI probability · Plagiarism score · Risk report</span>
+            <span class="hint-text">Press <kbd>Enter</kbd> to submit · <kbd>Ctrl+Enter</kbd> for new line</span>
+          </div>
         </div>
       </div>
     </div>
@@ -187,6 +219,6 @@
   </main>
 </div>
 
-<script src="/static/js/app.js?v=3"></script>
+<script src="/static/js/app.js?v=10"></script>
 </body>
 </html>
