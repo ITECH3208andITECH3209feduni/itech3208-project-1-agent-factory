@@ -239,10 +239,10 @@ member_slide(
             ("SessionMemory class — sessions, messages, metadata.", False, OFF_W),
             ("Agent reads/writes DB every turn — no data loss.", False, OFF_W),
         ]),
-        ("REST API & Web UI", "PROJ-156–194", [
-            ("FastAPI: GET /api/literature  +  /api/amazon.", False, OFF_W),
-            ("Served index.html + literature.html with CORS.", False, OFF_W),
-            ("End-to-end integration + formatter polish.", False, OFF_W),
+        ("UI Sprint — Attachments & Seller Tools", "PROJ-156–194", [
+            ("File attachments: PDF/DOCX/image parsing in chatbox.", False, OFF_W),
+            ("Literature AI: dual-panel (Research Search + Integrity).", False, OFF_W),
+            ("PPC builder card fix · arXiv 45 s timeout · chip UX.", False, OFF_W),
         ]),
     ]
 )
@@ -384,8 +384,8 @@ T(s, 8.02, 0.24, 1.84, 0.38, "EXECUTION PROOF",
 
 # Big stat row
 for i, (num, lbl, ac) in enumerate([
-    ("89",   "Jira Tickets\nClosed",  GOLD),
-    ("12",   "GitHub PRs\nMerged",    CYAN),
+    ("100+", "Jira Tickets\nClosed",  GOLD),
+    ("14",   "GitHub PRs\nMerged",    CYAN),
     ("5",    "Team\nMembers",         GOLD),
     ("100%", "Sprint Goal\nAchieved", CYAN),
 ]):
@@ -415,18 +415,25 @@ rows = [
      "Dilraj", "4",  "FastAPI static · literature.html · index.html",    "✅ Done"),
     (CARD_D, GOLD, "Session Memory — SQLite persistence across restarts",
      "Dilraj", "5",  "Schema · SessionMemory class · agent integration", "✅ Done"),
-    (CARD_L, CYAN, "Formatter Upgrades — error UX + rate-limit notices",
-     "Dilraj", "3",  "User-facing notices · no-results guidance · tips", "✅ Done"),
+    (CARD_L, CYAN, "UI Polish — PPC cards · Literature dual-panel · chip UX · arXiv fix",
+     "Dilraj", "8",  "Mode-type routing · inline S2 warning · query cleaner", "✅ Done"),
+    (CARD_D, GOLD, "File Attachment System — PDF · DOCX · images in chatbox",
+     "Dilraj", "3",  "PDF.js + mammoth.js lazy-load · preview chips · violet UX", "✅ Done"),
 ]
 
+ROW_H  = 0.41   # tighter pitch — fits 7 rows before footer
+ROW_TY = 0.03   # text y-offset within row
+
 for i, (bg, ac, epic, owner, tickets, deliverables, status) in enumerate(rows):
-    R(s, 0.22, 2.48 + i * 0.47, 9.52, 0.47, bg)
-    R(s, 0.22, 2.48 + i * 0.47, 0.04, 0.47, ac)
-    T(s, 0.30, 2.51 + i * 0.47, 3.64, 0.38, epic,         size=8.5, color=OFF_W)
-    T(s, 4.06, 2.51 + i * 0.47, 1.00, 0.38, owner,        size=8.5, color=MUTED)
-    T(s, 5.20, 2.51 + i * 0.47, 0.58, 0.38, tickets,      size=8.5, color=ac, bold=True)
-    T(s, 5.92, 2.51 + i * 0.47, 2.62, 0.38, deliverables, size=8.0, color=MUTED)
-    T(s, 8.64, 2.51 + i * 0.47, 1.20, 0.38, status,       size=8.5, color=GOLD, bold=True)
+    ry = 2.48 + i * ROW_H
+    ty = ry  + ROW_TY
+    R(s, 0.22, ry, 9.52, ROW_H, bg)
+    R(s, 0.22, ry, 0.04, ROW_H, ac)
+    T(s, 0.30, ty, 3.64, 0.34, epic,         size=8.0, color=OFF_W)
+    T(s, 4.06, ty, 1.00, 0.34, owner,        size=8.0, color=MUTED)
+    T(s, 5.20, ty, 0.58, 0.34, tickets,      size=8.0, color=ac, bold=True)
+    T(s, 5.92, ty, 2.62, 0.34, deliverables, size=7.5, color=MUTED)
+    T(s, 8.64, ty, 1.20, 0.34, status,       size=8.0, color=GOLD, bold=True)
 
 footer(s)
 
@@ -454,11 +461,11 @@ for i, (icon, title, ac, url, steps) in enumerate([
       "→ Scraped & AI-scored products",
       "→ Price · rating · reviews · Prime",
       "→ Direct Amazon links"]),
-    ("📖", "Swagger API Explorer",  GOLD, "http://localhost:8000/docs",
-     ["Interactive API documentation",
-      "→ Try /api/literature live",
-      "→ Try /api/amazon live",
-      "→ Inspect Pydantic schemas"]),
+    ("📎", "File Attachment System", GOLD, "Any chatbox — click 📎 to attach",
+     ["Attach PDF, DOCX, image or TXT",
+      "→ PDF.js extracts text client-side",
+      "→ mammoth.js parses Word files",
+      "→ Content auto-sent with query"]),
 ]):
     lx = 0.22 + i * 3.22
     R(s, lx, 0.94, 3.04, 4.52, CARD_D)
