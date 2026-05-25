@@ -316,7 +316,7 @@ member_slide(
     role="QA & Test Engineering",
     badge="QA & TESTS",
     accent=CYAN,
-    stat_num="27",
+    stat_num="29",
     stat_label="Jira Tickets Closed",
     contributions=[
         ("Test Suite", "PROJ-148–153", [
@@ -384,10 +384,10 @@ T(s, 8.02, 0.24, 1.84, 0.38, "EXECUTION PROOF",
 
 # Big stat row
 for i, (num, lbl, ac) in enumerate([
-    ("176",  "Jira Tickets\nClosed",  GOLD),
+    ("178",  "Jira Tickets\nClosed",  GOLD),
     ("14",   "GitHub PRs\nMerged",    CYAN),
     ("5",    "Team\nMembers",         GOLD),
-    ("178",  "Total\nTickets",        CYAN),
+    ("100%", "Sprint Goal\nAchieved", CYAN),
 ]):
     stat_card(s, 0.22 + i * 2.41, 0.78, 2.33, 1.32, num, lbl, ac)
 
