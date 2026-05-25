@@ -226,7 +226,7 @@ member_slide(
     role="Lead Developer",
     badge="LEAD DEV",
     accent=GOLD,
-    stat_num="32",
+    stat_num="67",
     stat_label="Jira Tickets Closed",
     contributions=[
         ("Literature Research Skill", "PROJ-127–132", [
@@ -256,7 +256,7 @@ member_slide(
     role="Amazon Intelligence Lead",
     badge="AMAZON LEAD",
     accent=CYAN,
-    stat_num="14",
+    stat_num="31",
     stat_label="Jira Tickets Closed",
     contributions=[
         ("Amazon Skill Core", "PROJ-111–113", [
@@ -286,7 +286,7 @@ member_slide(
     role="Infrastructure & DevOps",
     badge="INFRA",
     accent=GOLD,
-    stat_num="15",
+    stat_num="27",
     stat_label="Jira Tickets Closed",
     contributions=[
         ("Docker & Container Environment", "", [
@@ -316,7 +316,7 @@ member_slide(
     role="QA & Documentation",
     badge="QA & DOCS",
     accent=CYAN,
-    stat_num="12",
+    stat_num="27",
     stat_label="Jira Tickets Closed",
     contributions=[
         ("End-to-End Feature Testing", "", [
@@ -346,7 +346,7 @@ member_slide(
     role="QA Lead",
     badge="QA LEAD",
     accent=GOLD,
-    stat_num="16",
+    stat_num="24",
     stat_label="Jira Tickets Closed",
     contributions=[
         ("Acceptance Criteria & Test Design", "", [
@@ -384,10 +384,10 @@ T(s, 8.02, 0.24, 1.84, 0.38, "EXECUTION PROOF",
 
 # Big stat row
 for i, (num, lbl, ac) in enumerate([
-    ("100+", "Jira Tickets\nClosed",  GOLD),
+    ("176",  "Jira Tickets\nClosed",  GOLD),
     ("14",   "GitHub PRs\nMerged",    CYAN),
     ("5",    "Team\nMembers",         GOLD),
-    ("100%", "Sprint Goal\nAchieved", CYAN),
+    ("178",  "Total\nTickets",        CYAN),
 ]):
     stat_card(s, 0.22 + i * 2.41, 0.78, 2.33, 1.32, num, lbl, ac)
 
