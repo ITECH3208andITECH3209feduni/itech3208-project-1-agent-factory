@@ -12,11 +12,11 @@
 | 1:30  | 1:00     | 3 — Dhiman       | **Dhiman**   | Amazon Intelligence |
 | 2:30  | 1:00     | 4 — Prabhjot     | **Prabhjot** | OpenClaw SDK · Docker |
 | 3:30  | 1:00     | 5 — Sahil        | **Sahil**    | Test Suite · CI/CD · Scrum |
-| 4:30  | 1:00     | 6 — Saifur       | **Saifur**   | Literature Skill · SQLite Memory |
-| 5:30  | 0:30     | 7 — Delivery     | **Dilraj**   | Sprint metrics — 178 tickets |
+| 4:30  | 0:30     | 7 — Delivery     | **Sahil**    | Sprint metrics — 178 tickets |
+| 5:00  | 1:00     | 6 — Saifur       | **Saifur**   | Literature Skill · SQLite Memory |
 | 6:00  | 2:30     | 8 — Live Demo    | **Dilraj**   | Live browser demo |
-| 8:30  | 0:45     | 9 — Sprint 3     | **Dilraj**   | What's coming next |
-| 9:15  | 0:45     | 10 — Thank You   | **All**      | Close + invite Q&A |
+| 8:30  | 1:25     | 9 — Sprint 3     | **Dilraj**   | What's coming next |
+| 9:55  | 0:05     | 10 — Thank You   | **Dilraj**   | Thank you |
 
 ---
 
@@ -135,13 +135,30 @@
 > created the sprint burndown chart, facilitated the retrospective,
 > and prepped the team for this demo.
 >
-> 29 tickets, sprint 100% complete as of today."
+> 29 tickets closed."
+
+*[Sahil stays at podium — click to Slide 7]*
+
+---
+
+## 🎙 SLIDE 7 — Every Commitment Delivered (4:30 → 5:00) · SAHIL
+
+> **Sahil stays at podium — this is his slide too.**
+
+**Script:**
+> "And as a full team — 178 Jira tickets closed, 14 pull requests merged,
+> 5 members, 100% sprint goal achieved.
+>
+> Every workstream delivered: Literature AI, Amazon Intelligence, OpenClaw SDK,
+> Web UI, SQLite memory, test suite and CI/CD, seller tools, integrity checks.
+>
+> Nothing left open. Sprint 2 is complete."
 
 *[Nod to Saifur — click to Slide 6]*
 
 ---
 
-## 🎙 SLIDE 6 — Saifur Rahman Bhuiyan (4:30 → 5:30) · SAIFUR
+## 🎙 SLIDE 6 — Saifur Rahman Bhuiyan (5:00 → 6:00) · SAIFUR
 
 > **Saifur steps forward.**
 
@@ -165,23 +182,7 @@
 >
 > 24 tickets, all shipped."
 
-*[Saifur sits — Dilraj returns to podium — click to Slide 7]*
-
----
-
-## 🎙 SLIDE 7 — Every Commitment Delivered (5:30 → 6:00) · DILRAJ
-
-**Script:**
-> "So as a team — 178 Jira tickets, 14 pull requests merged, 5 members,
-> 100% sprint goal achieved.
->
-> Every workstream you see on this table was delivered:
-> Literature AI, Amazon Intelligence, OpenClaw SDK, Web UI and REST API,
-> SQLite memory, test suite and CI/CD, seller tools and integrity checks.
->
-> Nothing left open. Sprint 2 is complete."
-
-*[Click to Slide 8 — open browser]*
+*[Saifur sits — Dilraj returns to podium — click to Slide 8]*
 
 ---
 
@@ -245,50 +246,44 @@
 > perplexity score, burstiness score, probability it was AI-generated,
 > and a plagiarism cross-check against the web."
 
----
-
 *[Click to Slide 9]*
 
 ---
 
-## 🎙 SLIDE 9 — Sprint 3 Roadmap (8:30 → 9:15) · DILRAJ
+## 🎙 SLIDE 9 — Sprint 3 Roadmap (8:30 → 9:55) · DILRAJ
 
 **Script:**
 > "For Sprint 3, we're taking this further.
 >
-> The agent will go live 24/7 on a Mac Mini using OpenClaw —
-> and we're building an **AI Receptionist** —
-> essentially an automated call centre agent.
+> Both agents are now fully live — the agent will run 24/7 on a Mac Mini
+> using OpenClaw. And we're building something new on top:
+> an **AI Receptionist** — an automated call centre agent.
 >
 > It will have a Telegram bot so you can talk to your agents from your phone,
-> a smart intent router that reads your message and routes it automatically,
-> a knowledge base you can upload FAQs and pricing to,
-> appointment booking straight into Google Calendar,
-> an escalation engine that hands complex cases to a human,
-> and a multi-client setup so one platform can serve multiple businesses.
+> no browser needed.
+> A smart intent router that reads your message and routes it to the right agent —
+> no commands, no menus, just natural language.
+> A knowledge base you can upload your FAQs, pricing, and services to —
+> so the agent answers from your real business data.
+> Appointment booking straight into Google Calendar — instant confirmation,
+> no human needed.
+> An escalation engine that hands complex cases to a human
+> with the full conversation summary — it never drops context.
+> And a multi-client setup — one platform, configured independently
+> for multiple business clients.
 >
-> The Amazon and Literature agents from Sprint 2 are the foundation —
-> Sprint 3 turns it into a real product."
+> Sprint 2 built the engine. Sprint 3 turns it into a product."
 
 *[Click to Slide 10]*
 
 ---
 
-## 🎙 SLIDE 10 — Thank You (9:15 → 10:00) · ALL
+## 🎙 SLIDE 10 — Thank You (9:55 → 10:00) · DILRAJ
 
-> **All five members stand together (or remain seated and wave when named).**
+**Script:**
+> "Thank you."
 
-**Script (Dilraj):**
-> "That's Agent Factory — Sprint 2 complete.
->
-> Dilraj — Web UI, Seller Tools, Academic Integrity.
-> Dhiman — Amazon scraper, scorer, REST API.
-> Prabhjot — OpenClaw SDK, Docker, infrastructure.
-> Sahil — test suite, CI/CD, scrum.
-> Saifur — Literature AI, SQLite memory.
->
-> All code is on GitHub, all 178 tickets closed in Jira.
-> We're happy to take any questions."
+*[Hold slide — wait for applause / questions from lecturer]*
 
 ---
 
@@ -300,16 +295,16 @@
 0:30  DILRAJ    → Own slide (1min)
 1:30  DHIMAN    → Own slide (1min)
 2:30  PRABHJOT  → Own slide (1min)
-3:30  SAHIL     → Own slide (1min)
-4:30  SAIFUR    → Own slide (1min)
-5:30  DILRAJ    → Delivery stats (30s)
-6:00  DILRAJ    → Live demo (2m30s)
+3:30  SAHIL     → Own slide (1min)  ← stays at podium
+4:30  SAHIL     → Delivery stats (30s)
+5:00  SAIFUR    → Own slide (1min)
+6:00  DILRAJ    → Live demo (2min 30s)
           Demo 1: Literature search "transformers in NLP"
           Demo 2: Attach a PDF
           Demo 3: PPC "build ppc campaign for: yoga mat"
           Demo 4: Integrity check
-8:30  DILRAJ    → Sprint 3 roadmap (45s)
-9:15  DILRAJ    → Thank you + Q&A (45s)
+8:30  DILRAJ    → Sprint 3 roadmap (1min 25s)
+9:55  DILRAJ    → "Thank you." (5s)
 ```
 
 ---
