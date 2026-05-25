@@ -229,20 +229,20 @@ member_slide(
     stat_num="67",
     stat_label="Jira Tickets Closed",
     contributions=[
-        ("Literature Research Skill", "PROJ-127–132", [
-            ("Multi-source fetcher: arXiv + Semantic Scholar.", False, OFF_W),
-            ("Claude Haiku synthesis — summary, gaps, citations.", False, OFF_W),
-            ("PaperCard model, rate-limit retry, demo script.", False, OFF_W),
+        ("Web UI & Chat Interface", "PROJ-126–147", [
+            ("FastAPI app — dark-theme chat, app.js, style.css.", False, OFF_W),
+            ("ProductCard + PaperCard components + /query /history routes.", False, OFF_W),
+            ("Dual-panel Literature AI (Research Search + Integrity mode).", False, OFF_W),
         ]),
-        ("SQLite Session Memory", "PROJ-135–155", [
-            ("Replaced flat JSON with full SQLite schema.", False, OFF_W),
-            ("SessionMemory class — sessions, messages, metadata.", False, OFF_W),
-            ("Agent reads/writes DB every turn — no data loss.", False, OFF_W),
+        ("Amazon Seller Intelligence", "PROJ-187–190", [
+            ("PPC Campaign Builder — keywords, bids, ACOS targets.", False, OFF_W),
+            ("Alibaba Supplier Finder — MOQ, price, rating, lead time.", False, OFF_W),
+            ("Product Progress Tracker + Profit Optimiser AI.", False, OFF_W),
         ]),
-        ("UI Sprint — Attachments & Seller Tools", "PROJ-156–194", [
-            ("File attachments: PDF/DOCX/image parsing in chatbox.", False, OFF_W),
-            ("Literature AI: dual-panel (Research Search + Integrity).", False, OFF_W),
-            ("PPC builder card fix · arXiv 45 s timeout · chip UX.", False, OFF_W),
+        ("Academic Integrity + Export", "PROJ-184–191", [
+            ("AI Content Detector — perplexity + burstiness + Claude.", False, OFF_W),
+            ("Plagiarism Scanner — 1B+ web pages + arXiv + PubMed.", False, OFF_W),
+            ("PDF/Excel export + file attachment system (PDF.js/mammoth).", False, OFF_W),
         ]),
     ]
 )
@@ -259,20 +259,20 @@ member_slide(
     stat_num="31",
     stat_label="Jira Tickets Closed",
     contributions=[
-        ("Amazon Skill Core", "PROJ-111–113", [
-            ("amazon_skill.py — full skill pipeline built.", False, OFF_W),
-            ("amazon_cards.py — ProductCard + formatters.", False, OFF_W),
-            ("CLI demo script for standalone testing.", False, OFF_W),
+        ("Amazon Skill — Scraper + Scorer + Cache", "PROJ-166–169", [
+            ("amazon_scraper.py — async Playwright stealth scrape.", False, OFF_W),
+            ("amazon_api.py — RapidAPI fallback + source tagging.", False, OFF_W),
+            ("amazon_scorer.py (0–100) + amazon_cache.py (MD5 TTL).", False, OFF_W),
         ]),
-        ("Playwright + RapidAPI + AI Scorer", "PROJ-166–169", [
-            ("Stealth Playwright scrape: price, rating, Prime.", False, OFF_W),
-            ("RapidAPI fallback when scraper is blocked.", False, OFF_W),
-            ("0–100 AI score formula + MD5 TTL cache layer.", False, OFF_W),
+        ("Prompts + Agent Wiring", "PROJ-170–174", [
+            ("amazon_prompts.py — SEARCH / COMPARE / RECOMMEND.", False, OFF_W),
+            ("agent.py — Amazon skill wired to ProductCard response.", False, OFF_W),
+            ("scripts/demo_amazon.py — 3-query formatted table demo.", False, OFF_W),
         ]),
-        ("Amazon Route + Claude Prompts", "PROJ-170–174", [
-            ("GET /api/amazon FastAPI endpoint.", False, OFF_W),
-            ("SEARCH, COMPARE, RECOMMEND prompt templates.", False, OFF_W),
-            ("Pydantic Product + AmazonResponse schemas.", False, OFF_W),
+        ("REST API Endpoints", "PROJ-111–113", [
+            ("GET /api/amazon FastAPI endpoint + Pydantic schema.", False, OFF_W),
+            ("GET /api/literature FastAPI endpoint.", False, OFF_W),
+            ("API key authentication middleware for all endpoints.", False, OFF_W),
         ]),
     ]
 )
@@ -289,20 +289,20 @@ member_slide(
     stat_num="27",
     stat_label="Jira Tickets Closed",
     contributions=[
-        ("Docker & Container Environment", "", [
-            ("Maintained docker-compose.yml across the sprint.", False, OFF_W),
-            ("Service health checks and restart policies.", False, OFF_W),
-            ("BuildKit cache tuning — eliminated stale layers.", False, OFF_W),
+        ("OpenClaw SDK Integration", "PROJ-157–165", [
+            ("OpenClawWrapper client — connect / execute / retry.", False, OFF_W),
+            ("route_query() + classify() router + skills registry.", False, OFF_W),
+            ("with_fallback() decorator + smoke test + README.", False, OFF_W),
         ]),
-        ("CI/CD & Code Review", "", [
-            ("Reviewed PRs across Amazon & Literature skills.", False, OFF_W),
-            ("Caught integration conflicts before they merged.", False, OFF_W),
-            ("Kept the main branch green throughout the sprint.", False, OFF_W),
+        ("Docker & DevOps", "PROJ-114–116", [
+            ("Dockerfile + docker-compose.yml with env injection.", False, OFF_W),
+            ("Cross-platform smoke test — macOS + Linux.", False, OFF_W),
+            (".env docs — all variables documented in README.", False, OFF_W),
         ]),
-        ("Environment & Dev Setup", "", [
-            (".env management — centralised secret config.", False, OFF_W),
-            ("Port/path config for Uvicorn, SQLite, Playwright.", False, OFF_W),
-            ("Dev onboarding guide — one-command setup.", False, OFF_W),
+        ("Sprint 1 Foundations", "PROJ-7, 22–23", [
+            ("Module loading + skill file structure.", False, OFF_W),
+            ("Web research capability + structured output.", False, OFF_W),
+            ("Run instructions + Docker setup across team.", False, OFF_W),
         ]),
     ]
 )
@@ -313,26 +313,26 @@ member_slide(
 # ════════════════════════════════════════════════════════════════
 member_slide(
     name="Sahil K C",
-    role="QA & Documentation",
-    badge="QA & DOCS",
+    role="QA & Test Engineering",
+    badge="QA & TESTS",
     accent=CYAN,
     stat_num="27",
     stat_label="Jira Tickets Closed",
     contributions=[
-        ("End-to-End Feature Testing", "", [
-            ("Verified Literature: arXiv + Semantic Scholar.", False, OFF_W),
-            ("Confirmed Amazon cards: scores, Prime, links.", False, OFF_W),
-            ("Tested REST API responses against contracts.", False, OFF_W),
+        ("Test Suite", "PROJ-148–153", [
+            ("conftest.py — 5 fixtures: mock_agent, test_client, db_session.", False, OFF_W),
+            ("test_routing.py — 12 parametrised classify() tests.", False, OFF_W),
+            ("test_amazon · test_literature · test_web_ui (5 tests each).", False, OFF_W),
         ]),
-        ("Web UI Acceptance Testing", "", [
-            ("Tested localhost:8000 and /literature pages.", False, OFF_W),
-            ("Verified error banners and empty-state messages.", False, OFF_W),
-            ("Confirmed rate-limit notices display correctly.", False, OFF_W),
+        ("GitHub Actions CI/CD + Browser QA", "PROJ-152–155", [
+            (".github/workflows/pytest.yml — runs on every push to main.", False, OFF_W),
+            ("Live browser QA — Amazon + Literature Web UI verified.", False, OFF_W),
+            ("qa_report.md updated with screenshots + pass/fail log.", False, OFF_W),
         ]),
-        ("Sprint Documentation", "", [
-            ("Maintained sprint notes and meeting records.", False, OFF_W),
-            ("Reviewed API usage docs for accuracy.", False, OFF_W),
-            ("Error message copy review and final sign-off.", False, OFF_W),
+        ("Scrum & Sprint Ceremonies", "PROJ-50–77", [
+            ("Jira setup · standups · sprint burndown chart.", False, OFF_W),
+            ("Sprint retrospective report — team-wide sign-off.", False, OFF_W),
+            ("Demo prep: demo flow, speaking points, review.", False, OFF_W),
         ]),
     ]
 )
@@ -343,26 +343,26 @@ member_slide(
 # ════════════════════════════════════════════════════════════════
 member_slide(
     name="Saifur Rahman B",
-    role="QA Lead",
-    badge="QA LEAD",
+    role="Literature & Memory Lead",
+    badge="LIT & MEMORY",
     accent=GOLD,
     stat_num="24",
     stat_label="Jira Tickets Closed",
     contributions=[
-        ("Acceptance Criteria & Test Design", "", [
-            ("Wrote acceptance criteria for all new skills.", False, OFF_W),
-            ("Test cases designed before dev started.", False, OFF_W),
-            ("Covered Literature, Amazon, API, and Web UI.", False, OFF_W),
+        ("Literature Research Skill", "PROJ-175–179", [
+            ("arxiv_fetcher.py + semantic_scholar.py (429 retry).", False, OFF_W),
+            ("literature_synthesizer.py — Claude Haiku synthesis.", False, OFF_W),
+            ("PaperCard dataclass + to_dict() + to_html_card().", False, OFF_W),
         ]),
-        ("Pydantic Schema Verification", "", [
-            ("Reviewed Paper + LiteratureResponse schemas.", False, OFF_W),
-            ("Reviewed Product + AmazonResponse schemas.", False, OFF_W),
-            ("Caught field-type mismatches before merge.", False, OFF_W),
+        ("SQLite Session Memory", "PROJ-180–182", [
+            ("schema.sql — sessions + messages tables with FK + index.", False, OFF_W),
+            ("SessionMemory class — create_session, add_message, get_history.", False, OFF_W),
+            ("Replaced memory.json in agent.py — zero data loss.", False, OFF_W),
         ]),
-        ("Input / Output Contracts", "", [
-            ("Defined expected inputs and outputs per skill.", False, OFF_W),
-            ("Ensured Claude AI responses matched format.", False, OFF_W),
-            ("Verified end-to-end output consistency.", False, OFF_W),
+        ("Integration & Demo", "PROJ-119–120, 183", [
+            ("Rate-limit retry + no-results error handling.", False, OFF_W),
+            ("Claude AI synthesis paragraph integrated into output.", False, OFF_W),
+            ("scripts/demo_literature.py — healthcare AI demo.", False, OFF_W),
         ]),
     ]
 )
@@ -406,19 +406,19 @@ R(s, 0.22, 2.46, 9.52, 0.03, GOLD)
 
 rows = [
     (CARD_D, GOLD, "Literature Skill — arXiv + Semantic Scholar + Synthesis",
-     "Dilraj", "6",  "Fetcher · Claude synthesis · PaperCard · Demo",   "✅ Done"),
-    (CARD_L, CYAN, "Amazon Skill — Scraper + Scorer + Cache + API",
-     "Dhiman", "12", "Playwright · RapidAPI · 0–100 score · TTL cache", "✅ Done"),
-    (CARD_D, GOLD, "REST API — /api/literature + /api/amazon + schemas",
-     "Both",   "4",  "FastAPI routes · Pydantic schemas · Swagger docs",  "✅ Done"),
-    (CARD_L, CYAN, "Web UI — Browser search interface (localhost:8000)",
-     "Dilraj", "4",  "FastAPI static · literature.html · index.html",    "✅ Done"),
-    (CARD_D, GOLD, "Session Memory — SQLite persistence across restarts",
-     "Dilraj", "5",  "Schema · SessionMemory class · agent integration", "✅ Done"),
-    (CARD_L, CYAN, "UI Polish — PPC cards · Literature dual-panel · chip UX · arXiv fix",
-     "Dilraj", "8",  "Mode-type routing · inline S2 warning · query cleaner", "✅ Done"),
-    (CARD_D, GOLD, "File Attachment System — PDF · DOCX · images in chatbox",
-     "Dilraj", "3",  "PDF.js + mammoth.js lazy-load · preview chips · violet UX", "✅ Done"),
+     "Saifur", "9",  "arxiv_fetcher · semantic_scholar · synthesizer · PaperCard", "✅ Done"),
+    (CARD_L, CYAN, "Amazon Intelligence — Playwright · RapidAPI · Scorer · Cache",
+     "Dhiman", "9",  "scraper · api · scorer (0–100) · TTL cache · prompts", "✅ Done"),
+    (CARD_D, GOLD, "OpenClaw SDK Integration — Router + Skills Registry",
+     "Prabhjot", "9", "client · route_query · classify · registry · fallback", "✅ Done"),
+    (CARD_L, CYAN, "Web UI + REST API — FastAPI chat + /api/amazon + /api/literature",
+     "Dilraj", "15", "index.html · app.js · style.css · routes · components", "✅ Done"),
+    (CARD_D, GOLD, "SQLite Session Memory — schema + SessionMemory + migration",
+     "Saifur", "5",  "schema.sql · SessionMemory class · replaced memory.json", "✅ Done"),
+    (CARD_L, CYAN, "Test Suite + CI/CD — pytest + GitHub Actions + browser QA",
+     "Sahil",  "8",  "conftest · routing · amazon · literature · web_ui tests", "✅ Done"),
+    (CARD_D, GOLD, "Seller Tools + Integrity + Export — PPC · Supplier · AI detect",
+     "Dilraj", "8",  "PPC builder · supplier finder · AI detector · PDF/Excel", "✅ Done"),
 ]
 
 ROW_H  = 0.41   # tighter pitch — fits 7 rows before footer
