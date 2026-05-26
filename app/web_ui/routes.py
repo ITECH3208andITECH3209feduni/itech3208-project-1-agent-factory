@@ -41,6 +41,11 @@ _integrity     = AcademicIntegritySkill()
 _seller        = AmazonSellerSkill()
 _export        = ExportSkill()
 
+# ── Anthropic client for general chat ─────────────────────────
+import anthropic as _anthropic
+from config.settings import ANTHROPIC_API_KEY, CLAUDE_HAIKU_MODEL
+_claude = _anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+
 
 # ── Pydantic models ────────────────────────────────────────────
 class QueryRequest(BaseModel):
@@ -400,6 +405,41 @@ async def download_export(path: str):
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(path, filename=os.path.basename(path))
+
+
+class AskRequest(BaseModel):
+    question: str
+
+
+class AskResponse(BaseModel):
+    answer: str
+    error:  str
+
+
+@router.post("/ask", response_model=AskResponse)
+async def ask_anything(body: AskRequest):
+    """
+    General-purpose Q&A — ask anything like a search engine.
+    Uses Claude Haiku for fast, conversational answers.
+    """
+    if not body.question.strip():
+        return AskResponse(answer="", error="Empty question.")
+    try:
+        msg = _claude.messages.create(
+            model=CLAUDE_HAIKU_MODEL,
+            max_tokens=1024,
+            system=(
+                "You are a helpful, friendly AI assistant — like a smart search engine. "
+                "Answer questions clearly and concisely. Use markdown for formatting when helpful "
+                "(bullet points, bold, code blocks). Keep answers focused and practical. "
+                "If you don't know something, say so honestly."
+            ),
+            messages=[{"role": "user", "content": body.question}],
+        )
+        answer = msg.content[0].text if msg.content else "No response."
+        return AskResponse(answer=answer, error="")
+    except Exception as exc:
+        return AskResponse(answer="", error=str(exc))
 
 
 @router.get("/status", response_model=StatusResponse)

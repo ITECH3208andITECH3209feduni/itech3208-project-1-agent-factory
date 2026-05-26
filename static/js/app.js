@@ -27,11 +27,11 @@ const literatureBtn   = document.getElementById("literature-btn");
 
 let isLoading = false;
 let activeTab = "shopping";
-let activeLitMode = "search"; // "search" | "integrity"
+let activeLitMode = "search"; // "search" | "general" | "integrity"
 
 /* ── Attachment state ─────────────────────────────────────── */
 // Each entry: { name, ext, size, text, dataUrl }
-const attachState = { shopping: [], literature: [], integrity: [] };
+const attachState = { shopping: [], literature: [], integrity: [], general: [] };
 
 /* ══════════════════════════════════════════════════════════
    ATTACHMENT SYSTEM
@@ -239,6 +239,14 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   literatureBtn.addEventListener("click", sendLiteratureQuery);
 
+  // General search input — Enter to ask
+  const generalInput = document.getElementById("general-input");
+  const generalBtn   = document.getElementById("general-btn");
+  if (generalInput) generalInput.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); sendGeneralQuery(); }
+  });
+  if (generalBtn) generalBtn.addEventListener("click", sendGeneralQuery);
+
   // Integrity check input — Enter to submit, Ctrl+Enter for new line
   integrityInput.addEventListener("keydown", e => {
     if (e.key === "Enter" && !e.ctrlKey) { e.preventDefault(); sendIntegrityCheck(); }
@@ -289,8 +297,10 @@ function switchToIntegrity(mode) {
 function setLitMode(mode) {
   activeLitMode = mode;
   document.getElementById("lit-search-panel").style.display    = mode === "search"    ? "flex" : "none";
+  document.getElementById("lit-general-panel").style.display   = mode === "general"   ? "flex" : "none";
   document.getElementById("lit-integrity-panel").style.display = mode === "integrity" ? "flex" : "none";
   document.getElementById("lit-mode-search").classList.toggle("active",    mode === "search");
+  document.getElementById("lit-mode-general").classList.toggle("active",   mode === "general");
   document.getElementById("lit-mode-integrity").classList.toggle("active", mode === "integrity");
 }
 
@@ -446,6 +456,58 @@ async function sendShoppingQuery() {
 }
 
 /* ══════════════════════════════════════════════════════════
+   GENERAL SEARCH TAB — POST /ask
+══════════════════════════════════════════════════════════ */
+async function sendGeneralQuery() {
+  const generalInput = document.getElementById("general-input");
+  const generalBtn   = document.getElementById("general-btn");
+  const generalArea  = document.getElementById("general-area");
+  const question = generalInput.value.trim();
+  const { contextText, attachments } = getAttachContext("general");
+  if (!question && !contextText || isLoading) return;
+
+  const displayQ  = question || "(attached file)";
+  const fullQ     = question + contextText;
+
+  appendUserMsg(generalArea, displayQ, attachments);
+  generalInput.value = "";
+  clearAttachments("general");
+  setLoading(true, generalBtn, generalInput);
+  const typingId = showTyping(generalArea);
+
+  try {
+    const res = await fetch(`${API_BASE}/ask`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question: fullQ }),
+    });
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    const data = await res.json();
+    removeTyping(typingId);
+    if (data.error && !data.answer) {
+      appendErrorMsg(generalArea, data.error);
+    } else {
+      appendAgentBubble(generalArea, data.answer, [], "general");
+    }
+  } catch (err) {
+    removeTyping(typingId);
+    appendErrorMsg(generalArea, err.message);
+  } finally {
+    setLoading(false, generalBtn, generalInput);
+    scrollToBottom(generalArea);
+  }
+}
+
+function prefillGeneral(prefix) {
+  setLitMode("general");
+  const inp = document.getElementById("general-input");
+  if (!inp) return;
+  inp.value = prefix;
+  inp.focus();
+  inp.setSelectionRange(prefix.length, prefix.length);
+}
+
+/* ══════════════════════════════════════════════════════════
    INTEGRITY TAB — POST /integrity
 ══════════════════════════════════════════════════════════ */
 async function sendIntegrityCheck() {
@@ -517,6 +579,7 @@ function appendAgentBubble(area, responseText, cards, type) {
     : type === "ppc_builder" ? "PPC Campaign"
     : type === "literature" ? "Literature"
     : type === "integrity" ? "Integrity"
+    : type === "general" ? "Ask Anything"
     : "Agent";
 
   row.innerHTML = `

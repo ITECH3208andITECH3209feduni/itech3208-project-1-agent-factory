@@ -162,6 +162,9 @@
           <div class="source-chip active" id="lit-mode-search" onclick="setLitMode('search')" style="cursor:pointer">
             <span class="source-chip-dot"></span> Research Search
           </div>
+          <div class="source-chip" id="lit-mode-general" onclick="setLitMode('general')" style="cursor:pointer">
+            <span class="source-chip-dot"></span> Ask Anything
+          </div>
           <div class="source-chip" id="lit-mode-integrity" onclick="setLitMode('integrity')" style="cursor:pointer">
             <span class="source-chip-dot"></span> Integrity Check
           </div>
@@ -192,6 +195,34 @@
           <div class="input-hints">
             <span class="hint-text">arXiv · Semantic Scholar · AI synthesis · 📎 attach files</span>
             <span class="hint-text">Press <kbd>Enter</kbd> to search</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ask Anything / General Search Mode -->
+      <div id="lit-general-panel" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+        <div class="messages" id="general-area">
+          <div class="welcome">
+            <div class="welcome-heading">Ask Anything</div>
+            <div class="welcome-sub">Ask any question — general knowledge, definitions, explanations, how-to guides, current topics. Powered by Claude AI.</div>
+            <div class="chips">
+              <div class="chip" onclick="prefillGeneral('What is ')">💡 General Knowledge</div>
+              <div class="chip" onclick="prefillGeneral('Explain ')">📖 Explain a Concept</div>
+              <div class="chip" onclick="prefillGeneral('How does ')">🔧 How Does It Work</div>
+              <div class="chip" onclick="prefillGeneral('What is the difference between ')">⚖️ Compare Two Things</div>
+            </div>
+          </div>
+        </div>
+        <div class="input-area">
+          <div class="attach-strip" id="general-attach-strip"></div>
+          <div class="input-box">
+            <button class="attach-btn" onclick="triggerAttach('general')" title="Attach file">📎</button>
+            <input type="text" id="general-input" placeholder="Ask anything — e.g. what is machine learning? how does GPS work?" aria-label="General search" />
+            <button class="send-btn" id="general-btn">Ask ↑</button>
+          </div>
+          <div class="input-hints">
+            <span class="hint-text">Claude AI · General Knowledge · Any topic</span>
+            <span class="hint-text">Press <kbd>Enter</kbd> to ask</span>
           </div>
         </div>
       </div>
@@ -227,6 +258,6 @@
   </main>
 </div>
 
-<script src="/static/js/app.js?v=11"></script>
+<script src="/static/js/app.js?v=12"></script>
 </body>
 </html>
