@@ -258,6 +258,284 @@
   </main>
 </div>
 
-<script src="/static/js/app.js?v=12"></script>
+<script src="/static/js/app.js?v=13"></script>
+
+<!-- ══ WELCOME OVERLAY ══ -->
+<div id="welcome-overlay">
+  <div class="wb-top-bar"></div>
+  <div class="wb-blob wb-blob-1"></div>
+  <div class="wb-blob wb-blob-2"></div>
+  <div class="wb-blob wb-blob-3"></div>
+
+  <div class="wb-inner">
+    <!-- Logo -->
+    <div class="wb-logo">
+      <svg width="44" height="44" viewBox="0 0 100 100" fill="none">
+        <defs>
+          <linearGradient id="wb-bgl" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stop-color="#ff3300"/>
+            <stop offset="26%"  stop-color="#ff8800"/>
+            <stop offset="50%"  stop-color="#2299ff"/>
+            <stop offset="74%"  stop-color="#00cc66"/>
+            <stop offset="100%" stop-color="#aa00ee"/>
+          </linearGradient>
+          <radialGradient id="wb-sheen" cx="35%" cy="25%" r="52%">
+            <stop offset="0%"   stop-color="white" stop-opacity="0.3"/>
+            <stop offset="100%" stop-color="black" stop-opacity="0"/>
+          </radialGradient>
+          <clipPath id="wb-cL">
+            <path d="M50,10 C47,9 43,9 39,11 C35,13 31,17 28,22 C25,27 23,32 21,37 C19,42 19,47 20,52 C19,57 19,62 21,67 C23,72 27,76 31,79 C35,82 40,84 45,85 C47,85 49,85 50,85 Z"/>
+          </clipPath>
+          <clipPath id="wb-cR">
+            <path d="M50,10 C53,9 57,9 61,11 C65,13 69,17 72,22 C75,27 77,32 79,37 C81,42 81,47 80,52 C81,57 81,62 79,67 C77,72 73,76 69,79 C65,82 60,84 55,85 C53,85 51,85 50,85 Z"/>
+          </clipPath>
+          <filter id="wb-gw">
+            <feGaussianBlur stdDeviation="1" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <g clip-path="url(#wb-cL)">
+          <rect x="0" y="0" width="50" height="100" fill="url(#wb-bgl)"/>
+          <rect x="0" y="0" width="50" height="100" fill="url(#wb-sheen)"/>
+        </g>
+        <path d="M50,10 C47,9 43,9 39,11 C35,13 31,17 28,22 C25,27 23,32 21,37 C19,42 19,47 20,52 C19,57 19,62 21,67 C23,72 27,76 31,79 C35,82 40,84 45,85 C47,85 49,85 50,85"
+              stroke="rgba(255,255,255,0.65)" stroke-width="1.5" fill="none" filter="url(#wb-gw)"/>
+        <g clip-path="url(#wb-cR)">
+          <rect x="50" y="0" width="50" height="100" fill="url(#wb-bgl)"/>
+          <rect x="50" y="0" width="50" height="100" fill="url(#wb-sheen)"/>
+        </g>
+        <path d="M50,10 C53,9 57,9 61,11 C65,13 69,17 72,22 C75,27 77,32 79,37 C81,42 81,47 80,52 C81,57 81,62 79,67 C77,72 73,76 69,79 C65,82 60,84 55,85 C53,85 51,85 50,85"
+              stroke="rgba(255,255,255,0.65)" stroke-width="1.5" fill="none" filter="url(#wb-gw)"/>
+        <line x1="50" y1="10" x2="50" y2="85" stroke="rgba(0,0,0,0.6)" stroke-width="1.8"/>
+      </svg>
+    </div>
+
+    <div class="wb-title">Agent Factory</div>
+    <div class="wb-subtitle">Your AI-powered research platform. Pick an agent to get started.</div>
+
+    <div class="wb-badge">
+      <span class="wb-badge-dot"></span>
+      Online · v2.0.0 · Powered by Claude AI
+    </div>
+
+    <!-- Agent cards -->
+    <div class="wb-cards">
+
+      <div class="wb-card wb-card-amazon" onclick="launchAgent('shopping')">
+        <span class="wb-card-icon">🛒</span>
+        <div class="wb-card-title">Amazon Seller AI</div>
+        <div class="wb-card-desc">Research products, source suppliers from Alibaba, build PPC campaigns, and optimise profit margins.</div>
+        <div class="wb-card-tags">
+          <span class="wb-tag wb-tag-gold">Product Research</span>
+          <span class="wb-tag wb-tag-gold">PPC Builder</span>
+          <span class="wb-tag wb-tag-gold">Supplier Finder</span>
+          <span class="wb-tag wb-tag-gold">Profit Analyser</span>
+        </div>
+        <div class="wb-arrow wb-arrow-gold">→</div>
+      </div>
+
+      <div class="wb-card wb-card-lit" onclick="launchAgent('integrity')">
+        <span class="wb-card-icon">🧠</span>
+        <div class="wb-card-title">Literature AI</div>
+        <div class="wb-card-desc">Search academic papers, detect AI-generated content, check plagiarism, and ask any general question.</div>
+        <div class="wb-card-tags">
+          <span class="wb-tag wb-tag-violet">Research Search</span>
+          <span class="wb-tag wb-tag-cyan">AI Detector</span>
+          <span class="wb-tag wb-tag-violet">Plagiarism Check</span>
+          <span class="wb-tag wb-tag-cyan">Ask Anything</span>
+        </div>
+        <div class="wb-arrow wb-arrow-violet">→</div>
+      </div>
+
+    </div>
+
+    <div class="wb-footer">
+      <span>Claude Haiku · arXiv · Semantic Scholar</span>
+      <span class="wb-foot-dot"></span>
+      <span>Amazon · Alibaba · RapidAPI</span>
+      <span class="wb-foot-dot"></span>
+      <span>Federation University · 2026</span>
+    </div>
+  </div>
+</div>
+
+<style>
+/* ══ WELCOME OVERLAY STYLES ══ */
+#welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #07090f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+#welcome-overlay.wb-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.wb-top-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #ff3300, #ff8800, #2299ff, #00cc66, #aa00ee);
+}
+.wb-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+}
+.wb-blob-1 { width: 600px; height: 600px; background: #7c3aed; opacity: 0.12; top: -200px; left: -200px; }
+.wb-blob-2 { width: 500px; height: 500px; background: #00c2d4; opacity: 0.12; bottom: -150px; right: -150px; }
+.wb-blob-3 { width: 300px; height: 300px; background: #d4af37; opacity: 0.06; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+
+.wb-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  z-index: 1;
+  padding: 40px 20px;
+}
+
+/* Logo */
+.wb-logo {
+  width: 88px; height: 88px;
+  background: linear-gradient(145deg, #1a1f35, #0d1117);
+  border-radius: 24px;
+  border: 1px solid rgba(124,58,237,0.35);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 40px rgba(124,58,237,0.2), 0 8px 32px rgba(0,0,0,0.4);
+  margin-bottom: 28px;
+  position: relative;
+}
+.wb-logo::after {
+  content: '';
+  position: absolute; inset: -1px;
+  border-radius: 25px;
+  background: linear-gradient(145deg, rgba(124,58,237,0.4), transparent, rgba(0,194,212,0.2));
+  pointer-events: none;
+}
+
+.wb-title {
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  background: linear-gradient(135deg, #f0f6fc 0%, #a78bfa 50%, #00c2d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
+  line-height: 1.1;
+  font-family: 'Inter', sans-serif;
+}
+.wb-subtitle {
+  font-size: 15px;
+  color: #8b949e;
+  font-weight: 400;
+  margin-bottom: 8px;
+  max-width: 420px;
+  line-height: 1.6;
+  font-family: 'Inter', sans-serif;
+}
+.wb-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(124,58,237,0.12);
+  border: 1px solid rgba(124,58,237,0.25);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 11px;
+  color: #a78bfa;
+  font-weight: 500;
+  margin-bottom: 48px;
+  font-family: 'Inter', sans-serif;
+}
+.wb-badge-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+  display: inline-block;
+}
+
+/* Cards */
+.wb-cards {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 40px;
+}
+.wb-card {
+  width: 260px;
+  background: #0d1117;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  padding: 28px 24px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+  text-align: left;
+}
+.wb-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: 20px 20px 0 0;
+}
+.wb-card-amazon::before { background: linear-gradient(90deg, #f59e0b, #d4af37); }
+.wb-card-lit::before    { background: linear-gradient(90deg, #7c3aed, #00c2d4); }
+
+.wb-card:hover { transform: translateY(-6px); }
+.wb-card-amazon:hover { border-color: rgba(212,175,55,0.4); box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 30px rgba(212,175,55,0.15); }
+.wb-card-lit:hover    { border-color: rgba(124,58,237,0.4);  box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 30px rgba(124,58,237,0.15); }
+
+.wb-card-icon  { font-size: 2.2rem; margin-bottom: 16px; display: block; }
+.wb-card-title { font-size: 17px; font-weight: 700; color: #f0f6fc; margin-bottom: 8px; font-family: 'Inter', sans-serif; }
+.wb-card-desc  { font-size: 13px; color: #8b949e; line-height: 1.6; margin-bottom: 20px; font-family: 'Inter', sans-serif; }
+
+.wb-card-tags  { display: flex; flex-wrap: wrap; gap: 6px; }
+.wb-tag { font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 6px; font-family: 'Inter', sans-serif; }
+.wb-tag-gold   { background: rgba(212,175,55,0.12); color: #d4af37; border: 1px solid rgba(212,175,55,0.25); }
+.wb-tag-violet { background: rgba(124,58,237,0.12); color: #a78bfa; border: 1px solid rgba(124,58,237,0.25); }
+.wb-tag-cyan   { background: rgba(0,194,212,0.10);  color: #00c2d4; border: 1px solid rgba(0,194,212,0.25); }
+
+.wb-arrow {
+  position: absolute;
+  bottom: 24px; right: 24px;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  transition: transform 0.2s;
+}
+.wb-card:hover .wb-arrow { transform: translateX(3px); }
+.wb-arrow-gold   { background: rgba(212,175,55,0.12); color: #d4af37; }
+.wb-arrow-violet { background: rgba(124,58,237,0.15); color: #a78bfa; }
+
+/* Footer */
+.wb-footer {
+  font-size: 11px;
+  color: #484f58;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-family: 'Inter', sans-serif;
+}
+.wb-foot-dot { width: 4px; height: 4px; border-radius: 50%; background: #484f58; }
+</style>
+
+<script>
+function launchAgent(tab) {
+  const overlay = document.getElementById("welcome-overlay");
+  overlay.classList.add("wb-hidden");
+  switchTab(tab);
+  overlay.addEventListener("transitionend", () => overlay.remove(), { once: true });
+}
+</script>
 </body>
 </html>
