@@ -33,6 +33,7 @@ from config.settings import (
     REQUEST_TIMEOUT,
     ANTHROPIC_API_KEY,
     CLAUDE_MODEL,
+    CLAUDE_HAIKU_MODEL,
 )
 
 # How many papers to fetch for synthesis (PROJ-92) — more than normal MAX_RESULTS
@@ -41,6 +42,10 @@ SYNTHESIS_PAPER_COUNT = 10
 # Semantic Scholar citations endpoint
 SEMANTIC_SCHOLAR_CITATIONS_URL = "https://api.semanticscholar.org/graph/v1/paper/{paper_id}/citations"
 SEMANTIC_SCHOLAR_PAPER_URL     = "https://api.semanticscholar.org/graph/v1/paper/search"
+
+class _RateLimitedError(Exception):
+    """Raised by _retry_get when all retry attempts are exhausted due to HTTP 429."""
+
 
 # Trigger keywords for each enhanced mode
 SYNTHESIS_TRIGGERS  = {"synthesise", "synthesize", "synthesis", "overview", "summarise papers",
@@ -86,23 +91,31 @@ class LiteratureSkill(BaseSkill):
     # ── Retry helper ──────────────────────────────────────────
     def _retry_get(self, url: str, params: dict = None, retries: int = 3, backoff: float = 2.0) -> requests.Response:
         """GET with automatic retry and exponential backoff.
-        Handles 429 rate limits and transient connection / timeout errors."""
+        Raises _RateLimitedError when all attempts are exhausted due to HTTP 429."""
         last_error = None
+        was_rate_limited = False
         for attempt in range(retries):
             try:
                 resp = requests.get(url, params=params, timeout=REQUEST_TIMEOUT)
                 if resp.status_code == 429:
                     wait = backoff * (2 ** attempt)   # 2s, 4s, 8s
                     time.sleep(wait)
-                    last_error = Exception(f"429 rate-limited (waited {wait}s before retry)")
+                    last_error = Exception(f"HTTP 429 (waited {wait}s)")
+                    was_rate_limited = True
                     continue
+                was_rate_limited = False
                 resp.raise_for_status()
                 return resp
             except (requests.exceptions.ConnectionError,
                     requests.exceptions.Timeout) as e:
                 last_error = e
+                was_rate_limited = False
                 if attempt < retries - 1:
                     time.sleep(backoff * (attempt + 1))
+        if was_rate_limited:
+            raise _RateLimitedError(
+                f"Rate limited after {retries} attempts — try again in about a minute."
+            )
         raise last_error or Exception(f"Request failed after {retries} attempts")
 
     # ── Main entry point ──────────────────────────────────────
@@ -122,36 +135,60 @@ class LiteratureSkill(BaseSkill):
         errors  = []
 
         # ── 1. arXiv ─────────────────────────────────────────
+        arxiv_count = 0
         try:
             arxiv_results = self._search_arxiv(query, max_results=paper_count)
+            arxiv_count = len(arxiv_results)
             results.extend(arxiv_results)
+        except _RateLimitedError:
+            errors.append("arXiv is temporarily rate-limited — try again in about a minute.")
         except Exception as e:
-            errors.append(f"arXiv: {e}")
+            errors.append(f"Could not reach arXiv: {e}")
 
         # ── 2. Semantic Scholar ───────────────────────────────
+        ss_count = 0
         try:
             ss_results = self._search_semantic_scholar(query, limit=paper_count)
+            ss_count = len(ss_results)
             existing_titles = {r["title"].lower() for r in results}
             for r in ss_results:
                 if r["title"].lower() not in existing_titles:
                     results.append(r)
                     existing_titles.add(r["title"].lower())
+        except _RateLimitedError:
+            errors.append(
+                "Semantic Scholar is temporarily rate-limited — results may be incomplete. "
+                "Try again in about a minute."
+            )
         except Exception as e:
-            errors.append(f"Semantic Scholar: {e}")
+            errors.append(f"Could not reach Semantic Scholar: {e}")
 
         # ── 3. PubMed (medical/life sciences queries) ─────────
+        pubmed_count = 0
         if any(kw in q_lower for kw in ["medicine", "health", "clinical", "drug",
                                          "disease", "patient", "trial"]):
             try:
                 pubmed_results = self._search_pubmed(query)
+                pubmed_count = len(pubmed_results)
                 existing_titles = {r["title"].lower() for r in results}
                 for r in pubmed_results:
                     if r["title"].lower() not in existing_titles:
                         results.append(r)
+            except _RateLimitedError:
+                errors.append("PubMed is temporarily rate-limited — try again in about a minute.")
             except Exception as e:
-                errors.append(f"PubMed: {e}")
+                errors.append(f"Could not reach PubMed: {e}")
 
         results = results[:paper_count]
+
+        # ── Always-on: quick AI synthesis paragraph ───────────
+        # 2-3 sentences using Sonnet; runs on every successful search.
+        quick_synthesis = ""
+        if results:
+            try:
+                quick_synthesis = self._quick_synthesis(query, results)
+            except Exception as e:
+                errors.append(f"Quick synthesis: {e}")
 
         # ── Mode: Multi-paper synthesis (PROJ-92) ─────────────
         synthesis_text = ""
@@ -199,9 +236,15 @@ class LiteratureSkill(BaseSkill):
                                                    "drug", "disease", "patient", "trial"]
                     ) else []
                 ),
-                "total_found":      len(results),
-                "synthesis_done":   bool(synthesis_text),
+                "per_source_counts": {
+                    "arXiv":            arxiv_count,
+                    "Semantic Scholar": ss_count,
+                    "PubMed":           pubmed_count,
+                },
+                "total_found":       len(results),
+                "synthesis_done":    bool(synthesis_text),
                 "gap_analysis_done": bool(gaps_text),
+                "quick_synthesis":   quick_synthesis,
             },
         )
 
@@ -210,7 +253,7 @@ class LiteratureSkill(BaseSkill):
         if max_results is None:
             max_results = MAX_RESULTS
         params = {
-            "search_query": f"all:{quote_plus(query)}",
+            "search_query": f"all:{query}",   # requests encodes params — no manual quote_plus
             "start":        0,
             "max_results":  max_results,
             "sortBy":       "relevance",
@@ -331,6 +374,41 @@ class LiteratureSkill(BaseSkill):
             })
         return out
 
+    # ── Quick AI synthesis paragraph (always-on) ─────────────
+    def _quick_synthesis(self, query: str, results: list[dict]) -> str:
+        """2-3 sentence Sonnet paragraph summarising the top-5 results.
+        Runs on every successful search; stored in metadata['quick_synthesis']."""
+        client = self._get_claude()
+        if not client or not results:
+            return ""
+
+        top5 = results[:5]
+        paper_list = "\n".join(
+            f"[{i+1}] {r['title']} ({r.get('year', '?')}) — {r.get('authors', '?')}: "
+            f"{r.get('abstract', '')[:200]}"
+            for i, r in enumerate(top5)
+        )
+
+        prompt = (
+            f"A researcher searched for: \"{query}\"\n\n"
+            f"Top {len(top5)} papers found:\n{paper_list}\n\n"
+            "Write a single paragraph of exactly 2–3 sentences that:\n"
+            "1. Identifies the key themes across these papers\n"
+            "2. Conveys what the literature reveals about this topic\n"
+            "3. Gives the researcher immediate orientation\n\n"
+            "Write only the paragraph — no headers, no bullet points, no preamble."
+        )
+
+        try:
+            msg = client.messages.create(
+                model      = CLAUDE_MODEL,
+                max_tokens = 180,
+                messages   = [{"role": "user", "content": prompt}],
+            )
+            return msg.content[0].text.strip()
+        except Exception:
+            return ""
+
     # ── Multi-paper synthesis (PROJ-92) ───────────────────────
     def _synthesise_papers(self, query: str, results: list[dict]) -> str:
         """Use Claude to synthesise findings across 8–10 papers into a cohesive overview."""
@@ -338,14 +416,13 @@ class LiteratureSkill(BaseSkill):
         if not client or not results:
             return ""
 
-        # Build a structured input for Claude
         paper_list = "\n\n".join(
             f"[{i+1}] **{r['title']}** ({r.get('year','?')}) — {r.get('authors','?')}\n"
             f"Abstract: {r.get('abstract','No abstract available.')}"
             for i, r in enumerate(results[:10])
         )
 
-        prompt = f"""You are a research librarian. Synthesise the following {len(results[:10])} academic papers on the topic: "{query}"
+        prompt = f"""You are a research librarian. Synthesise the following {len(results[:10])} academic papers on the topic: \"{query}\"
 
 Papers:
 {paper_list}
@@ -379,7 +456,7 @@ Keep the synthesis concise but insightful (under 400 words)."""
 
         try:
             message = client.messages.create(
-                model      = CLAUDE_MODEL,
+                model      = CLAUDE_HAIKU_MODEL,
                 max_tokens = 600,
                 messages   = [{"role": "user", "content": prompt}],
             )
@@ -403,7 +480,7 @@ Keep the synthesis concise but insightful (under 400 words)."""
         years = [r.get("year","") for r in results if r.get("year","").isdigit()]
         year_range = f"{min(years)}–{max(years)}" if years else "unknown range"
 
-        prompt = f"""You are a research strategist analysing the literature on: "{query}"
+        prompt = f"""You are a research strategist analysing the literature on: \"{query}\"
 
 The papers below span {year_range}. Based on what IS covered, identify what is NOT yet covered — the research gaps, open problems, and future directions.
 
@@ -435,7 +512,7 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
 
         try:
             message = client.messages.create(
-                model      = CLAUDE_MODEL,
+                model      = CLAUDE_HAIKU_MODEL,
                 max_tokens = 500,
                 messages   = [{"role": "user", "content": prompt}],
             )
@@ -454,17 +531,15 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
         """
         import re
 
-        # Try to extract a Semantic Scholar paper ID or arXiv ID from the query
         paper_id = None
         arxiv_match = re.search(r"ARXIV:([\d.v]+)", query, re.IGNORECASE)
-        ss_match    = re.search(r"\b([0-9a-f]{40})\b", query)  # 40-char hex SS paper ID
+        ss_match    = re.search(r"\b([0-9a-f]{40})\b", query)
 
         if arxiv_match:
             paper_id = f"ARXIV:{arxiv_match.group(1)}"
         elif ss_match:
             paper_id = ss_match.group(1)
         else:
-            # No explicit ID — search for the paper title first
             title_query = re.sub(
                 r"(cited by|citations for|citations of|who cited|citing papers for"
                 r"|forward citation|forward citations|citing works of)\s*",
@@ -478,7 +553,6 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
                     error=msg, summary=msg,
                 )
 
-            # Search for the paper to get its ID
             try:
                 ss_results = self._search_semantic_scholar(title_query, limit=1)
                 if ss_results and ss_results[0].get("paper_id"):
@@ -500,7 +574,6 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
                     error=msg, summary=msg,
                 )
 
-        # Now fetch forward citations
         try:
             citing_papers = self._get_forward_citations(paper_id)
         except Exception as e:
@@ -541,12 +614,6 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
         )
 
     def _get_forward_citations(self, paper_id: str, limit: int = 20) -> list[dict]:
-        """
-        Retrieve papers that cite `paper_id` via the Semantic Scholar citations API.
-
-        Endpoint: GET /paper/{paper_id}/citations
-        Returns list of dicts matching the standard paper dict schema.
-        """
         url    = SEMANTIC_SCHOLAR_CITATIONS_URL.format(paper_id=paper_id)
         params = {
             "fields": "title,authors,year,url,citationCount,paperId",
@@ -558,7 +625,6 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
 
         out = []
         for item in data:
-            # Each item has a "citingPaper" key
             paper = item.get("citingPaper", {})
             if not paper:
                 continue
@@ -567,26 +633,28 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
                 "title":     paper.get("title", ""),
                 "authors":   ", ".join(authors[:3]) + (" et al." if len(authors) > 3 else ""),
                 "year":      str(paper.get("year") or ""),
-                "abstract":  "",   # not fetched in citation list to keep it fast
+                "abstract":  "",
                 "link":      paper.get("url", ""),
                 "source":    "Semantic Scholar (citing)",
                 "citations": paper.get("citationCount", 0),
                 "paper_id":  paper.get("paperId", ""),
             })
 
-        # Sort by citation count descending (most influential citing papers first)
         out.sort(key=lambda x: x.get("citations", 0), reverse=True)
         return out
 
     # ── Summary builder ───────────────────────────────────────
     def _build_summary(self, query: str, results: list[dict]) -> str:
         if not results:
-            return f"No papers found for '{query}'."
+            return (
+                f"No papers found for \"{query}\". "
+                "Try shorter or broader search terms, check spelling, "
+                "or search a single concept at a time."
+            )
 
         years  = [r["year"] for r in results if r.get("year")]
         recent = max(years) if years else "N/A"
 
-        # Highlight highly-cited papers if available
         high_cited = [r for r in results if r.get("citations", 0) > 100]
         cited_note = (
             f" {len(high_cited)} papers with 100+ citations." if high_cited else ""

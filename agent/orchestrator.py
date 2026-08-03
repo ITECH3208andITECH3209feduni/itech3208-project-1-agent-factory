@@ -9,7 +9,7 @@ import anthropic
 from skills.base_skill import BaseSkill, SkillResult
 from skills.literature import LiteratureSkill
 from skills.amazon     import AmazonSkill
-from agent.memory      import Memory
+from agent.memory      import SessionMemory
 from agent.formatter   import Formatter
 from config.settings   import ANTHROPIC_API_KEY, CLAUDE_MODEL
 
@@ -57,7 +57,7 @@ SKILLS = {
 class Orchestrator:
     def __init__(self, output_format: str = "markdown"):
         self.client    = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        self.memory    = Memory()
+        self.memory    = SessionMemory()
         self.formatter = Formatter(output_format=output_format)
         self.skills: dict[str, BaseSkill] = {
             "literature": LiteratureSkill(),
