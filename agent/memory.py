@@ -61,8 +61,18 @@ class SessionMemory:
 
     # ── Public API ─────────────────────────────────────────────
 
-    def add(self, query: str, skill_used: str, result_summary: str) -> None:
-        """Record a completed query in the current session."""
+    def add(
+        self,
+        query: str,
+        skill_used: str,
+        result_summary: str,
+        session_id: str | None = None,
+    ) -> None:
+        """Record a completed query. Defaults to this instance's session,
+        but callers that multiplex sessions (e.g. the web UI, one
+        Orchestrator process shared across logged-in users) can pass an
+        explicit session_id — the authenticated username, in that case —
+        to keep each user's history isolated (PROJ-349)."""
         self._conn.execute(
             "INSERT INTO queries (timestamp, query, skill, summary, session_id)"
             " VALUES (?, ?, ?, ?, ?)",
@@ -71,7 +81,7 @@ class SessionMemory:
                 query,
                 skill_used,
                 (result_summary or "")[:200],
-                self._session,
+                session_id or self._session,
             ),
         )
         self._conn.execute(
@@ -81,30 +91,50 @@ class SessionMemory:
         )
         self._conn.commit()
 
-    def save_context(self, query: str, skill: str, summary: str) -> None:
+    def save_context(
+        self, query: str, skill: str, summary: str, session_id: str | None = None
+    ) -> None:
         """Spec-compliant entry point used by the orchestrator (PROJ-33)."""
-        self.add(query=query, skill_used=skill, result_summary=summary)
+        self.add(
+            query=query, skill_used=skill, result_summary=summary, session_id=session_id
+        )
 
-    def get_last_context(self) -> dict | None:
-        """Return the most recently saved context entry, or None."""
+    def get_last_context(self, session_id: str | None = None) -> dict | None:
+        """Return the most recently saved context entry, or None.
+        Scoped to session_id when given, else this instance's session."""
         row = self._conn.execute(
             "SELECT timestamp, query, skill, summary"
-            " FROM queries ORDER BY id DESC LIMIT 1"
+            " FROM queries WHERE session_id = ? ORDER BY id DESC LIMIT 1",
+            (session_id or self._session,),
         ).fetchone()
         return dict(row) if row else None
 
-    def get_history(self, last_n: int = 5) -> list[dict]:
-        """Return the last N query records across all sessions, oldest first."""
-        rows = self._conn.execute(
-            "SELECT timestamp, query, skill, summary"
-            " FROM queries ORDER BY id DESC LIMIT ?",
-            (last_n,),
-        ).fetchall()
+    def get_history(
+        self, last_n: int = 5, session_id: str | None = None, all_sessions: bool = False
+    ) -> list[dict]:
+        """Return the last N query records, oldest first.
+
+        By default this scopes to session_id (or this instance's own
+        session) so one user's history never leaks into another's. Pass
+        all_sessions=True for the legacy CLI behaviour of pulling across
+        every session (used by main.py's single-user REPL)."""
+        if all_sessions:
+            rows = self._conn.execute(
+                "SELECT timestamp, query, skill, summary"
+                " FROM queries ORDER BY id DESC LIMIT ?",
+                (last_n,),
+            ).fetchall()
+        else:
+            rows = self._conn.execute(
+                "SELECT timestamp, query, skill, summary"
+                " FROM queries WHERE session_id = ? ORDER BY id DESC LIMIT ?",
+                (session_id or self._session, last_n),
+            ).fetchall()
         return [dict(r) for r in reversed(rows)]
 
-    def get_context_string(self, last_n: int = 3) -> str:
+    def get_context_string(self, last_n: int = 3, session_id: str | None = None) -> str:
         """Return recent history formatted for the orchestrator routing prompt."""
-        history = self.get_history(last_n)
+        history = self.get_history(last_n, session_id=session_id)
         if not history:
             return "No previous queries."
         lines = []
@@ -113,19 +143,22 @@ class SessionMemory:
             lines.append(f"[{ts}] ({h['skill']}) '{h['query']}' → {h['summary']}")
         return "\n".join(lines)
 
-    def stats(self) -> dict:
+    def stats(self, session_id: str | None = None) -> dict:
         total   = self._conn.execute(
             "SELECT value FROM meta WHERE key = 'total_queries'"
         ).fetchone()
         created = self._conn.execute(
             "SELECT value FROM meta WHERE key = 'db_created_at'"
         ).fetchone()
-        count   = self._conn.execute("SELECT COUNT(*) FROM queries").fetchone()[0]
+        count   = self._conn.execute(
+            "SELECT COUNT(*) FROM queries WHERE session_id = ?",
+            (session_id or self._session,),
+        ).fetchone()[0]
         return {
             "total_queries":   int(total["value"]) if total else count,
             "history_count":   count,
             "session_started": created["value"] if created else "unknown",
-            "current_session": self._session,
+            "current_session": session_id or self._session,
         }
 
     def clear(self) -> None:

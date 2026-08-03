@@ -11,6 +11,38 @@
 </head>
 <body>
 
+<!-- ══ AUTH MODAL (PROJ-349) ══ -->
+<!-- Shown on load until /auth/me confirms a valid session; blocks the
+     rest of the UI (including the welcome overlay) until login/register
+     succeeds. See checkAuth() in app.js. -->
+<div id="auth-modal" style="display:none">
+  <div class="auth-backdrop"></div>
+  <div class="auth-box">
+    <div class="auth-logo">🧠</div>
+    <div class="auth-title">Agent Factory</div>
+    <div class="auth-subtitle" id="auth-subtitle">Log in to continue</div>
+
+    <form id="auth-form" autocomplete="on">
+      <label class="auth-label" for="auth-username">Username</label>
+      <input class="auth-input" type="text" id="auth-username" name="username"
+             autocomplete="username" placeholder="e.g. dilraj" required />
+
+      <label class="auth-label" for="auth-password">Password</label>
+      <input class="auth-input" type="password" id="auth-password" name="password"
+             autocomplete="current-password" placeholder="••••••••" required />
+
+      <div class="auth-error" id="auth-error"></div>
+
+      <button class="auth-submit" type="submit" id="auth-submit">Log In</button>
+    </form>
+
+    <div class="auth-switch">
+      <span id="auth-switch-text">Don't have an account?</span>
+      <a href="#" id="auth-switch-link">Register</a>
+    </div>
+  </div>
+</div>
+
 <!-- Gradient top bar (same as preview) -->
 <div class="preview-banner"></div>
 
@@ -106,6 +138,8 @@
         <span class="model-dot"></span>
         Claude Haiku · arXiv · S2
       </div>
+      <div class="user-badge" id="user-badge" title="Logged in as" style="display:none"></div>
+      <button class="logout-btn" id="logout-btn" title="Log out" style="display:none">⎋</button>
     </div>
 
   </aside>

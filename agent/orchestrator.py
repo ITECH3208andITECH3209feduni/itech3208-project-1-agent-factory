@@ -65,13 +65,20 @@ class Orchestrator:
         }
 
     # ── Main entry point ───────────────────────────────────────
-    def run(self, query: str) -> tuple[str, SkillResult | None]:
+    def run(
+        self, query: str, session_id: str | None = None
+    ) -> tuple[str, SkillResult | None]:
         """
         Process a user query end-to-end.
         Returns (rendered_output: str, result: SkillResult | None)
+
+        session_id scopes conversation context + memory persistence.
+        Pass the authenticated username here when multiple users share
+        one Orchestrator process (PROJ-349) — otherwise defaults to this
+        Orchestrator's own single-session memory (CLI usage).
         """
         # 1. Route to the right skill
-        skill_name = self._route(query)
+        skill_name = self._route(query, session_id=session_id)
 
         # 2. Handle clarification request
         if skill_name.startswith("CLARIFY:"):
@@ -88,27 +95,29 @@ class Orchestrator:
 
         # 5. Persist to memory (PROJ-33: use spec method save_context)
         if result.success:
-            self.memory.save_context(query, skill_name, result.summary)
+            self.memory.save_context(query, skill_name, result.summary, session_id=session_id)
 
         # 6. Format and return
         rendered = self.formatter.render(result)
         return rendered, result
 
-    def run_and_save(self, query: str) -> tuple[str, str, SkillResult | None]:
+    def run_and_save(
+        self, query: str, session_id: str | None = None
+    ) -> tuple[str, str, SkillResult | None]:
         """
         Same as run() but also saves the output to a file.
         Returns (rendered_output, saved_filepath, result)
         """
-        rendered, result = self.run(query)
+        rendered, result = self.run(query, session_id=session_id)
         if result:
             path = self.formatter.save(result)
             return rendered, path, result
         return rendered, "", None
 
     # ── Intent routing ─────────────────────────────────────────
-    def _route(self, query: str) -> str:
+    def _route(self, query: str, session_id: str | None = None) -> str:
         """Ask Claude to classify the query intent."""
-        context = self.memory.get_context_string(last_n=3)
+        context = self.memory.get_context_string(last_n=3, session_id=session_id)
         prompt  = ROUTING_PROMPT.format(context=context, query=query)
 
         # Quick keyword pre-check (saves an API call for obvious queries)

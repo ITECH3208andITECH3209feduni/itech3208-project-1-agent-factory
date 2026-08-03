@@ -29,6 +29,20 @@ let isLoading = false;
 let activeTab = "shopping";
 let activeLitMode = "search"; // "search" | "general" | "integrity"
 
+// Auth (PROJ-349)
+const authModal      = document.getElementById("auth-modal");
+const authForm       = document.getElementById("auth-form");
+const authUsername   = document.getElementById("auth-username");
+const authPassword   = document.getElementById("auth-password");
+const authError      = document.getElementById("auth-error");
+const authSubmitBtn  = document.getElementById("auth-submit");
+const authSubtitle   = document.getElementById("auth-subtitle");
+const authSwitchText = document.getElementById("auth-switch-text");
+const authSwitchLink = document.getElementById("auth-switch-link");
+const userBadge      = document.getElementById("user-badge");
+const logoutBtn      = document.getElementById("logout-btn");
+let authMode = "login"; // "login" | "register"
+
 /* ── Attachment state ─────────────────────────────────────── */
 // Each entry: { name, ext, size, text, dataUrl }
 const attachState = { shopping: [], literature: [], integrity: [], general: [] };
@@ -216,11 +230,112 @@ function getAttachContext(panel) {
 }
 
 /* ══════════════════════════════════════════════════════════
+   AUTH (PROJ-349) — login / register / logout, gates the rest of the UI
+══════════════════════════════════════════════════════════ */
+
+/** Check for a valid session cookie. Reveals the app on success,
+ * shows the login modal on 401. Always resolves (never throws). */
+async function checkAuth() {
+  try {
+    const res = await fetch(`${API_BASE}/auth/me`);
+    if (res.ok) {
+      const data = await res.json();
+      onAuthed(data.username);
+      return;
+    }
+  } catch { /* network error — fall through to login modal */ }
+  showAuthModal();
+}
+
+function onAuthed(username) {
+  document.body.classList.add("authed");
+  authModal.style.display = "none";
+  userBadge.style.display = "block";
+  userBadge.textContent = username;
+  logoutBtn.style.display = "block";
+  loadHistory();
+}
+
+function showAuthModal() {
+  document.body.classList.remove("authed");
+  authModal.style.display = "flex";
+  authUsername.focus();
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  authError.textContent = "";
+  if (mode === "register") {
+    authSubtitle.textContent = "Create an account to get started";
+    authSubmitBtn.textContent = "Register";
+    authSwitchText.textContent = "Already have an account?";
+    authSwitchLink.textContent = "Log in";
+    authPassword.autocomplete = "new-password";
+  } else {
+    authSubtitle.textContent = "Log in to continue";
+    authSubmitBtn.textContent = "Log In";
+    authSwitchText.textContent = "Don't have an account?";
+    authSwitchLink.textContent = "Register";
+    authPassword.autocomplete = "current-password";
+  }
+}
+
+async function handleAuthSubmit(e) {
+  e.preventDefault();
+  const username = authUsername.value.trim();
+  const password = authPassword.value;
+  authError.textContent = "";
+  authSubmitBtn.disabled = true;
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/${authMode === "register" ? "register" : "login"}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      authError.textContent = data.detail || "Something went wrong. Try again.";
+      return;
+    }
+
+    authPassword.value = "";
+    onAuthed(data.username);
+  } catch {
+    authError.textContent = "Couldn't reach the server. Is it running?";
+  } finally {
+    authSubmitBtn.disabled = false;
+  }
+}
+
+async function handleLogout() {
+  try {
+    await fetch(`${API_BASE}/auth/logout`, { method: "POST" });
+  } catch { /* ignore — clearing local UI state either way */ }
+  document.body.classList.remove("authed");
+  userBadge.style.display = "none";
+  logoutBtn.style.display = "none";
+  historyList.innerHTML = "";
+  authUsername.value = "";
+  authPassword.value = "";
+  setAuthMode("login");
+  showAuthModal();
+}
+
+/* ══════════════════════════════════════════════════════════
    INIT
 ══════════════════════════════════════════════════════════ */
 document.addEventListener("DOMContentLoaded", () => {
   checkStatus();
-  loadHistory();
+  checkAuth(); // shows the login modal, or reveals the app + loads history
+
+  authForm.addEventListener("submit", handleAuthSubmit);
+  authSwitchLink.addEventListener("click", e => {
+    e.preventDefault();
+    setAuthMode(authMode === "login" ? "register" : "login");
+  });
+  logoutBtn.addEventListener("click", handleLogout);
 
   // Nav tab switching
   document.querySelectorAll(".nav-item[data-tab]").forEach(item => {

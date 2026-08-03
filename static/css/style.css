@@ -475,6 +475,96 @@ body {
 .md-content a { color: var(--sky); text-decoration: none; }
 .md-content a:hover { color: var(--sky2); }
 
+/* ═══════════════════════════════════
+   AUTH MODAL (PROJ-349)
+   ═══════════════════════════════════ */
+/* Hide the whole app until checkAuth() confirms a valid session and
+   app.js adds .authed to <body>. Prevents a flash of the chat UI (and
+   an inevitable 401 from /history) before we know who's logged in. */
+body:not(.authed) .preview-banner,
+body:not(.authed) .layout,
+body:not(.authed) #welcome-overlay {
+  display: none !important;
+}
+#auth-modal {
+  position: fixed; inset: 0; z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+}
+.auth-backdrop {
+  position: absolute; inset: 0;
+  background: var(--bg);
+}
+.auth-box {
+  position: relative; z-index: 1;
+  width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 16px;
+  padding: 32px 28px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.auth-logo { font-size: 32px; margin-bottom: 10px; }
+.auth-title {
+  font-size: 20px; font-weight: 700; color: var(--text);
+  letter-spacing: -0.3px; margin-bottom: 4px;
+  font-family: 'Inter', sans-serif;
+}
+.auth-subtitle {
+  font-size: 12px; color: var(--text2); margin-bottom: 22px;
+  font-family: 'Inter', sans-serif;
+}
+.auth-label {
+  display: block; text-align: left;
+  font-size: 11px; font-weight: 600; color: var(--text2);
+  margin: 12px 0 6px; text-transform: uppercase; letter-spacing: 0.3px;
+}
+.auth-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  outline: none;
+}
+.auth-input:focus { border-color: var(--violet); }
+.auth-error {
+  min-height: 16px;
+  font-size: 12px; color: var(--rose);
+  margin-top: 10px; text-align: left;
+}
+.auth-submit {
+  width: 100%; margin-top: 16px;
+  background: linear-gradient(135deg, var(--violet), var(--sky));
+  border: none; border-radius: 8px;
+  padding: 11px; font-size: 13px; font-weight: 600; color: #fff;
+  cursor: pointer; font-family: 'Inter', sans-serif;
+  transition: opacity 0.15s;
+}
+.auth-submit:hover { opacity: 0.9; }
+.auth-submit:disabled { opacity: 0.5; cursor: default; }
+.auth-switch {
+  margin-top: 18px; font-size: 12px; color: var(--text2);
+  font-family: 'Inter', sans-serif;
+}
+.auth-switch a { color: var(--sky2); text-decoration: none; margin-left: 4px; }
+.auth-switch a:hover { text-decoration: underline; }
+
+/* Sidebar user badge + logout */
+.user-badge {
+  font-size: 11px; color: var(--text2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 90px;
+}
+.logout-btn {
+  background: none; border: 1px solid var(--border2); border-radius: 6px;
+  color: var(--text2); font-size: 13px; width: 26px; height: 26px;
+  cursor: pointer; flex-shrink: 0; transition: all 0.15s;
+}
+.logout-btn:hover { color: var(--rose); border-color: var(--rose); }
+
 /* Error bubble */
 .error-bubble {
   background: rgba(244,63,94,0.08); border: 1px solid rgba(244,63,94,0.2);

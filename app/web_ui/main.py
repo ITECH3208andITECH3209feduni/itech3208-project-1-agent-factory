@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from app.web_ui.routes import router
+from app.web_ui.auth_routes import router as auth_router
 
 # ── App setup ──────────────────────────────────────────────────
 app = FastAPI(
@@ -38,6 +39,7 @@ if os.path.isdir(_STATIC_DIR):
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 # Include API routes
+app.include_router(auth_router)  # /auth/register, /auth/login, /auth/logout, /auth/me
 app.include_router(router)
 
 

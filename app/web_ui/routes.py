@@ -13,12 +13,13 @@ import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from agent.orchestrator import Orchestrator
 from components.amazon_cards import ProductCard
 from components.literature_cards import PaperCard
+from app.web_ui.auth_routes import get_current_username
 
 router = APIRouter()
 
@@ -51,17 +52,21 @@ class StatusResponse(BaseModel):
 
 # ── Routes ─────────────────────────────────────────────────────
 @router.post("/query", response_model=QueryResponse)
-async def query_agent(body: QueryRequest):
+async def query_agent(body: QueryRequest, username: str = Depends(get_current_username)):
     """
     Run a research query through the agent.
     Returns the text response plus typed result cards.
+
+    Requires login (PROJ-349) — history and conversation context are
+    scoped to the logged-in user's session_id so one user's queries
+    never bleed into another's.
 
     Response schema:
         response  — human-readable agent answer
         cards     — list of ProductCard or PaperCard dicts
         type      — "amazon" | "literature" | "unknown"
     """
-    rendered, result = _orchestrator.run(body.query)
+    rendered, result = _orchestrator.run(body.query, session_id=username)
 
     if result is None:
         # Clarification response — no cards
@@ -94,9 +99,9 @@ async def query_agent(body: QueryRequest):
 
 
 @router.get("/history", response_model=list[HistoryItem])
-async def get_history():
-    """Return the last 20 queries from session memory."""
-    history = _orchestrator.memory.get_history(20)
+async def get_history(username: str = Depends(get_current_username)):
+    """Return the last 20 queries from the logged-in user's own history."""
+    history = _orchestrator.memory.get_history(20, session_id=username)
     return [
         HistoryItem(
             timestamp=h.get("timestamp", ""),
