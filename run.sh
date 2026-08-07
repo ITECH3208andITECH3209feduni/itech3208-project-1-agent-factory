@@ -138,7 +138,18 @@ case "${1:-}" in
   test)
     shift
     echo "==> Running smoke tests  (root: $PROJECT_ROOT)"
-    exec "$PYTHON" scripts/test_rate_limiter.py "$@"
+    # Run every suite even if an early one fails, then report once — a single
+    # red suite shouldn't hide the state of the others.
+    rc=0
+    for suite in scripts/test_*.py; do
+      [ -e "$suite" ] || continue
+      echo
+      echo "--- $suite"
+      "$PYTHON" "$suite" "$@" || rc=1
+    done
+    echo
+    [ "$rc" -eq 0 ] && echo "==> All suites passed" || echo "==> One or more suites FAILED"
+    exit "$rc"
     ;;
   *)
     exec "$PYTHON" main.py "$@"
