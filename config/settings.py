@@ -36,9 +36,24 @@ ARXIV_BASE_URL              = "http://export.arxiv.org/api/query"
 SEMANTIC_SCHOLAR_URL        = "https://api.semanticscholar.org/graph/v1/paper/search"
 PUBMED_SEARCH_URL           = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi"
 PUBMED_FETCH_URL            = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi"
-# Optional: get a free key at https://www.semanticscholar.org/product/api
-# raises rate limit from 1 req/s to 100 req/s
-SEMANTIC_SCHOLAR_API_KEY    = os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "")
+
+# Semantic Scholar API key (PROJ-379).
+# Register at https://www.semanticscholar.org/product/api-key
+# S2_API_KEY is the canonical name; SEMANTIC_SCHOLAR_API_KEY is still read so
+# existing .env files keep working.
+S2_API_KEY = os.environ.get("S2_API_KEY") or os.environ.get("SEMANTIC_SCHOLAR_API_KEY", "")
+
+# Backwards-compatible alias — existing imports refer to this name.
+SEMANTIC_SCHOLAR_API_KEY = S2_API_KEY
+
+# Client-side rate limit for Semantic Scholar (PROJ-379).
+# The keyed tier is 100 requests / 5 minutes. Without a key the public tier is
+# roughly 1 req/s, so we fall back to a much smaller budget over the same window.
+S2_RATE_LIMIT_REQUESTS = int(os.environ.get("S2_RATE_LIMIT_REQUESTS", "100" if S2_API_KEY else "20"))
+S2_RATE_LIMIT_PERIOD   = float(os.environ.get("S2_RATE_LIMIT_PERIOD", "300"))
+
+# Give up rather than block forever if the bucket is exhausted.
+S2_RATE_LIMIT_TIMEOUT  = float(os.environ.get("S2_RATE_LIMIT_TIMEOUT", "60"))
 
 # ── Amazon scraping ────────────────────────────────────────────
 AMAZON_BASE_URL   = "https://www.amazon.com"

@@ -24,6 +24,7 @@ except ImportError:
     ANTHROPIC_AVAILABLE = False
 
 from skills.base_skill import BaseSkill, SkillResult
+from skills.rate_limiter import TokenBucket
 from config.settings import (
     ARXIV_BASE_URL,
     SEMANTIC_SCHOLAR_URL,
@@ -34,6 +35,17 @@ from config.settings import (
     ANTHROPIC_API_KEY,
     CLAUDE_MODEL,
     SEMANTIC_SCHOLAR_API_KEY,
+    S2_RATE_LIMIT_REQUESTS,
+    S2_RATE_LIMIT_PERIOD,
+    S2_RATE_LIMIT_TIMEOUT,
+)
+
+# Module-level bucket shared by every LiteratureSkill instance (PROJ-379).
+# The limit is per API key, not per object, so one bucket per process is correct.
+_S2_BUCKET = TokenBucket(
+    capacity   = S2_RATE_LIMIT_REQUESTS,
+    period_sec = S2_RATE_LIMIT_PERIOD,
+    name       = "semantic-scholar",
 )
 
 # How many papers to fetch for synthesis (PROJ-92) — more than normal MAX_RESULTS
@@ -139,9 +151,8 @@ class LiteratureSkill(BaseSkill):
             errors.append(f"arXiv: {e}")
 
         # ── 2. Semantic Scholar ───────────────────────────────
-        # Small delay to avoid hitting the 1 req/s rate limit when no API key is set
-        if not SEMANTIC_SCHOLAR_API_KEY:
-            time.sleep(1.0)
+        # Pacing is handled by the token bucket in _s2_get (PROJ-379), which
+        # replaces the old unconditional 1s sleep on the keyless path.
         try:
             ss_results = self._search_semantic_scholar(query, limit=paper_count)
             existing_titles = {r["title"].lower() for r in results}
@@ -279,6 +290,21 @@ class LiteratureSkill(BaseSkill):
             return {"x-api-key": SEMANTIC_SCHOLAR_API_KEY}
         return None
 
+    def _s2_get(self, url: str, params: dict = None) -> requests.Response:
+        """
+        Rate-limited GET against Semantic Scholar (PROJ-379).
+
+        Spends a token before the request goes out, so we stay inside the
+        100 req/5 min budget instead of discovering it via a 429.
+        """
+        if not _S2_BUCKET.acquire(timeout=S2_RATE_LIMIT_TIMEOUT):
+            raise Exception(
+                f"Semantic Scholar rate limit reached "
+                f"({int(_S2_BUCKET.capacity)} requests per {_S2_BUCKET.period_sec:.0f}s); "
+                f"gave up after waiting {S2_RATE_LIMIT_TIMEOUT:.0f}s"
+            )
+        return self._retry_get(url, params=params, headers=self._ss_headers())
+
     def _search_semantic_scholar(self, query: str, limit: int = None) -> list[dict]:
         if limit is None:
             limit = MAX_RESULTS
@@ -287,7 +313,7 @@ class LiteratureSkill(BaseSkill):
             "limit":  limit,
             "fields": "title,authors,year,abstract,url,citationCount,paperId",
         }
-        resp = self._retry_get(SEMANTIC_SCHOLAR_URL, params=params, headers=self._ss_headers())
+        resp = self._s2_get(SEMANTIC_SCHOLAR_URL, params=params)
         data = resp.json().get("data", [])
         out  = []
         for paper in data:
@@ -577,7 +603,7 @@ Be specific and grounded in what the abstracts actually discuss (or don't discus
             "limit":  limit,
         }
 
-        resp = self._retry_get(url, params=params, headers=self._ss_headers())
+        resp = self._s2_get(url, params=params)
         data = resp.json().get("data", [])
 
         out = []
