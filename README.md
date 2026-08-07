@@ -261,8 +261,26 @@ MIT
 ```bash
 git clone https://github.com/ITECH3208andITECH3209feduni/itech3208-project-1-agent-factory.git
 cd itech3208-project-1-agent-factory
-pip install -r requirements.txt
+./run.sh
 ```
+
+`run.sh` is the canonical entry point (PROJ-380). On first run it creates
+`.venv`, installs `requirements.txt`, and starts the interactive CLI. It
+resolves its own directory before doing anything, so it works from any
+working directory and always uses the checkout it lives in — no more
+"which worktree am I actually running?" ambiguity.
+
+If you prefer to manage the environment yourself:
+
+```bash
+pip install -r requirements.txt
+./run.sh --no-venv          # or: python main.py
+```
+
+> **Windows:** run `./run.sh` from Git Bash. The repo's other scripts
+> (`setup.sh`, the Husky hooks) already assume bash, so there is one
+> launcher rather than a PowerShell copy that can drift out of sync.
+> `python main.py` also still works.
 
 ## Environment Variables
 
@@ -284,32 +302,56 @@ cp .env.example .env
 
 ## Running the Agent
 
+All of these work from any directory — `run.sh` cd's to the project root itself.
+
 **Interactive mode:**
 ```bash
-python main.py
+./run.sh
 ```
 
 **Single query mode:**
 ```bash
-python main.py -q "Find papers on transformer architecture"
-python main.py -q "Best wireless earbuds under $50"
+./run.sh -q "Find papers on transformer architecture"
+./run.sh -q "Best wireless earbuds under $50"
 ```
 
 **Save output to file:**
 ```bash
-python main.py -q "RAG architecture" --save
+./run.sh -q "RAG architecture" --save
 ```
 
 **Show query history:**
 ```bash
-python main.py --history
+./run.sh --history
 ```
 
-**Windows users** — use `python` instead of `python3`:
-```cmd
-set ANTHROPIC_API_KEY=your-key-here
-python main.py
+**API server:**
+```bash
+./run.sh serve                 # http://0.0.0.0:8000
+HOST=127.0.0.1 PORT=9000 ./run.sh serve
 ```
+
+**Smoke tests:**
+```bash
+./run.sh test
+```
+
+| Subcommand | Runs |
+|-----------|------|
+| *(none)* | `main.py` — interactive CLI, plus all its flags |
+| `serve` | `uvicorn app.web.main:app` |
+| `test` | the smoke-test scripts |
+| `--no-venv` | skips venv creation, uses whatever Python is active |
+
+Running `python main.py` directly still works, but only from the project
+root and only with your environment already set up.
+
+### VS Code
+
+`.vscode/launch.json` is committed (PROJ-380) with four configs: interactive
+CLI, single query, API server, and the rate limiter tests. Each pins `cwd`
+and `PYTHONPATH` to the workspace folder, so F5 debugs the same code
+`./run.sh` executes.
 
 ## Running with Docker
 

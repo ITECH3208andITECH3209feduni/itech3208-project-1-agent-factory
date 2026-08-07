@@ -38,6 +38,10 @@ Thumbs.db
 # IDE
 .idea/
 .vscode/
+# ...but the canonical debug config is shared, not per-developer (PROJ-380)
+!.vscode/
+.vscode/*
+!.vscode/launch.json
 *.swp
 *.swo
 
