@@ -15,6 +15,11 @@ playwright-stealth>=1.0.6  # Makes the browser invisible to bot detectors
 # arXiv and Semantic Scholar use plain requests (no extra lib needed)
 # PubMed uses requests + stdlib xml.etree
 
+# ── Web API (PROJ-299..303) ───────────────────────────────────
+fastapi>=0.110.0           # ASGI web framework
+uvicorn[standard]>=0.27.0  # ASGI server
+pydantic>=2.6.0            # Request/response models
+
 # ── Terminal UI ───────────────────────────────────────────────
 rich>=13.0.0               # Pretty terminal output (optional but recommended)
 

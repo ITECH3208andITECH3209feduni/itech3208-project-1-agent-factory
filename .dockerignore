@@ -1,11 +1,75 @@
-node_modules
-.claude
-.git
-__pycache__
-*.pyc
-*.pyo
+# .dockerignore — build context exclusions (PROJ-299..303)
+#
+# Two jobs: keep secrets and local state out of the image, and keep the
+# context small so `docker build` is not uploading node_modules every time.
+
+# ── Secrets and local state (must never enter an image) ───────
 .env
-data
+.env.*
+!.env.example
+*.keys.json
+credentials.json
+secrets.json
+config/local_settings.py
 store
+data
+
+# ── Generated output ──────────────────────────────────────────
 outputs
+test_outputs
 *.log
+logs
+
+# ── VCS and CI ────────────────────────────────────────────────
+.git
+.gitignore
+.gitattributes
+.github
+.husky
+
+# ── Node (this image is Python-only) ──────────────────────────
+node_modules
+.npm-cache
+dist
+build
+package-lock.json
+tsconfig.json
+eslint.config.js
+vitest.config.ts
+vitest.skills.config.ts
+src
+
+# ── Python caches and local envs ──────────────────────────────
+__pycache__
+**/__pycache__
+*.py[cod]
+*.egg-info
+.eggs
+.pytest_cache
+.coverage
+htmlcov
+venv
+.venv
+env
+
+# ── Editor / OS ───────────────────────────────────────────────
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ── Agent tooling and docs not needed at runtime ──────────────
+.claude
+.nanoclaw
+.mcp.json
+docs
+assets
+groups
+container
+launchd
+repo-tokens
+config-examples
+*.md
+!README.md
