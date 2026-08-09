@@ -25,6 +25,20 @@ const literatureArea  = document.getElementById("literature-area");
 const literatureInput = document.getElementById("literature-input");
 const literatureBtn   = document.getElementById("literature-btn");
 
+// AI Receptionist tab
+const receptionistArea  = document.getElementById("receptionist-area");
+const receptionistInput = document.getElementById("receptionist-input");
+const receptionistBtn   = document.getElementById("receptionist-btn");
+
+// Knowledge Base tab (PROJ-279-283)
+const kbFileInput    = document.getElementById("kb-file-input");
+const kbUploadBtn    = document.getElementById("kb-upload-btn");
+const kbSearchInput  = document.getElementById("kb-search-input");
+const kbSearchBtn    = document.getElementById("kb-search-btn");
+const kbSearchResults = document.getElementById("kb-search-results");
+const kbDocList      = document.getElementById("kb-doc-list");
+const kbErrorBox     = document.getElementById("kb-error");
+
 let isLoading = false;
 let activeTab = "shopping";
 let activeLitMode = "search"; // "search" | "general" | "integrity"
@@ -254,6 +268,7 @@ function onAuthed(username) {
   userBadge.textContent = username;
   logoutBtn.style.display = "block";
   loadHistory();
+  loadKbDocuments();
 }
 
 function showAuthModal() {
@@ -367,6 +382,19 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Enter" && !e.ctrlKey) { e.preventDefault(); sendIntegrityCheck(); }
   });
   integrityBtn.addEventListener("click", sendIntegrityCheck);
+
+  // AI Receptionist input — Enter to send
+  receptionistInput.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); sendReceptionistQuery(); }
+  });
+  receptionistBtn.addEventListener("click", sendReceptionistQuery);
+
+  // Knowledge Base tab (PROJ-279-283)
+  if (kbUploadBtn) kbUploadBtn.addEventListener("click", uploadKbFile);
+  if (kbSearchBtn) kbSearchBtn.addEventListener("click", searchKb);
+  if (kbSearchInput) kbSearchInput.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); searchKb(); }
+  });
 });
 
 /* ══════════════════════════════════════════════════════════
@@ -382,6 +410,7 @@ function switchTab(tabName) {
     panel.classList.toggle("active", panel.id === `tab-${tabName}`);
   });
   activeTab = tabName;
+  if (tabName === "kb") loadKbDocuments();
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -623,6 +652,49 @@ function prefillGeneral(prefix) {
 }
 
 /* ══════════════════════════════════════════════════════════
+   AI RECEPTIONIST TAB — POST /receptionist (PROJ-195, PROJ-209-218)
+══════════════════════════════════════════════════════════ */
+async function sendReceptionistQuery() {
+  const message = receptionistInput.value.trim();
+  if (!message || isLoading) return;
+
+  appendUserMsg(receptionistArea, message, []);
+  receptionistInput.value = "";
+  setLoading(true, receptionistBtn, receptionistInput);
+  const typingId = showTyping(receptionistArea);
+
+  try {
+    const res = await fetch(`${API_BASE}/receptionist`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message }),
+    });
+    removeTyping(typingId);
+
+    if (res.status === 401) {
+      appendErrorMsg(receptionistArea, "You've been logged out — please log in again.");
+      showAuthModal();
+      return;
+    }
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+    const data = await res.json();
+    appendAgentBubble(receptionistArea, data.answer, [], "receptionist");
+  } catch (err) {
+    removeTyping(typingId);
+    appendErrorMsg(receptionistArea, err.message);
+  } finally {
+    setLoading(false, receptionistBtn, receptionistInput);
+    scrollToBottom(receptionistArea);
+  }
+}
+
+function prefillReceptionist(text) {
+  receptionistInput.value = text;
+  receptionistInput.focus();
+}
+
+/* ══════════════════════════════════════════════════════════
    INTEGRITY TAB — POST /integrity
 ══════════════════════════════════════════════════════════ */
 async function sendIntegrityCheck() {
@@ -695,6 +767,7 @@ function appendAgentBubble(area, responseText, cards, type) {
     : type === "literature" ? "Literature"
     : type === "integrity" ? "Integrity"
     : type === "general" ? "Ask Anything"
+    : type === "receptionist" ? "AI Receptionist"
     : "Agent";
 
   row.innerHTML = `
@@ -1019,4 +1092,124 @@ function fillShoppingInput(text) {
     shoppingInput.value = text;
     shoppingInput.focus();
   }, 50);
+}
+
+/* ══════════════════════════════════════════════════════════
+   KNOWLEDGE BASE TAB — /kb/upload, /kb/list, /kb/{id}, /kb/search
+   (PROJ-279-283)
+══════════════════════════════════════════════════════════ */
+function kbShowError(message) {
+  if (!kbErrorBox) return;
+  kbErrorBox.textContent = message;
+  kbErrorBox.style.display = message ? "block" : "none";
+}
+
+async function loadKbDocuments() {
+  if (!kbDocList) return;
+  try {
+    const res = await fetch(`${API_BASE}/kb/list`);
+    if (res.status === 401) return; // not logged in yet — auth modal already showing
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    const data = await res.json();
+    renderKbDocuments(data.documents || []);
+  } catch (err) {
+    kbShowError(`Couldn't load documents: ${err.message}`);
+  }
+}
+
+function renderKbDocuments(documents) {
+  if (documents.length === 0) {
+    kbDocList.innerHTML = `<div class="kb-empty">No documents uploaded yet.</div>`;
+    return;
+  }
+  kbDocList.innerHTML = documents.map(doc => `
+    <div class="kb-doc-item" data-doc-id="${doc.id}">
+      <div class="kb-doc-meta">
+        <div class="kb-doc-name">${escHtml(doc.filename)}</div>
+        <div class="kb-doc-sub">${(doc.size_bytes / 1024).toFixed(1)} KB · uploaded ${new Date(doc.uploaded_at).toLocaleString()}</div>
+      </div>
+      <button class="kb-doc-delete-btn" onclick="deleteKbDocument(${doc.id})">Delete</button>
+    </div>
+  `).join("");
+}
+
+async function uploadKbFile() {
+  kbShowError("");
+  const file = kbFileInput?.files?.[0];
+  if (!file) {
+    kbShowError("Choose a file first.");
+    return;
+  }
+  const formData = new FormData();
+  formData.append("file", file);
+
+  kbUploadBtn.disabled = true;
+  kbUploadBtn.textContent = "Uploading…";
+  try {
+    const res = await fetch(`${API_BASE}/kb/upload`, { method: "POST", body: formData });
+    if (res.status === 401) {
+      kbShowError("You've been logged out — please log in again.");
+      showAuthModal();
+      return;
+    }
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || `Server error: ${res.status}`);
+    kbFileInput.value = "";
+    await loadKbDocuments();
+  } catch (err) {
+    kbShowError(err.message);
+  } finally {
+    kbUploadBtn.disabled = false;
+    kbUploadBtn.textContent = "Upload ↑";
+  }
+}
+
+async function deleteKbDocument(docId) {
+  kbShowError("");
+  try {
+    const res = await fetch(`${API_BASE}/kb/${docId}`, { method: "DELETE" });
+    if (res.status === 401) {
+      kbShowError("You've been logged out — please log in again.");
+      showAuthModal();
+      return;
+    }
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    await loadKbDocuments();
+  } catch (err) {
+    kbShowError(`Couldn't delete document: ${err.message}`);
+  }
+}
+
+async function searchKb() {
+  const query = kbSearchInput.value.trim();
+  if (!query) return;
+  kbSearchResults.innerHTML = `<div class="kb-no-results">Searching…</div>`;
+  try {
+    const res = await fetch(`${API_BASE}/kb/search?q=${encodeURIComponent(query)}`);
+    if (res.status === 401) {
+      showAuthModal();
+      return;
+    }
+    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    const data = await res.json();
+    renderKbSearchResults(data.results || []);
+  } catch (err) {
+    kbSearchResults.innerHTML = `<div class="kb-no-results">Error: ${escHtml(err.message)}</div>`;
+  }
+}
+
+function renderKbSearchResults(results) {
+  if (results.length === 0) {
+    kbSearchResults.innerHTML = `<div class="kb-no-results">No matching documents.</div>`;
+    return;
+  }
+  kbSearchResults.innerHTML = results.map(r => `
+    <div class="kb-result">
+      <div class="kb-result-title">
+        <span>${escHtml(r.filename)}</span>
+        <span class="kb-result-score">${Math.round(r.score * 100)}% match</span>
+      </div>
+      <div class="kb-result-snippet">${escHtml(r.snippet)}</div>
+    </div>
+  `).join("");
 }

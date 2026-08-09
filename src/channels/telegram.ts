@@ -2,9 +2,9 @@ import fs from 'fs';
 import https from 'https';
 import path from 'path';
 
-import { Api, Bot } from 'grammy';
+import { Api, Bot, InlineKeyboard } from 'grammy';
 
-import { ASSISTANT_NAME, TRIGGER_PATTERN } from '../config.js';
+import { ASSISTANT_NAME, DEFAULT_TRIGGER, TRIGGER_PATTERN } from '../config.js';
 import { readEnvFile } from '../env.js';
 import { resolveGroupFolderPath } from '../group-folder.js';
 import { logger } from '../logger.js';
@@ -21,6 +21,23 @@ export interface TelegramChannelOpts {
   onChatMetadata: OnChatMetadata;
   registeredGroups: () => Record<string, RegisteredGroup>;
 }
+
+// Quick-action chips (PROJ-229: inline keyboard chips for mode selection).
+// Each button's callback_data maps to the canned message content that gets
+// fed through the normal message pipeline when tapped — see the
+// callback_query:data handler in connect(). Keeping the mapping here (data
+// -> content) means the keyboard and its handler always agree on meaning.
+const MODE_MENU_CHOICES: Record<string, string> = {
+  'menu:help': '/help',
+  'menu:history': '/history',
+  'menu:book': `${DEFAULT_TRIGGER} I'd like to book an appointment`,
+};
+
+const MODE_MENU_KEYBOARD = new InlineKeyboard()
+  .text('📅 Book an appointment', 'menu:book')
+  .row()
+  .text('📜 History', 'menu:history')
+  .text('❓ Help', 'menu:help');
 
 /**
  * Send a message with Telegram Markdown parse mode, falling back to plain text.
@@ -90,7 +107,10 @@ export class TelegramChannel implements Channel {
       const fileUrl = `https://api.telegram.org/file/bot${this.botToken}/${file.file_path}`;
       const resp = await fetch(fileUrl);
       if (!resp.ok) {
-        logger.warn({ fileId, status: resp.status }, 'Telegram file download failed');
+        logger.warn(
+          { fileId, status: resp.status },
+          'Telegram file download failed',
+        );
         return null;
       }
 
@@ -132,9 +152,73 @@ export class TelegramChannel implements Channel {
       ctx.reply(`${ASSISTANT_NAME} is online.`);
     });
 
+    // Health-check / onboarding command — first thing a new user or group sees.
+    // Confirms the bot is reachable and tells the user what to do next.
+    this.bot.command('start', (ctx) => {
+      const chatType = ctx.chat.type;
+      const isGroup = chatType === 'group' || chatType === 'supergroup';
+      const nextStep = isGroup
+        ? `Ask an admin to register this chat with \`/chatid\`, then mention me with ${DEFAULT_TRIGGER} to start a conversation.`
+        : `Just send me a message to get started.`;
+      ctx.reply(`👋 ${ASSISTANT_NAME} is online and ready.\n\n${nextStep}`, {
+        parse_mode: 'Markdown',
+        reply_markup: isGroup ? undefined : MODE_MENU_KEYBOARD,
+      });
+    });
+
+    // /menu — re-show the quick-action chips without repeating the full
+    // onboarding text (PROJ-229: inline keyboard chips for mode selection).
+    this.bot.command('menu', (ctx) => {
+      ctx.reply('What would you like to do?', {
+        reply_markup: MODE_MENU_KEYBOARD,
+      });
+    });
+
+    // Handle taps on the quick-action chips above. Each button maps to a
+    // canned message that's fed through the exact same pipeline as if the
+    // user had typed it (UX commands still short-circuit in index.ts;
+    // the appointment chip flows to the agent normally). This keeps the
+    // chip behavior in sync with whatever /help, /history, and the
+    // calendar tool already do — no separate logic to maintain.
+    this.bot.on('callback_query:data', async (ctx) => {
+      const data = ctx.callbackQuery.data;
+      const choice = MODE_MENU_CHOICES[data];
+      // Always acknowledge, even for unknown data, so Telegram stops
+      // showing the tap as "pending" on the user's client.
+      await ctx.answerCallbackQuery(
+        choice ? undefined : { text: 'Unrecognized option' },
+      );
+      if (!choice) return;
+
+      const chat = ctx.callbackQuery.message?.chat;
+      if (!chat) return;
+      const chatJid = `tg:${chat.id}`;
+
+      const group = this.opts.registeredGroups()[chatJid];
+      if (!group) return;
+
+      const senderName =
+        ctx.from?.first_name ||
+        ctx.from?.username ||
+        ctx.from?.id.toString() ||
+        'Unknown';
+
+      this.opts.onMessage(chatJid, {
+        id: `cb_${ctx.callbackQuery.id}`,
+        chat_jid: chatJid,
+        sender: ctx.from?.id.toString() || '',
+        sender_name: senderName,
+        content: choice,
+        timestamp: new Date().toISOString(),
+        is_from_me: false,
+      });
+
+      logger.info({ chatJid, choice }, 'Telegram menu chip selected');
+    });
+
     // Telegram bot commands handled above — skip them in the general handler
     // so they don't also get stored as messages. All other /commands flow through.
-    const TELEGRAM_BOT_COMMANDS = new Set(['chatid', 'ping']);
+    const TELEGRAM_BOT_COMMANDS = new Set(['chatid', 'ping', 'start', 'menu']);
 
     this.bot.on('message:text', async (ctx) => {
       if (ctx.message.text.startsWith('/')) {

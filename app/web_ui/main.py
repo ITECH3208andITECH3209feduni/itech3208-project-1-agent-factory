@@ -25,6 +25,9 @@ from fastapi.responses import FileResponse
 
 from app.web_ui.routes import router
 from app.web_ui.auth_routes import router as auth_router
+from app.web_ui.receptionist_routes import router as receptionist_router
+from app.web_ui.calendar_routes import router as calendar_router
+from app.web_ui.kb_routes import router as kb_router
 
 # ── App setup ──────────────────────────────────────────────────
 app = FastAPI(
@@ -39,8 +42,11 @@ if os.path.isdir(_STATIC_DIR):
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 # Include API routes
-app.include_router(auth_router)  # /auth/register, /auth/login, /auth/logout, /auth/me
-app.include_router(router)
+app.include_router(auth_router)          # /auth/register, /auth/login, /auth/logout, /auth/me
+app.include_router(router)               # /query, /history, /status
+app.include_router(receptionist_router)  # /receptionist
+app.include_router(calendar_router)      # /calendar/ics
+app.include_router(kb_router)            # /kb/upload, /kb/list, /kb/{id}, /kb/search
 
 
 # ── Root — serve the chat UI ───────────────────────────────────

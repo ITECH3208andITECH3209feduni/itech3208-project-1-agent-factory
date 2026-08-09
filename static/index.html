@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Agent Factory</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=2" />
+  <link rel="stylesheet" href="/static/css/style.css?v=4" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <!-- PDF.js — lazy-loaded on first PDF attach -->
   <!-- mammoth.js — lazy-loaded on first DOCX attach -->
@@ -125,6 +125,12 @@
       </div>
       <div class="nav-item" data-tab="integrity">
         <span class="nav-icon">🧠</span> Literature AI
+      </div>
+      <div class="nav-item" data-tab="receptionist">
+        <span class="nav-icon">💁</span> AI Receptionist
+      </div>
+      <div class="nav-item" data-tab="kb">
+        <span class="nav-icon">📚</span> Knowledge Base
       </div>
     </div>
 
@@ -289,10 +295,79 @@
       </div>
     </div>
 
+    <!-- ── AI Receptionist Tab (PROJ-195, PROJ-209-218) ── -->
+    <div class="tab-panel" id="tab-receptionist">
+      <div class="topbar">
+        <div class="topbar-left">
+          <div class="topbar-title">AI Receptionist</div>
+        </div>
+        <div class="topbar-right">
+          <div class="source-chip active"><span class="source-chip-dot"></span> FAQ</div>
+          <div class="source-chip active"><span class="source-chip-dot"></span> Booking</div>
+        </div>
+      </div>
+
+      <div class="messages" id="receptionist-area">
+        <div class="welcome">
+          <div class="welcome-heading">AI Receptionist</div>
+          <div class="welcome-sub">Ask a question, book an appointment, or ask to speak with a human — I'll route you to the right place.</div>
+          <div class="chips">
+            <div class="chip" onclick="prefillReceptionist('What are your hours?')">🕐 Hours</div>
+            <div class="chip" onclick="prefillReceptionist('Book me in for a consultation next Tuesday at 2pm')">📅 Book an appointment</div>
+            <div class="chip" onclick="prefillReceptionist('What services do you offer?')">❓ Our services</div>
+            <div class="chip" onclick="prefillReceptionist(&quot;I'd like to talk to a person&quot;)">🙋 Talk to a human</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <div class="input-box">
+          <input type="text" id="receptionist-input" placeholder="Ask a question, or say what you'd like to book…" aria-label="AI Receptionist" />
+          <button class="send-btn" id="receptionist-btn">Send ↑</button>
+        </div>
+        <div class="input-hints">
+          <span class="hint-text">FAQ · Appointment booking · Human escalation</span>
+          <span class="hint-text">Press <kbd>Enter</kbd> to send</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Knowledge Base Tab (PROJ-279-283) ── -->
+    <div class="tab-panel" id="tab-kb">
+      <div class="topbar">
+        <div class="topbar-left">
+          <div class="topbar-title">Knowledge Base</div>
+        </div>
+        <div class="topbar-right">
+          <div class="source-chip active"><span class="source-chip-dot"></span> Your documents</div>
+        </div>
+      </div>
+
+      <div class="kb-body">
+        <div class="kb-upload-row">
+          <input type="file" id="kb-file-input" accept=".txt,.md,.csv,.json" aria-label="Upload document" />
+          <button class="send-btn" id="kb-upload-btn">Upload ↑</button>
+        </div>
+        <div class="kb-hint">Accepted: .txt, .md, .csv, .json (text only) — max 2MB. Keyword search, not semantic search — see note below.</div>
+        <div class="kb-error" id="kb-error" style="display:none"></div>
+
+        <div class="kb-search-row">
+          <input type="text" id="kb-search-input" placeholder="Test search across your uploaded documents…" aria-label="Search knowledge base" />
+          <button class="send-btn" id="kb-search-btn">Search</button>
+        </div>
+        <div id="kb-search-results"></div>
+
+        <div class="kb-section-label">Your documents</div>
+        <div id="kb-doc-list" class="kb-doc-list">
+          <div class="kb-empty" id="kb-empty-msg">No documents uploaded yet.</div>
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
-<script src="/static/js/app.js?v=13"></script>
+<script src="/static/js/app.js?v=15"></script>
 
 <!-- ══ WELCOME OVERLAY ══ -->
 <div id="welcome-overlay">
@@ -379,6 +454,18 @@
           <span class="wb-tag wb-tag-cyan">Ask Anything</span>
         </div>
         <div class="wb-arrow wb-arrow-violet">→</div>
+      </div>
+
+      <div class="wb-card wb-card-recep" onclick="launchAgent('receptionist')">
+        <span class="wb-card-icon">💁</span>
+        <div class="wb-card-title">AI Receptionist</div>
+        <div class="wb-card-desc">Ask a quick question, book an appointment straight onto our calendar, or ask to speak with a human.</div>
+        <div class="wb-card-tags">
+          <span class="wb-tag wb-tag-emerald">FAQ</span>
+          <span class="wb-tag wb-tag-emerald">Appointment Booking</span>
+          <span class="wb-tag wb-tag-emerald">Human Escalation</span>
+        </div>
+        <div class="wb-arrow wb-arrow-emerald">→</div>
       </div>
 
     </div>
@@ -499,6 +586,8 @@
 /* Cards */
 .wb-cards {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 20px;
   margin-bottom: 40px;
 }
@@ -523,10 +612,12 @@
 }
 .wb-card-amazon::before { background: linear-gradient(90deg, #f59e0b, #d4af37); }
 .wb-card-lit::before    { background: linear-gradient(90deg, #7c3aed, #00c2d4); }
+.wb-card-recep::before  { background: linear-gradient(90deg, #10b981, #00c2d4); }
 
 .wb-card:hover { transform: translateY(-6px); }
 .wb-card-amazon:hover { border-color: rgba(212,175,55,0.4); box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 30px rgba(212,175,55,0.15); }
 .wb-card-lit:hover    { border-color: rgba(124,58,237,0.4);  box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 30px rgba(124,58,237,0.15); }
+.wb-card-recep:hover  { border-color: rgba(16,185,129,0.4);  box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 30px rgba(16,185,129,0.15); }
 
 .wb-card-icon  { font-size: 2.2rem; margin-bottom: 16px; display: block; }
 .wb-card-title { font-size: 17px; font-weight: 700; color: #f0f6fc; margin-bottom: 8px; font-family: 'Inter', sans-serif; }
@@ -537,6 +628,7 @@
 .wb-tag-gold   { background: rgba(212,175,55,0.12); color: #d4af37; border: 1px solid rgba(212,175,55,0.25); }
 .wb-tag-violet { background: rgba(124,58,237,0.12); color: #a78bfa; border: 1px solid rgba(124,58,237,0.25); }
 .wb-tag-cyan   { background: rgba(0,194,212,0.10);  color: #00c2d4; border: 1px solid rgba(0,194,212,0.25); }
+.wb-tag-emerald { background: rgba(16,185,129,0.10); color: #34d399; border: 1px solid rgba(16,185,129,0.25); }
 
 .wb-arrow {
   position: absolute;
@@ -550,6 +642,7 @@
 .wb-card:hover .wb-arrow { transform: translateX(3px); }
 .wb-arrow-gold   { background: rgba(212,175,55,0.12); color: #d4af37; }
 .wb-arrow-violet { background: rgba(124,58,237,0.15); color: #a78bfa; }
+.wb-arrow-emerald { background: rgba(16,185,129,0.15); color: #34d399; }
 
 /* Footer */
 .wb-footer {
