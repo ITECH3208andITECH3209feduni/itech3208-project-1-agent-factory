@@ -8,11 +8,11 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from api.routes import amazon, literature
+from api.routes import amazon, literature, knowledge_base
 
 app = FastAPI(
     title       = "Agent Factory API",
-    description = "REST API for Agent Factory skills (literature, amazon).",
+    description = "REST API for Agent Factory skills (literature, amazon, knowledge_base).",
     version     = "0.1.0",
 )
 
@@ -27,6 +27,8 @@ app.add_middleware(
 
 app.include_router(literature.router)
 app.include_router(amazon.router)
+app.include_router(knowledge_base.router)
+
 
 
 @app.get("/health", tags=["meta"])

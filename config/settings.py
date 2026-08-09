@@ -61,6 +61,10 @@ MEMORY_DB         = os.path.join(_BASE_DIR, "outputs", "memory.db")
 MEMORY_FILE       = os.path.join(_BASE_DIR, "outputs", "memory.json")  # kept for one-shot migration
 MAX_HISTORY_ITEMS = 50    # keep last N queries in memory
 
+# ── Knowledge Base / ChromaDB ──────────────────────────────────
+CHROMADB_DIR          = os.path.join(_BASE_DIR, "outputs", "chromadb")
+DEFAULT_KB_COLLECTION = "agent_knowledge_base"
+
 # ── Output ─────────────────────────────────────────────────────
 OUTPUT_DIR        = os.path.join(_BASE_DIR, "outputs")
 DEFAULT_FORMAT    = "markdown"   # "markdown" | "json"
