@@ -1,0 +1,32 @@
+[
+  {
+    "question": "What are your hours?",
+    "answer": "This chat and our Telegram bot are available 24/7. Our human team responds Monday to Friday, 9am–5pm AEST.",
+    "tags": ["hours", "open", "available", "time", "closed"]
+  },
+  {
+    "question": "How do I book an appointment?",
+    "answer": "Just tell me a date, time, and what it's for — e.g. \"book me in for a consultation next Tuesday at 2pm\" — and I'll add it to the calendar for you.",
+    "tags": ["book", "appointment", "schedule", "meeting", "reserve", "booking"]
+  },
+  {
+    "question": "How do I cancel or reschedule an appointment?",
+    "answer": "I can't cancel or move existing bookings yet — email us or ask to speak with a human and our team will sort it out for you.",
+    "tags": ["cancel", "reschedule", "change", "move", "appointment"]
+  },
+  {
+    "question": "What services do you offer?",
+    "answer": "Agent Factory offers AI-powered literature research, Amazon product/seller research, and this receptionist for appointments, FAQs, and general questions.",
+    "tags": ["services", "offer", "provide", "do", "help"]
+  },
+  {
+    "question": "How do I talk to a human?",
+    "answer": "Just ask — say something like \"I'd like to talk to a person\" and I'll flag this conversation for our team to follow up.",
+    "tags": ["human", "person", "representative", "agent", "escalate", "talk", "speak"]
+  },
+  {
+    "question": "Is this free to use?",
+    "answer": "Yes — this assistant is free to chat with. Contact our team for details on any paid services.",
+    "tags": ["free", "cost", "price", "pricing", "pay"]
+  }
+]
