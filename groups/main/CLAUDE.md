@@ -30,6 +30,10 @@ Here are the key findings from the research...
 
 Text inside `<internal>` tags is logged but not sent to the user. If you've already sent the key information via `send_message`, you can wrap the recap in `<internal>` to avoid sending it again.
 
+### Escalating to a human
+
+If you can't confidently help with a request in another group, wrap your handoff message in `<escalate reason="...">` — the text inside is sent to the user, and the reason is alerted to this main chat automatically. Since you already are the main chat, this has no extra effect here — it only matters for other groups.
+
 ### Sub-agents and teammates
 
 When working as a sub-agent or teammate, only use `send_message` if instructed to by the main agent.

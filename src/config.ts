@@ -11,6 +11,8 @@ const envConfig = readEnvFile([
   'ONECLI_URL',
   'ONECLI_API_KEY',
   'TZ',
+  'GOOGLE_CALENDAR_KEY_PATH',
+  'GOOGLE_CALENDAR_ID',
 ]);
 
 export const ASSISTANT_NAME =
@@ -55,6 +57,18 @@ export const CONTAINER_MAX_OUTPUT_SIZE = parseInt(
 export const ONECLI_URL = process.env.ONECLI_URL || envConfig.ONECLI_URL;
 export const ONECLI_API_KEY =
   process.env.ONECLI_API_KEY || envConfig.ONECLI_API_KEY;
+
+// Google Calendar (appointment booking, Epic 15 / PROJ-219). Path is resolved
+// relative to the project root; the key file itself lives outside git (see
+// .gitignore's secrets/ entry) and is only ever read by the host process,
+// never mounted into agent containers (containers have .env shadowed for
+// the same reason — see container-runner.ts).
+export const GOOGLE_CALENDAR_KEY_PATH =
+  process.env.GOOGLE_CALENDAR_KEY_PATH ||
+  envConfig.GOOGLE_CALENDAR_KEY_PATH ||
+  '';
+export const GOOGLE_CALENDAR_ID =
+  process.env.GOOGLE_CALENDAR_ID || envConfig.GOOGLE_CALENDAR_ID || '';
 export const MAX_MESSAGES_PER_PROMPT = Math.max(
   1,
   parseInt(process.env.MAX_MESSAGES_PER_PROMPT || '10', 10) || 10,

@@ -36,6 +36,9 @@ const THIRD_GROUP: RegisteredGroup = {
 
 let groups: Record<string, RegisteredGroup>;
 let deps: IpcDeps;
+let sentMessages: { jid: string; text: string }[];
+let bookAppointmentCalls: unknown[];
+let bookAppointmentResult: { ok: boolean; eventUrl?: string; error?: string };
 
 beforeEach(() => {
   _initTestDatabase();
@@ -51,8 +54,17 @@ beforeEach(() => {
   setRegisteredGroup('other@g.us', OTHER_GROUP);
   setRegisteredGroup('third@g.us', THIRD_GROUP);
 
+  sentMessages = [];
+  bookAppointmentCalls = [];
+  bookAppointmentResult = {
+    ok: true,
+    eventUrl: 'https://calendar.google.com/event?eid=test',
+  };
+
   deps = {
-    sendMessage: async () => {},
+    sendMessage: async (jid, text) => {
+      sentMessages.push({ jid, text });
+    },
     registeredGroups: () => groups,
     registerGroup: (jid, group) => {
       groups[jid] = group;
@@ -63,6 +75,10 @@ beforeEach(() => {
     getAvailableGroups: () => [],
     writeGroupsSnapshot: () => {},
     onTasksChanged: () => {},
+    bookAppointment: async (input) => {
+      bookAppointmentCalls.push(input);
+      return bookAppointmentResult;
+    },
   };
 });
 
@@ -675,5 +691,123 @@ describe('register_group success', () => {
     );
 
     expect(getRegisteredGroup('partial@g.us')).toBeUndefined();
+  });
+});
+
+// --- book_appointment authorization (PROJ-219) ---
+
+describe('book_appointment authorization', () => {
+  const validBooking = {
+    type: 'book_appointment',
+    chatJid: 'other@g.us',
+    summary: 'Consultation',
+    start: '2026-08-10T14:00:00',
+    end: '2026-08-10T14:30:00',
+  };
+
+  it('a group can book an appointment for its own chat', async () => {
+    await processTaskIpc(validBooking, 'other-group', false, deps);
+
+    expect(bookAppointmentCalls.length).toBe(1);
+    expect(bookAppointmentCalls[0]).toMatchObject({
+      summary: 'Consultation',
+      startIso: '2026-08-10T14:00:00',
+      endIso: '2026-08-10T14:30:00',
+    });
+  });
+
+  it('main group can book an appointment for another registered chat', async () => {
+    await processTaskIpc(validBooking, 'whatsapp_main', true, deps);
+
+    expect(bookAppointmentCalls.length).toBe(1);
+  });
+
+  it('non-main group cannot book for a different chat', async () => {
+    await processTaskIpc(
+      { ...validBooking, chatJid: 'third@g.us' },
+      'other-group',
+      false,
+      deps,
+    );
+
+    expect(bookAppointmentCalls.length).toBe(0);
+  });
+
+  it('rejects booking for an unregistered chat', async () => {
+    await processTaskIpc(
+      { ...validBooking, chatJid: 'unknown@g.us' },
+      'whatsapp_main',
+      true,
+      deps,
+    );
+
+    expect(bookAppointmentCalls.length).toBe(0);
+  });
+
+  it('rejects request missing required fields', async () => {
+    await processTaskIpc(
+      { type: 'book_appointment', chatJid: 'other@g.us', summary: 'No times' },
+      'other-group',
+      false,
+      deps,
+    );
+
+    expect(bookAppointmentCalls.length).toBe(0);
+  });
+});
+
+// --- book_appointment behavior ---
+
+describe('book_appointment behavior', () => {
+  const validBooking = {
+    type: 'book_appointment',
+    chatJid: 'other@g.us',
+    summary: 'Consultation',
+    start: '2026-08-10T14:00:00',
+    end: '2026-08-10T14:30:00',
+  };
+
+  it('sends a confirmation message to the chat on success', async () => {
+    bookAppointmentResult = {
+      ok: true,
+      eventUrl: 'https://calendar.google.com/event?eid=abc',
+    };
+
+    await processTaskIpc(validBooking, 'other-group', false, deps);
+
+    expect(sentMessages.length).toBe(1);
+    expect(sentMessages[0].jid).toBe('other@g.us');
+    expect(sentMessages[0].text).toContain('Consultation');
+    expect(sentMessages[0].text).toContain(
+      'https://calendar.google.com/event?eid=abc',
+    );
+  });
+
+  it('sends a failure message to the chat when booking fails', async () => {
+    bookAppointmentResult = { ok: false, error: '403 Forbidden' };
+
+    await processTaskIpc(validBooking, 'other-group', false, deps);
+
+    expect(sentMessages.length).toBe(1);
+    expect(sentMessages[0].text).toContain("Couldn't book");
+    expect(sentMessages[0].text).toContain('403 Forbidden');
+  });
+
+  it('passes description and attendeeEmail through when provided', async () => {
+    await processTaskIpc(
+      {
+        ...validBooking,
+        description: 'Bring ID',
+        attendeeEmail: 'client@example.com',
+      },
+      'other-group',
+      false,
+      deps,
+    );
+
+    expect(bookAppointmentCalls[0]).toMatchObject({
+      description: 'Bring ID',
+      attendeeEmail: 'client@example.com',
+    });
   });
 });

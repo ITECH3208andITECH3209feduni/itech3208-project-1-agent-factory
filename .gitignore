@@ -26,6 +26,7 @@ groups/global/*
 .env
 *.env
 config/local_settings.py
+secrets/
 
 # Temp files
 .tmp-*

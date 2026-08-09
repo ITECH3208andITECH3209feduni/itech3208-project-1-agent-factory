@@ -30,6 +30,16 @@ Here are the key findings from the research...
 
 Text inside `<internal>` tags is logged but not sent to the user. If you've already sent the key information via `send_message`, you can wrap the recap in `<internal>` to avoid sending it again.
 
+### Escalating to a human
+
+If you can't confidently help with a request — you don't know the answer, it needs a judgment call only a person can make, or the user is asking to speak to someone — wrap your handoff message in `<escalate reason="...">`:
+
+```
+<escalate reason="no answer in knowledge base">I'm not sure about that one — let me get a team member to help you.</escalate>
+```
+
+The text inside the tag is sent to the user as-is. The `reason` attribute is sent as an alert to the admin/main chat so a person can follow up — you don't need to notify anyone yourself. Only use this when you genuinely can't help; don't escalate things you can reasonably answer.
+
 ### Sub-agents and teammates
 
 When working as a sub-agent or teammate, only use `send_message` if instructed to by the main agent.

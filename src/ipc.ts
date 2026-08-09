@@ -3,11 +3,13 @@ import path from 'path';
 
 import { CronExpressionParser } from 'cron-parser';
 
+import { BookAppointmentInput, BookAppointmentResult } from './calendar.js';
 import { DATA_DIR, IPC_POLL_INTERVAL, TIMEZONE } from './config.js';
 import { AvailableGroup } from './container-runner.js';
 import { createTask, deleteTask, getTaskById, updateTask } from './db.js';
 import { isValidGroupFolder } from './group-folder.js';
 import { logger } from './logger.js';
+import { formatLocalTime } from './timezone.js';
 import { RegisteredGroup } from './types.js';
 
 export interface IpcDeps {
@@ -23,6 +25,9 @@ export interface IpcDeps {
     registeredJids: Set<string>,
   ) => void;
   onTasksChanged: () => void;
+  bookAppointment: (
+    input: BookAppointmentInput,
+  ) => Promise<BookAppointmentResult>;
 }
 
 let ipcWatcherRunning = false;
@@ -173,6 +178,12 @@ export async function processTaskIpc(
     trigger?: string;
     requiresTrigger?: boolean;
     containerConfig?: RegisteredGroup['containerConfig'];
+    // For book_appointment
+    summary?: string;
+    start?: string;
+    end?: string;
+    description?: string;
+    attendeeEmail?: string;
   },
   sourceGroup: string, // Verified identity from IPC directory
   isMain: boolean, // Verified from directory path
@@ -458,6 +469,47 @@ export async function processTaskIpc(
         logger.warn(
           { data },
           'Invalid register_group request - missing required fields',
+        );
+      }
+      break;
+
+    case 'book_appointment':
+      if (data.chatJid && data.summary && data.start && data.end) {
+        const targetGroup = registeredGroups[data.chatJid];
+
+        // Authorization: non-main groups can only book for their own chat
+        if (!targetGroup || (!isMain && targetGroup.folder !== sourceGroup)) {
+          logger.warn(
+            { sourceGroup, chatJid: data.chatJid },
+            'Unauthorized book_appointment attempt blocked',
+          );
+          break;
+        }
+
+        const result = await deps.bookAppointment({
+          summary: data.summary,
+          startIso: data.start,
+          endIso: data.end,
+          description: data.description,
+          attendeeEmail: data.attendeeEmail,
+          timezone: TIMEZONE,
+        });
+
+        const confirmationText = result.ok
+          ? `✅ Booked: *${data.summary}* — ${formatLocalTime(data.start, TIMEZONE)}${
+              result.eventUrl ? `\n${result.eventUrl}` : ''
+            }`
+          : `⚠️ Couldn't book that appointment: ${result.error}`;
+
+        await deps.sendMessage(data.chatJid, confirmationText);
+        logger.info(
+          { chatJid: data.chatJid, sourceGroup, ok: result.ok },
+          'Appointment booking processed via IPC',
+        );
+      } else {
+        logger.warn(
+          { data },
+          'Invalid book_appointment request - missing required fields',
         );
       }
       break;
