@@ -8,7 +8,7 @@ build/
 
 # Local data & auth
 store/
-data/
+/data/
 logs/
 *.log
 
