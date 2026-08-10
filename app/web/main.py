@@ -8,20 +8,26 @@ The ASGI entry point the container runs:
 or, equivalently, `./run.sh serve`.
 
 Endpoints:
-    GET  /          service metadata
-    GET  /health    liveness + readiness (used by the Docker HEALTHCHECK)
-    POST /query     run a query through the agent
+    GET  /                    service metadata
+    GET  /health              liveness + readiness (used by the Docker HEALTHCHECK)
+    POST /query               run a query through the agent
+    GET  /skills              registered skill manifests (PROJ-334..338)
+    GET  /skills/{name}       one manifest
+    GET  /skills/{name}/tools that skill's tools
+    GET  /ui                  minimal web UI with a skills sidebar
 """
 
 import logging
 import os
 import time
+from typing import Any
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from config import settings
+from skills.manifest_loader import discover_manifests, get_manifest
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "INFO").upper(),
@@ -83,7 +89,83 @@ def root() -> dict:
         "version": SERVICE_VERSION,
         "docs":    "/docs",
         "health":  "/health",
+        "skills":  "/skills",
+        "ui":      "/ui",
     }
+
+
+# ── Skills registry (PROJ-334..338) ───────────────────────────
+def _public_manifest(manifest: dict) -> dict:
+    """
+    Strip internals before publishing a manifest over HTTP.
+
+    `_source` is a local filename and `_errors` are for operators, not API
+    consumers. Configuration entries are reduced to names and whether they are
+    set — never values, since several are secrets.
+    """
+    public = {k: v for k, v in manifest.items() if not k.startswith("_")}
+
+    config = []
+    for entry in manifest.get("configuration", []) or []:
+        name = entry.get("name", "")
+        config.append({
+            "name":        name,
+            "description": entry.get("description", ""),
+            "required":    entry.get("required", False),
+            "secret":      entry.get("secret", False),
+            # Whether it is configured, never what it is set to.
+            "configured":  bool(os.environ.get(name)),
+        })
+    if config:
+        public["configuration"] = config
+
+    return public
+
+
+@app.get("/skills")
+def list_skills(include_tools: bool = True) -> JSONResponse:
+    """
+    Every registered skill manifest, auto-discovered from skills/manifests/.
+
+    Returns 200 with whatever loaded even when a manifest is malformed; the
+    broken ones are reported in `errors`. One bad file should not take the
+    whole registry offline.
+    """
+    manifests = discover_manifests(strict=False)
+
+    skills, errors = [], []
+    for manifest in manifests:
+        if manifest.get("_errors"):
+            errors.append({"source": manifest.get("_source"), "problems": manifest["_errors"]})
+            continue
+        public = _public_manifest(manifest)
+        if not include_tools:
+            public.pop("tools", None)
+        skills.append(public)
+
+    body: dict[str, Any] = {"count": len(skills), "skills": skills}
+    if errors:
+        body["errors"] = errors
+    return JSONResponse(status_code=200, content=body)
+
+
+@app.get("/skills/{name}")
+def get_skill(name: str) -> dict:
+    """One skill's manifest."""
+    manifest = get_manifest(name)
+    if manifest is None or manifest.get("_errors"):
+        raise HTTPException(status_code=404, detail=f"skill '{name}' not found")
+    return _public_manifest(manifest)
+
+
+@app.get("/skills/{name}/tools")
+def get_skill_tools(name: str) -> dict:
+    """Just the tool definitions for one skill, for MCP clients."""
+    manifest = get_manifest(name)
+    if manifest is None or manifest.get("_errors"):
+        raise HTTPException(status_code=404, detail=f"skill '{name}' not found")
+    tools = manifest.get("tools", []) or []
+    return {"skill": name, "version": manifest.get("version"), "count": len(tools), "tools": tools}
 
 
 @app.get("/health")
@@ -115,6 +197,14 @@ def health() -> JSONResponse:
             "warnings":       problems,
         },
     )
+
+
+@app.get("/ui", response_class=HTMLResponse, include_in_schema=False)
+def ui() -> HTMLResponse:
+    """Minimal web UI. The sidebar is populated at runtime from /skills."""
+    from app.web.ui import INDEX_HTML
+
+    return HTMLResponse(content=INDEX_HTML)
 
 
 @app.post("/query", response_model=QueryResponse)
