@@ -1,1 +1,13 @@
 npm run format:fix
+
+# Block commits that would introduce a credential (PROJ-319..323).
+# Cheap: only scans the staged diff, not history.
+if [ -x ./scripts/audit_secrets.sh ]; then
+  ./scripts/audit_secrets.sh --staged || {
+    echo
+    echo "Commit blocked: possible secret in staged changes."
+    echo "See docs/SECRETS.md. If this is a false positive:"
+    echo "  git commit --no-verify"
+    exit 1
+  }
+fi

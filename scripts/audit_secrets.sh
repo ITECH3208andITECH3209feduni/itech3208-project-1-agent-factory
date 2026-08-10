@@ -46,11 +46,16 @@ PATTERNS+='|"private_key_id"[[:space:]]*:'             # GCP service account JSO
 # Placeholders in templates, docs, and test fixtures match the shapes above
 # but are not secrets. Filtering them is what keeps this check credible —
 # an audit that reports .env.example every run is an audit nobody reads.
-PLACEHOLDERS='your-|your_|-here|<[a-z_]*>|example|EXAMPLE|placeholder|PLACEHOLDER'
-PLACEHOLDERS+='|dummy|DUMMY|fake|FAKE|test-token|test_token|TEST_TOKEN|sample|SAMPLE'
-PLACEHOLDERS+='|changeme|CHANGEME|xxxx|XXXX|\.\.\.|redacted|REDACTED|TODO'
+PLACEHOLDERS='your-|your_|-here|<[a-z_]*>|example|placeholder'
+PLACEHOLDERS+='|dummy|fake|test-token|test_token|sample|specimen'
+PLACEHOLDERS+='|changeme|xxxx|\.\.\.|redacted|todo|notarealkey'
 
-drop_placeholders() { grep -Ev "$PLACEHOLDERS" || true; }
+# Matched case-insensitively. Listing each casing separately does not scale and
+# already failed once: .env.example documents the Telegram token shape as
+# "AAExampleTokenStringFromBotFather", which the lowercase `example` and
+# uppercase `EXAMPLE` alternatives both missed, so the audit flagged our own
+# template. -i covers every casing without enumerating them.
+drop_placeholders() { grep -Evi "$PLACEHOLDERS" || true; }
 
 bold "Secrets audit — $PROJECT_ROOT"
 echo
