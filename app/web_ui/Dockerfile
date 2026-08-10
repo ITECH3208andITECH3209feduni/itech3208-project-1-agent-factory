@@ -31,6 +31,8 @@ COPY agent/ ./agent/
 COPY app/ ./app/
 COPY config/ ./config/
 COPY static/ ./static/
+COPY skills/ ./skills/
+COPY components/ ./components/
 
 # Runtime data directory (SQLite DBs — see config/settings.py) lives
 # under outputs/, created on first write; declared here so it's
