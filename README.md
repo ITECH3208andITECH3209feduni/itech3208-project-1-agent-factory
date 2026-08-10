@@ -290,15 +290,43 @@ Copy `.env.example` to `.env` and fill in your values:
 cp .env.example .env
 ```
 
+Then lock it down and check it:
+
+```bash
+chmod 600 .env
+./scripts/secure-secrets.sh
+```
+
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
 | `ANTHROPIC_API_KEY` | **Yes** | — | Claude API key. Get one at [console.anthropic.com](https://console.anthropic.com) |
-| `SEMANTIC_SCHOLAR_API_KEY` | No | `""` (empty) | Semantic Scholar API key. Raises rate limit from 1 req/s to 100 req/s. Get a free key at [semanticscholar.org/product/api](https://www.semanticscholar.org/product/api) |
-| `MAX_RESULTS` | No | `10` | Maximum number of results returned per skill call |
-| `REQUEST_TIMEOUT` | No | `15` | HTTP request timeout in seconds |
-| `MAX_RETRIES` | No | `3` | Number of retry attempts on network failure |
+| `S2_API_KEY` | No | `""` | Semantic Scholar key — raises the quota to 100 requests / 5 min. [Register here](https://www.semanticscholar.org/product/api-key). `SEMANTIC_SCHOLAR_API_KEY` still works as an alias |
+| `BOT_TOKEN` | For Telegram | `""` | Bot token from [@BotFather](https://t.me/BotFather) |
+| `GOOGLE_CALENDAR_CREDENTIALS` | For Calendar | `""` | **Path** to the OAuth client secrets JSON — not the JSON itself |
+| `CHROMADB_PATH` | No | `store/chromadb` | Vector store location |
+| `JWT_SECRET` | Before exposing the API | `""` | Session signing secret, 32+ chars |
+| `COMPOSE_PROFILES` | No | `""` | Which services start: `telegram`, `dapr`, `tunnel` |
+| `CLOUDFLARE_TUNNEL_TOKEN` | For the tunnel | `""` | Cloudflare Zero Trust tunnel token |
+| `DEPLOY_WEBHOOK_SECRET` | For auto-deploy | `""` | Shared secret for the GitHub push webhook |
+| `MAX_RESULTS` | No | `10` | Max items per skill call |
+| `REQUEST_TIMEOUT` | No | `15` | HTTP timeout in seconds |
+| `MAX_RETRIES` | No | `3` | Retry attempts on network failure |
 
-> **Note:** `MAX_RESULTS`, `REQUEST_TIMEOUT`, and `MAX_RETRIES` can be overridden by setting them in your `.env` file or by editing `config/settings.py` directly.
+Check what is and isn't configured at any time:
+
+```bash
+python -c "from config.settings import validate_env; print(*validate_env(), sep='\n')"
+```
+
+> **`.env` wins over your shell.** `config/settings.py` loads it with
+> `override=True`, so an exported variable will *not* beat the file. Edit
+> `.env`, not your shell profile.
+
+> `GOOGLE_CALENDAR_CREDENTIALS` is a **path** on purpose. Putting the
+> credential body in an environment variable leaks it into `docker inspect`,
+> crash reports, and `/proc/<pid>/environ`.
+
+See [docs/SECRETS.md](docs/SECRETS.md) for rotation procedures.
 
 ## Running the Agent
 
@@ -353,13 +381,203 @@ CLI, single query, API server, and the rate limiter tests. Each pins `cwd`
 and `PYTHONPATH` to the workspace folder, so F5 debugs the same code
 `./run.sh` executes.
 
-## Running with Docker
+## Running with Docker Compose
+
+The stack is profile-based. The core is `agent` + `chromadb`; everything else
+is opt-in.
 
 ```bash
-docker compose up
+docker compose up -d                     # agent + ChromaDB
+docker compose --profile telegram up -d  # + Telegram bot
+docker compose --profile dapr up -d      # + Dapr sidecars and placement
+docker compose --profile tunnel up -d    # + Cloudflare Tunnel
+
+docker compose ps
+docker compose logs -f agent
+docker compose down
 ```
 
-Outputs are saved to `./outputs` on your host machine.
+Or set `COMPOSE_PROFILES=telegram,tunnel` in `.env` and use
+`./scripts/macos/agentctl.sh start`, which reads it.
+
+| Service | Profile | Port | Notes |
+|---|---|---|---|
+| `agent` | default | `8000` | FastAPI. `/query`, `/skills`, `/health`, `/ui` |
+| `chromadb` | default | — | Not published to the host: only the agent needs it, and Chroma ships with no auth |
+| `telegram-bot` | `telegram` | — | Reaches the API at `agent:8000` over the compose network |
+| `agent-dapr`, `telegram-dapr` | `dapr` | — | Sidecars sharing their app's network namespace |
+| `dapr-placement` | `dapr` | `50006` | Actor placement |
+| `cloudflared` | `tunnel` | — | Public HTTPS ingress |
+
+Once up: <http://localhost:8000/ui> for the web UI,
+<http://localhost:8000/docs> for the OpenAPI explorer.
+
+`./outputs` is bind-mounted, so saved results land on the host. ChromaDB and
+`/data` use **named volumes**, not bind mounts — Chroma's SQLite backing store
+misbehaves across the macOS virtiofs boundary.
+
+> Give Docker Desktop **at least 4 GB** (Settings → Resources). The image
+> builds `lxml` from source and installs Chromium; it OOMs on less.
+
+---
+
+## Sprint 3 setup
+
+### Telegram bot
+
+1. Message [@BotFather](https://t.me/BotFather) → `/newbot`, follow the prompts
+2. Copy the token into `.env`:
+
+```bash
+BOT_TOKEN=123456789:AAE...
+COMPOSE_PROFILES=telegram
+```
+
+3. Restart: `docker compose --profile telegram up -d`
+
+For the bot to receive messages from outside your network it needs a public
+HTTPS webhook — see [Exposing it publicly](#exposing-it-publicly) below, then:
+
+```bash
+source .env
+curl -fsS "https://api.telegram.org/bot${BOT_TOKEN}/setWebhook" \
+  -d "url=https://${PUBLIC_HOSTNAME}/telegram/webhook"
+curl -fsS "https://api.telegram.org/bot${BOT_TOKEN}/getWebhookInfo" | python -m json.tool
+```
+
+A climbing `pending_update_count` with a non-empty `last_error_message` means
+Telegram is reaching Cloudflare but not your container.
+
+> **Status:** the Compose service and webhook plumbing exist; the bot module
+> `app/channels/telegram_bot.py` is not implemented yet.
+
+### ChromaDB
+
+Runs as a container with a persistent named volume — no host install needed.
+
+```bash
+docker compose up -d chromadb
+docker compose logs chromadb
+```
+
+Configure with `CHROMADB_PATH` (default `store/chromadb`, set to `/data/chromadb`
+inside the container) and `CHROMADB_COLLECTION` (default `agent_factory`).
+
+> **Status:** the service runs and the app is configured to reach it, but the
+> embedding and recall paths are not implemented. Memory currently lives in
+> `outputs/memory.json` via `agent/memory.py`.
+
+### Dapr
+
+You do **not** need the Dapr CLI or `dapr init` — the sidecars run as
+containers under the `dapr` profile.
+
+```bash
+docker compose --profile dapr up -d
+docker compose logs agent-dapr
+```
+
+Components are in `config-examples/dapr/components/`: `statestore` and
+`pubsub`, both `in-memory` so the local stack needs no Redis. State is lost on
+sidecar restart, which is fine because ChromaDB owns anything durable. For
+messaging that survives restarts, switch both to `.redis` and add a `redis`
+service.
+
+If you want the CLI for `dapr dashboard`:
+
+```bash
+brew install dapr/tap/dapr-cli     # macOS
+```
+
+> **Status:** sidecars are configured and start, but no application code calls
+> Dapr yet.
+
+### Google Calendar OAuth
+
+1. [Google Cloud Console](https://console.cloud.google.com/) → create or select a project
+2. **APIs & Services → Library** → enable **Google Calendar API**
+3. **OAuth consent screen** → External → add your Google account as a test user
+4. **Credentials → Create credentials → OAuth client ID → Desktop app**
+5. Download the JSON, store it **outside the repo** (or somewhere gitignored)
+6. Point `.env` at it:
+
+```bash
+GOOGLE_CALENDAR_CREDENTIALS=/Users/you/.config/agent-factory/gcal_client.json
+GOOGLE_CALENDAR_TOKEN_PATH=store/google_calendar_token.json
+```
+
+The first authorised call opens a browser consent flow and caches a token at
+`GOOGLE_CALENDAR_TOKEN_PATH`. Delete that file to force re-consent (needed
+after rotating the client secret).
+
+> **Status:** config is wired through and validated, but the OAuth flow and
+> calendar tools are not implemented yet — nothing reads these values.
+
+### Deployment
+
+The client confirmed on 29 Jul 2026 that the app runs **locally on a Mac**
+rather than on AWS/Azure, so the Sprint 3 plan's cloud-deploy step was
+superseded. Full guide: **[docs/DEPLOYMENT-MAC.md](docs/DEPLOYMENT-MAC.md)**.
+
+```bash
+./scripts/macos/install-service.sh        # launchd: start at login, restart on crash
+./scripts/macos/agentctl.sh status
+./scripts/deploy.sh                        # pull, rebuild, restart, verify health
+```
+
+#### Exposing it publicly
+
+A tunnel rather than port-forwarding, because Telegram webhooks need public
+HTTPS with a valid certificate and a home connection has a dynamic IP and
+often CGNAT.
+
+1. Cloudflare Zero Trust → **Networks → Tunnels → Create a tunnel** → Cloudflared
+2. Add a public hostname routing to `HTTP` → **`agent:8000`** (the container
+   name on the compose network — *not* `localhost`)
+3. Put the token and hostname in `.env`, add `tunnel` to `COMPOSE_PROFILES`
+4. `curl https://your-host/health`
+
+---
+
+## Skills and MCP
+
+Skills are described by manifests in `skills/manifests/*.skill.json` and
+served over HTTP:
+
+```bash
+curl localhost:8000/skills              # all manifests
+curl localhost:8000/skills/literature   # one
+curl localhost:8000/skills/amazon/tools # tool definitions
+```
+
+Each skill also runs as a standalone MCP server:
+
+```bash
+python -m skills.mcp.literature_server
+python -m skills.mcp.amazon_server
+```
+
+To use them from an MCP client such as Claude Desktop:
+
+```json
+{
+  "mcpServers": {
+    "literature": {
+      "command": "python",
+      "args": ["-m", "skills.mcp.literature_server"],
+      "cwd": "/path/to/itech3208-project-1-agent-factory"
+    }
+  }
+}
+```
+
+The manifest is the single source of truth — the registry endpoint, the UI
+sidebar, and both MCP servers all read tool definitions from it, so they
+cannot drift apart. Adding a skill is one new `skill.json`.
+
+Architecture diagrams: **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**.
+
+---
 
 ## Example Queries
 
@@ -375,10 +593,18 @@ Outputs are saved to `./outputs` on your host machine.
 
 | Problem | Fix |
 |---------|-----|
-| `python3` not found | Use `python` instead |
+| `python3` not found | Use `python`, or set `AGENT_FACTORY_PYTHON`. On Windows a bare `python3` is often the Microsoft Store stub — it satisfies `command -v` but fails on execution |
 | pip not working | Run `python -m pip install -r requirements.txt` |
 | Playwright browser error | Run `playwright install chromium` |
 | Permission error on pip | Run `pip install --user -r requirements.txt` |
+| Docker build OOMs | Raise Docker Desktop memory to 4 GB+ (Settings → Resources) |
+| `docker compose up` complains about a missing variable | `ANTHROPIC_API_KEY` is required. Others are optional and default to empty |
+| Containers up but API unreachable | The healthcheck has a 20s `start_period`. Wait, then `curl localhost:8000/health` |
+| `/query` returns 503 | Not a crash — `ANTHROPIC_API_KEY` is unset. `/health` lists what is missing |
+| `/skills` shows an `errors` array | A manifest is malformed. `python scripts/test_manifests.py` names the problem |
+| Tunnel returns 502 | The Cloudflare service target must be `agent:8000`, not `localhost:8000` |
+| Telegram not delivering | Check `getWebhookInfo` — the URL must be HTTPS with a valid cert |
+| A `.env` edit seems ignored | It shouldn't be: `override=True` means the file wins. Confirm you edited the `.env` at the project root |
 | `ANTHROPIC_API_KEY not set` warning | Create a `.env` file with your key (see above) |
 
 ## PROJ-48 Validation
