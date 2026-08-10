@@ -186,6 +186,33 @@ services:
     profiles:
       - dapr
 
+  # ══════════════════════════════════════════════════════════
+  # Cloudflare Tunnel (PROJ-309..313)
+  # docker compose --profile tunnel up -d
+  # ══════════════════════════════════════════════════════════
+  # Gives the Telegram webhook and web UI a stable public HTTPS hostname
+  # without opening a port on Dilraj's home router. The tunnel dials out, so
+  # it survives the CGNAT and dynamic IP a residential connection has — which
+  # is the actual blocker for Telegram webhooks, since Telegram will only POST
+  # to a public HTTPS endpoint with a valid certificate.
+  cloudflared:
+    image: cloudflare/cloudflared:2024.10.1
+    container_name: agent-factory-tunnel
+    <<: *default-restart
+    logging: *default-logging
+    # Plain ${VAR:-} rather than ${VAR:?err}: compose interpolates the entire
+    # file before it applies profiles, so a :? here would break `docker compose
+    # up` for everyone not using the tunnel. agentctl.sh validates the token
+    # when the tunnel profile is actually enabled.
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${CLOUDFLARE_TUNNEL_TOKEN:-}"]
+    networks:
+      - agent-net
+    depends_on:
+      agent:
+        condition: service_healthy
+    profiles:
+      - tunnel
+
 
 # ── Networks ──────────────────────────────────────────────────
 networks:

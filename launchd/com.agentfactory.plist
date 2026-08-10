@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Agent Factory — launchd agent (PROJ-309..313)
+
+  Template. Placeholders are substituted by scripts/macos/install-service.sh,
+  which writes the result to ~/Library/LaunchAgents/com.agentfactory.plist.
+  Do not edit the installed copy — edit this and re-run the installer.
+
+  Supervises scripts/macos/agentctl.sh, which runs `docker compose up` in the
+  FOREGROUND. That matters: with `up -d` the script would exit immediately and
+  KeepAlive would relaunch it forever. Running in the foreground gives launchd
+  a real process to watch, so a crashed stack is genuinely restarted.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.agentfactory</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>{{PROJECT_ROOT}}/scripts/macos/agentctl.sh</string>
+        <string>supervise</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>{{PROJECT_ROOT}}</string>
+
+    <!-- Start at login and on reboot. -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart on crash, but not after a clean `agentctl.sh stop`. -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <!-- Docker Desktop can take a while after login. Without throttling,
+         launchd would burn through restarts before the daemon is ready and
+         then back off exactly when the stack could finally start. -->
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- launchd agents get a minimal PATH that excludes Homebrew and the
+             Docker CLI symlinks, so both are spelled out here. -->
+        <key>PATH</key>
+        <string>{{HOME}}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/Applications/Docker.app/Contents/Resources/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>{{HOME}}</string>
+        <key>COMPOSE_PROJECT_NAME</key>
+        <string>agent-factory</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>{{PROJECT_ROOT}}/logs/agentfactory.log</string>
+    <key>StandardErrorPath</key>
+    <string>{{PROJECT_ROOT}}/logs/agentfactory.error.log</string>
+</dict>
+</plist>
