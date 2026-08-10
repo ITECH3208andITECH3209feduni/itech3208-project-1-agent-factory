@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Agent Factory — deploy webhook listener (PROJ-314..318)
+
+  Optional. Only needed for push-triggered deploys; running ./scripts/deploy.sh
+  by hand needs none of this.
+
+  Template — install with:
+    sed -e "s|{{PROJECT_ROOT}}|$PWD|g" -e "s|{{HOME}}|$HOME|g" \
+        launchd/com.agentfactory.webhook.plist \
+        > ~/Library/LaunchAgents/com.agentfactory.webhook.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.agentfactory.webhook.plist
+
+  The listener runs on the HOST, not in a container, because it has to restart
+  the container stack.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.agentfactory.webhook</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>{{PROJECT_ROOT}}/scripts/deploy_webhook.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>{{PROJECT_ROOT}}</string>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>{{HOME}}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/Applications/Docker.app/Contents/Resources/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>HOME</key>
+        <string>{{HOME}}</string>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>{{PROJECT_ROOT}}/logs/deploy-webhook.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>{{PROJECT_ROOT}}/logs/deploy-webhook.error.log</string>
+</dict>
+</plist>

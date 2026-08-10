@@ -135,7 +135,79 @@ To go back to polling: `curl "https://api.telegram.org/bot${BOT_TOKEN}/deleteWeb
 
 ---
 
-## 5. Troubleshooting
+## 5. Deploying updates
+
+### By hand
+
+```bash
+./scripts/deploy.sh --check     # is there anything to deploy?
+./scripts/deploy.sh             # pull, rebuild, restart, verify health
+./scripts/deploy.sh --force     # redeploy the same commit
+```
+
+The script fast-forwards only — it will not create a merge commit on the
+deployment box — and refuses to run with uncommitted changes in the working
+tree, rather than silently discarding them. If the image build fails it resets
+the checkout back to the previous commit, so the box is never left on code with
+no matching image. A deploy that finishes but leaves `/health` unreachable is
+reported as `UNHEALTHY` and exits non-zero.
+
+Every run appends one line to `logs/deploy.log`:
+
+```
+2026-08-10 13:22:04 | SUCCESS   | branch=master | from=fbf3bec | to=27d0b85 | 94s | feat: ...
+2026-08-10 14:01:11 | FAILED    | branch=master | from=27d0b85 | to=unknown | 3s  | git fetch failed
+```
+
+`--check` is a read-only probe and deliberately does not require Docker, so it
+stays fast when the daemon is down.
+
+### On push (optional)
+
+`scripts/deploy_webhook.py` is a stdlib-only listener that runs `deploy.sh`
+when a push lands on the deploy branch.
+
+1. Generate a secret and put it in `.env`:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+# DEPLOY_WEBHOOK_SECRET=...
+```
+
+2. Install it as a launchd agent:
+
+```bash
+sed -e "s|{{PROJECT_ROOT}}|$PWD|g" -e "s|{{HOME}}|$HOME|g" \
+    launchd/com.agentfactory.webhook.plist \
+    > ~/Library/LaunchAgents/com.agentfactory.webhook.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.agentfactory.webhook.plist
+```
+
+3. Add a public hostname in Cloudflare pointing at `http://host.docker.internal:9000`,
+   or route `/deploy-hook` through the existing tunnel.
+
+4. GitHub repo → Settings → Webhooks → Add webhook:
+   - Payload URL: `https://<your-host>/deploy-hook`
+   - Content type: `application/json`
+   - Secret: the value from step 1
+   - Events: **Just the push event**
+
+The endpoint verifies GitHub's `X-Hub-Signature-256` with `hmac.compare_digest`,
+ignores pushes to other branches, and returns `202` immediately — GitHub times
+deliveries out after 10s and a deploy takes minutes. Concurrent deploys are
+locked out so two pushes cannot fight over the same checkout.
+
+**It refuses every request when `DEPLOY_WEBHOOK_SECRET` is empty** — this
+endpoint executes code on the host, so failing closed is the only safe default.
+
+```bash
+tail -f logs/deploy-webhook.log
+curl localhost:9000/health
+```
+
+---
+
+## 6. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---|---|---|
