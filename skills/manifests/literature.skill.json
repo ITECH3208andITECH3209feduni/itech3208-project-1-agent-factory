@@ -1,0 +1,191 @@
+{
+  "$schema": "../schema/skill.schema.json",
+  "manifestVersion": "0.1",
+  "name": "literature",
+  "displayName": "Literature Research",
+  "version": "2.0.0",
+  "description": "Search academic papers and scientific literature across arXiv, Semantic Scholar, and PubMed. Supports multi-paper synthesis, research gap analysis, and forward citation lookup.",
+  "author": {
+    "name": "Prabhjot Singh",
+    "email": "p73@students.federation.edu.au",
+    "organization": "Federation University — ITECH3208 Agent Factory"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/ITECH3208andITECH3209feduni/itech3208-project-1-agent-factory",
+  "keywords": [
+    "research",
+    "academic",
+    "papers",
+    "arxiv",
+    "pubmed",
+    "semantic-scholar",
+    "citations",
+    "literature-review"
+  ],
+  "runtime": {
+    "type": "python",
+    "minVersion": "3.9",
+    "entryPoint": "skills.literature:LiteratureSkill"
+  },
+  "mcp": {
+    "server": "skills.mcp.literature_server",
+    "transport": "stdio",
+    "command": ["python", "-m", "skills.mcp.literature_server"]
+  },
+  "configuration": [
+    {
+      "name": "S2_API_KEY",
+      "description": "Semantic Scholar API key. Raises the quota to 100 requests / 5 minutes.",
+      "required": false,
+      "secret": true
+    },
+    {
+      "name": "ANTHROPIC_API_KEY",
+      "description": "Claude API key. Required for synthesis and gap analysis; plain search works without it.",
+      "required": false,
+      "secret": true
+    }
+  ],
+  "tools": [
+    {
+      "name": "literature_search",
+      "description": "Search academic papers across arXiv, Semantic Scholar, and PubMed. PubMed is queried only for medical and life-sciences topics. Returns deduplicated results with title, authors, year, abstract, link, and citation count.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Research topic or question, e.g. 'transformer architecture attention'",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "max_results": {
+            "type": "integer",
+            "description": "Maximum papers to return.",
+            "minimum": 1,
+            "maximum": 50,
+            "default": 10
+          }
+        },
+        "required": ["query"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "summary": { "type": "string" },
+          "count": { "type": "integer" },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": { "type": "string" },
+                "authors": { "type": "string" },
+                "year": { "type": "string" },
+                "abstract": { "type": "string" },
+                "link": { "type": "string" },
+                "source": { "type": "string" },
+                "citations": { "type": "integer" },
+                "paper_id": { "type": "string" }
+              }
+            }
+          },
+          "error": { "type": "string" }
+        },
+        "required": ["success", "summary", "results"]
+      }
+    },
+    {
+      "name": "literature_synthesise",
+      "description": "Search for papers on a topic and synthesise findings across them into themes, points of consensus, conflicting results, and methodological approaches. Requires ANTHROPIC_API_KEY.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string",
+            "description": "Topic to synthesise, e.g. 'CRISPR off-target effects'",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": ["topic"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "synthesis": { "type": "string" },
+          "papers_analysed": { "type": "integer" },
+          "error": { "type": "string" }
+        },
+        "required": ["success", "synthesis"]
+      }
+    },
+    {
+      "name": "literature_research_gaps",
+      "description": "Identify under-researched areas, methodological limitations, and future directions for a topic, grounded in the abstracts of retrieved papers. Requires ANTHROPIC_API_KEY.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "topic": {
+            "type": "string",
+            "description": "Field to analyse for gaps, e.g. 'federated learning privacy'",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "required": ["topic"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "gaps": { "type": "string" },
+          "papers_analysed": { "type": "integer" },
+          "error": { "type": "string" }
+        },
+        "required": ["success", "gaps"]
+      }
+    },
+    {
+      "name": "literature_citations",
+      "description": "Find papers that cite a given paper (forward citations) via Semantic Scholar. Accepts an arXiv ID ('ARXIV:1706.03762'), a 40-character Semantic Scholar paper ID, or a paper title to look up first. Results are sorted by citation count.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "paper": {
+            "type": "string",
+            "description": "Paper title, arXiv ID, or Semantic Scholar paper ID",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Maximum citing papers to return.",
+            "minimum": 1,
+            "maximum": 100,
+            "default": 20
+          }
+        },
+        "required": ["paper"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "summary": { "type": "string" },
+          "source_paper_id": { "type": "string" },
+          "citing_count": { "type": "integer" },
+          "results": { "type": "array", "items": { "type": "object" } },
+          "error": { "type": "string" }
+        },
+        "required": ["success", "summary", "results"]
+      }
+    }
+  ]
+}

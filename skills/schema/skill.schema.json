@@ -1,0 +1,133 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://agentskills.io/schema/skill.schema.json",
+  "title": "Agent Skill Manifest",
+  "description": "Manifest describing a distributable agent skill (PROJ-329..333). Follows the agentskills.io draft standard.",
+  "type": "object",
+  "required": ["manifestVersion", "name", "version", "description", "author", "tools"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+
+    "manifestVersion": {
+      "type": "string",
+      "description": "Version of this manifest format, not of the skill.",
+      "enum": ["0.1"]
+    },
+    "name": {
+      "type": "string",
+      "description": "Unique machine name. Lowercase, must match the skill's `name` attribute.",
+      "pattern": "^[a-z][a-z0-9-]{1,63}$"
+    },
+    "displayName": {
+      "type": "string",
+      "maxLength": 64
+    },
+    "version": {
+      "type": "string",
+      "description": "Skill version, strict semver.",
+      "pattern": "^(0|[1-9]\\d*)\\.(0|[1-9]\\d*)\\.(0|[1-9]\\d*)(?:-((?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\\.(?:0|[1-9]\\d*|\\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\\+([0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*))?$"
+    },
+    "description": {
+      "type": "string",
+      "minLength": 20,
+      "maxLength": 600
+    },
+    "author": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "organization": { "type": "string" }
+      }
+    },
+    "license": { "type": "string" },
+    "homepage": { "type": "string", "format": "uri" },
+    "keywords": {
+      "type": "array",
+      "items": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+      "maxItems": 20
+    },
+    "notes": { "type": "string" },
+
+    "runtime": {
+      "type": "object",
+      "required": ["type", "entryPoint"],
+      "properties": {
+        "type": { "type": "string", "enum": ["python", "node"] },
+        "minVersion": { "type": "string" },
+        "entryPoint": {
+          "type": "string",
+          "description": "Import path, e.g. 'skills.literature:LiteratureSkill'."
+        }
+      }
+    },
+
+    "mcp": {
+      "type": "object",
+      "description": "How to run this skill as a standalone MCP server.",
+      "required": ["server", "transport"],
+      "properties": {
+        "server": { "type": "string" },
+        "transport": { "type": "string", "enum": ["stdio", "sse", "http"] },
+        "command": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+
+    "configuration": {
+      "type": "array",
+      "description": "Environment variables the skill reads.",
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "required"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+          "description": { "type": "string" },
+          "required": { "type": "boolean" },
+          "secret": {
+            "type": "boolean",
+            "description": "If true, never log or echo the value.",
+            "default": false
+          }
+        }
+      }
+    },
+
+    "tools": {
+      "type": "array",
+      "description": "Tools this skill exposes. Each maps to one MCP tool.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "description", "inputSchema"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$"
+          },
+          "description": {
+            "type": "string",
+            "minLength": 20,
+            "description": "Written for a model deciding whether to call this tool, so it must say what the tool does AND when to use it."
+          },
+          "inputSchema": {
+            "type": "object",
+            "description": "JSON Schema for the arguments.",
+            "required": ["type", "properties"],
+            "properties": {
+              "type": { "const": "object" },
+              "properties": { "type": "object" },
+              "required": { "type": "array", "items": { "type": "string" } },
+              "additionalProperties": { "type": "boolean" }
+            }
+          },
+          "outputSchema": {
+            "type": "object",
+            "description": "JSON Schema for the result."
+          }
+        }
+      }
+    }
+  }
+}

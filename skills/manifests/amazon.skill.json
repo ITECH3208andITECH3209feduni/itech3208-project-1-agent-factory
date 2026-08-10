@@ -1,0 +1,168 @@
+{
+  "$schema": "../schema/skill.schema.json",
+  "manifestVersion": "0.1",
+  "name": "amazon",
+  "displayName": "Amazon Product Research",
+  "version": "2.0.0",
+  "description": "Search Amazon for products, compare options, analyse review sentiment, and score seller opportunity from Best Seller Rank and competition signals.",
+  "author": {
+    "name": "Prabhjot Singh",
+    "email": "p73@students.federation.edu.au",
+    "organization": "Federation University — ITECH3208 Agent Factory"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/ITECH3208andITECH3209feduni/itech3208-project-1-agent-factory",
+  "keywords": [
+    "amazon",
+    "ecommerce",
+    "product-research",
+    "price-comparison",
+    "reviews",
+    "sentiment",
+    "bsr",
+    "seller-intelligence"
+  ],
+  "runtime": {
+    "type": "python",
+    "minVersion": "3.9",
+    "entryPoint": "skills.amazon:AmazonSkill"
+  },
+  "mcp": {
+    "server": "skills.mcp.amazon_server",
+    "transport": "stdio",
+    "command": ["python", "-m", "skills.mcp.amazon_server"]
+  },
+  "configuration": [
+    {
+      "name": "ANTHROPIC_API_KEY",
+      "description": "Claude API key. Required for review sentiment analysis and opportunity scoring; plain search and comparison work without it.",
+      "required": false,
+      "secret": true
+    }
+  ],
+  "notes": "Scrapes Amazon with a headless browser (Playwright + Chromium). Slower than an API and subject to bot detection; expect occasional empty results under heavy use.",
+  "tools": [
+    {
+      "name": "amazon_search",
+      "description": "Search Amazon for products matching a query. Returns title, price, rating, review count, and link for each result.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Product search, e.g. 'wireless earbuds under $50'",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        },
+        "required": ["query"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "summary": { "type": "string" },
+          "count": { "type": "integer" },
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": { "type": "string" },
+                "price": { "type": "string" },
+                "rating": { "type": "string" },
+                "reviews": { "type": "string" },
+                "link": { "type": "string" },
+                "asin": { "type": "string" }
+              }
+            }
+          },
+          "error": { "type": "string" }
+        },
+        "required": ["success", "summary", "results"]
+      }
+    },
+    {
+      "name": "amazon_compare",
+      "description": "Compare several products side by side on price, rating, review volume, and features, with a recommendation.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Comparison request, e.g. 'compare standing desks under $400'",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        },
+        "required": ["query"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "summary": { "type": "string" },
+          "results": { "type": "array", "items": { "type": "object" } },
+          "error": { "type": "string" }
+        },
+        "required": ["success", "summary", "results"]
+      }
+    },
+    {
+      "name": "amazon_review_sentiment",
+      "description": "Scrape customer reviews for a product and analyse sentiment, recurring praise, and recurring complaints. Requires ANTHROPIC_API_KEY.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Product to analyse, e.g. 'review sentiment for Anker Soundcore Q30'",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        },
+        "required": ["query"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "summary": { "type": "string" },
+          "sentiment": { "type": "object" },
+          "error": { "type": "string" }
+        },
+        "required": ["success", "summary"]
+      }
+    },
+    {
+      "name": "amazon_opportunity_score",
+      "description": "Score a product niche for seller opportunity using Best Seller Rank, review volume, price band, and competition. Requires ANTHROPIC_API_KEY.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Niche to evaluate, e.g. 'seller opportunity for laptop stands'",
+            "minLength": 1,
+            "maxLength": 300
+          }
+        },
+        "required": ["query"],
+        "additionalProperties": false
+      },
+      "outputSchema": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "summary": { "type": "string" },
+          "results": { "type": "array", "items": { "type": "object" } },
+          "error": { "type": "string" }
+        },
+        "required": ["success", "summary"]
+      }
+    }
+  ]
+}
