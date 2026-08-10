@@ -23,3 +23,112 @@ jobs:
 
       - name: Tests
         run: npx vitest run
+
+  python-tests:
+    # PROJ-374-378: Python side (Agent Factory research assistant +
+    # AI Receptionist) test coverage — separate job from the Node/TS
+    # NanoClaw side above so either can fail independently and both
+    # show up as distinct PR checks.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install -r requirements_web.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run tests with coverage
+        run: pytest --cov=agent --cov=app --cov-report=term-missing --cov-report=xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-coverage
+          path: coverage.xml
+
+      - name: Coverage summary badge (PROJ-374-378)
+        # Stdlib-only, no third-party badge service and no repo-write-back
+        # (Dilraj's GitHub account has had real collaborator-permission
+        # issues on this repo — see PR #14's history — so this
+        # deliberately avoids any step that needs push access). Reads the
+        # line-rate straight out of coverage.xml and renders it as a
+        # colored line in the PR's Checks summary, which is visible
+        # without downloading the artifact.
+        if: always()
+        run: |
+          cat > /tmp/coverage_summary.py <<'PY'
+          import xml.etree.ElementTree as ET
+          import os
+
+          try:
+              root = ET.parse("coverage.xml").getroot()
+              pct = round(float(root.attrib["line-rate"]) * 100, 1)
+          except Exception as exc:
+              pct = None
+              print(f"Could not parse coverage.xml: {exc}")
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if pct is not None:
+              color = "brightgreen" if pct >= 80 else "yellow" if pct >= 60 else "red"
+              line = f"**Python coverage: {pct}%** ({color})"
+          else:
+              line = "**Python coverage: unavailable** (see logs)"
+
+          print(line)
+          if summary_path:
+              with open(summary_path, "a") as fh:
+                  fh.write(line + "\n")
+          PY
+          python3 /tmp/coverage_summary.py
+
+  docker-smoke-test:
+    # PROJ-374-378: builds the Web UI's app/web_ui/Dockerfile and
+    # confirms the container actually starts and answers a real HTTP
+    # request — not just that `docker build` succeeds. This is the
+    # "deployable app" half of CI/CD; the Node/TS and pytest jobs
+    # above only prove the source is correct, not that the packaged
+    # artifact runs.
+    #
+    # Scope note: no Dapr stage exists here because there is no Dapr
+    # anywhere in this codebase to test against (see the Dockerfile's
+    # header comment). Adding one would mean inventing infrastructure
+    # the app doesn't use, not verifying something real.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -f app/web_ui/Dockerfile -t agent-factory-web:ci .
+
+      - name: Run container
+        run: |
+          docker run -d --name web-smoke -p 8000:8000 agent-factory-web:ci
+          echo "Waiting for the app to come up..."
+          for i in $(seq 1 20); do
+            if curl -sf http://localhost:8000/status; then
+              echo "Container is up."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Container never became healthy — dumping logs:"
+          docker logs web-smoke
+          exit 1
+
+      - name: Smoke-test /status
+        run: |
+          curl -sf http://localhost:8000/status | tee /dev/stderr | grep -q '"status":"ok"'
+
+      - name: Container logs (always, for debugging)
+        if: always()
+        run: docker logs web-smoke || true
+
+      - name: Stop container
+        if: always()
+        run: docker rm -f web-smoke || true

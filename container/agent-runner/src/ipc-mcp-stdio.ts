@@ -216,6 +216,87 @@ SCHEDULE VALUE FORMAT (all times are LOCAL timezone):
 );
 
 server.tool(
+  'book_appointment',
+  `Book an appointment on the shared Google Calendar. Use this when a user asks to schedule, book, or reserve a time (e.g. "book me in for 2pm Tuesday", "can I get an appointment Friday morning"). This is fire-and-forget: it submits the request and returns immediately — the actual confirmation (or failure reason) is sent to the chat as a separate message once the booking completes, so don't repeat "booked!" yourself; let that follow-up message speak for it.
+
+If the user hasn't given a specific date, time, and duration, ask them before calling this tool — don't guess. Convert relative dates ("tomorrow", "next Tuesday") to an actual date using the current date from the message context.
+
+TIME FORMAT: local time WITHOUT a timezone suffix, e.g. "2026-08-10T14:00:00" (do not use "Z" or a UTC offset — the server applies the local timezone).`,
+  {
+    summary: z
+      .string()
+      .describe(
+        'Short title for the event, e.g. "Consultation with Alice" or "Appointment — haircut"',
+      ),
+    start: z
+      .string()
+      .describe('Local start time, no timezone suffix, e.g. "2026-08-10T14:00:00"'),
+    end: z
+      .string()
+      .describe('Local end time, no timezone suffix, e.g. "2026-08-10T14:30:00"'),
+    description: z
+      .string()
+      .optional()
+      .describe('Optional longer description or notes for the event'),
+    attendee_email: z
+      .string()
+      .optional()
+      .describe(
+        "Optional email address to invite (e.g. the user's email, if they gave it)",
+      ),
+  },
+  async (args) => {
+    const startDate = new Date(args.start);
+    const endDate = new Date(args.end);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `Invalid start/end time. Use local time without a timezone suffix, e.g. "2026-08-10T14:00:00". Got start="${args.start}" end="${args.end}".`,
+          },
+        ],
+        isError: true,
+      };
+    }
+    if (endDate.getTime() <= startDate.getTime()) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: 'End time must be after start time.',
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    const data = {
+      type: 'book_appointment',
+      chatJid,
+      summary: args.summary,
+      start: args.start,
+      end: args.end,
+      description: args.description,
+      attendeeEmail: args.attendee_email,
+      createdBy: groupFolder,
+      timestamp: new Date().toISOString(),
+    };
+
+    writeIpcFile(TASKS_DIR, data);
+
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `Booking request submitted for "${args.summary}" (${args.start}). I'll confirm once it's on the calendar.`,
+        },
+      ],
+    };
+  },
+);
+
+server.tool(
   'list_tasks',
   "List all scheduled tasks. From main: shows all tasks. From other groups: shows only that group's tasks.",
   {},

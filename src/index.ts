@@ -3,6 +3,7 @@ import path from 'path';
 
 import { OneCLI } from '@onecli-sh/sdk';
 
+import { bookAppointment } from './calendar.js';
 import {
   ASSISTANT_NAME,
   DEFAULT_TRIGGER,
@@ -63,8 +64,40 @@ import {
 } from './sender-allowlist.js';
 import { startSessionCleanup } from './session-cleanup.js';
 import { startSchedulerLoop } from './task-scheduler.js';
+import { formatLocalTime } from './timezone.js';
 import { Channel, NewMessage, RegisteredGroup } from './types.js';
 import { logger } from './logger.js';
+
+// Bot UX commands (PROJ-229): channel-agnostic /help, /clear, /history.
+// Recognized the same way as the existing /remote-control interception below —
+// exact match on trimmed content, handled before storage so they never show
+// up as regular conversation turns.
+const UX_COMMANDS = new Set(['/help', '/clear', '/history']);
+const HISTORY_LIMIT = 10;
+
+// Per-sender rate limiting (PROJ-229): guards against a single sender
+// flooding the bot faster than it can reasonably be expected to respond.
+// Keyed by "chatJid:sender" so limits are per-person-per-chat.
+const RATE_LIMIT_WINDOW_MS = 1500;
+const RATE_LIMIT_WARNING_COOLDOWN_MS = 5000;
+const lastMessageAtBySender = new Map<string, number>();
+const lastRateLimitWarningAt = new Map<string, number>();
+
+/** Records the message and returns true if the sender is currently rate-limited. */
+function isRateLimited(chatJid: string, sender: string): boolean {
+  const key = `${chatJid}:${sender}`;
+  const now = Date.now();
+  const last = lastMessageAtBySender.get(key);
+  lastMessageAtBySender.set(key, now);
+  return last !== undefined && now - last < RATE_LIMIT_WINDOW_MS;
+}
+
+// Escalation path (PROJ-224): agents wrap a handoff message in
+// <escalate reason="..."> when they can't confidently help. The reason is
+// alerted to the main/admin chat; the wrapped text is sent to the user as
+// their reply (in place of the raw agent output).
+const ESCALATE_PATTERN =
+  /<escalate(?:\s+reason="([^"]*)")?\s*>([\s\S]*?)<\/escalate>/;
 
 // Re-export for backwards compatibility during refactor
 export { escapeXml, formatMessages } from './router.js';
@@ -214,6 +247,35 @@ export function _setRegisteredGroups(
   registeredGroups = groups;
 }
 
+/** Finds the JID of the registered main/admin group, if any. */
+function findMainGroupJid(): string | undefined {
+  return Object.entries(registeredGroups).find(([, g]) => g.isMain)?.[0];
+}
+
+/**
+ * Escalation path (PROJ-224): alert the main/admin chat when an agent
+ * signals (via <escalate reason="..."> in its output) that it couldn't
+ * confidently handle a request. No-ops if there's no main group registered,
+ * or if the escalating chat IS the main group (nothing to notify).
+ */
+async function notifyEscalation(
+  group: RegisteredGroup,
+  chatJid: string,
+  reason: string,
+): Promise<void> {
+  const mainJid = findMainGroupJid();
+  if (!mainJid || mainJid === chatJid) return;
+
+  const channel = findChannel(channels, mainJid);
+  if (!channel) return;
+
+  await channel.sendMessage(
+    mainJid,
+    `⚠️ Escalation in "${group.name}": ${reason}`,
+  );
+  logger.info({ group: group.name, chatJid, reason }, 'Escalation notified');
+}
+
 /**
  * Process all pending messages for a group.
  * Called by the GroupQueue when it's this group's turn.
@@ -291,11 +353,31 @@ async function processGroupMessages(chatJid: string): Promise<boolean> {
           ? result.result
           : JSON.stringify(result.result);
       // Strip <internal>...</internal> blocks — agent uses these for internal reasoning
-      const text = raw.replace(/<internal>[\s\S]*?<\/internal>/g, '').trim();
+      const withoutInternal = raw.replace(
+        /<internal>[\s\S]*?<\/internal>/g,
+        '',
+      );
+      // Escalation path (PROJ-224): <escalate reason="..."> wraps the
+      // user-facing handoff message; the reason is alerted separately.
+      const escalateMatch = withoutInternal.match(ESCALATE_PATTERN);
+      const text = (
+        escalateMatch
+          ? withoutInternal.replace(ESCALATE_PATTERN, () => escalateMatch[2])
+          : withoutInternal
+      ).trim();
       logger.info({ group: group.name }, `Agent output: ${raw.length} chars`);
       if (text) {
         await channel.sendMessage(chatJid, text);
         outputSentToUser = true;
+      }
+      if (escalateMatch) {
+        notifyEscalation(
+          group,
+          chatJid,
+          escalateMatch[1] || 'unspecified',
+        ).catch((err) =>
+          logger.warn({ err, chatJid }, 'Escalation notice failed'),
+        );
       }
       // Only reset idle timer on actual results, not session-update markers (result: null)
       resetIdleTimer();
@@ -634,6 +716,68 @@ async function main(): Promise<void> {
     }
   }
 
+  // Handle /help, /clear, /history — channel-agnostic bot UX commands (PROJ-229).
+  // Only meaningful for chats that are already registered as a group.
+  async function handleUxCommand(
+    command: string,
+    chatJid: string,
+  ): Promise<void> {
+    const group = registeredGroups[chatJid];
+    if (!group) return;
+
+    const channel = findChannel(channels, chatJid);
+    if (!channel) return;
+
+    if (command === '/help') {
+      await channel.sendMessage(
+        chatJid,
+        [
+          `*${ASSISTANT_NAME} commands*`,
+          `${DEFAULT_TRIGGER} <message> — talk to ${ASSISTANT_NAME}`,
+          '/help — show this message',
+          '/history — show your recent messages in this chat',
+          '/clear — start a fresh conversation (forgets this chat’s session)',
+        ].join('\n'),
+      );
+      return;
+    }
+
+    if (command === '/clear') {
+      delete sessions[group.folder];
+      deleteSession(group.folder);
+      await channel.sendMessage(
+        chatJid,
+        'Conversation cleared — starting fresh.',
+      );
+      return;
+    }
+
+    if (command === '/history') {
+      const recent = getMessagesSince(
+        chatJid,
+        '',
+        ASSISTANT_NAME,
+        HISTORY_LIMIT,
+      );
+      if (recent.length === 0) {
+        await channel.sendMessage(
+          chatJid,
+          'No recent messages found for this chat.',
+        );
+        return;
+      }
+      const lines = recent.map(
+        (m) =>
+          `${formatLocalTime(m.timestamp, TIMEZONE)} — ${m.sender_name}: ${m.content}`,
+      );
+      await channel.sendMessage(
+        chatJid,
+        `Your last ${recent.length} message(s):\n${lines.join('\n')}`,
+      );
+      return;
+    }
+  }
+
   // Channel callbacks (shared by all channels)
   const channelOpts = {
     onMessage: (chatJid: string, msg: NewMessage) => {
@@ -644,6 +788,40 @@ async function main(): Promise<void> {
           logger.error({ err, chatJid }, 'Remote control command error'),
         );
         return;
+      }
+
+      // Bot UX commands — /help, /clear, /history (PROJ-229)
+      if (!msg.is_from_me && UX_COMMANDS.has(trimmed)) {
+        handleUxCommand(trimmed, chatJid).catch((err) =>
+          logger.error({ err, chatJid, command: trimmed }, 'UX command error'),
+        );
+        return;
+      }
+
+      // Per-sender rate limiting (PROJ-229) — checked before storage so a
+      // flood of messages doesn't each independently trigger the agent.
+      if (!msg.is_from_me && !msg.is_bot_message && registeredGroups[chatJid]) {
+        if (isRateLimited(chatJid, msg.sender)) {
+          const key = `${chatJid}:${msg.sender}`;
+          const now = Date.now();
+          const lastWarned = lastRateLimitWarningAt.get(key);
+          if (
+            lastWarned === undefined ||
+            now - lastWarned >= RATE_LIMIT_WARNING_COOLDOWN_MS
+          ) {
+            lastRateLimitWarningAt.set(key, now);
+            const channel = findChannel(channels, chatJid);
+            channel
+              ?.sendMessage(
+                chatJid,
+                "You're sending messages a bit fast — one moment please.",
+              )
+              .catch((err) =>
+                logger.warn({ err, chatJid }, 'Rate limit notice failed'),
+              );
+          }
+          return;
+        }
       }
 
       // Sender allowlist drop mode: discard messages from denied senders before storing
@@ -746,6 +924,7 @@ async function main(): Promise<void> {
         writeTasksSnapshot(group.folder, group.isMain === true, taskRows);
       }
     },
+    bookAppointment,
   });
   startSessionCleanup();
   queue.setProcessMessagesFn(processGroupMessages);

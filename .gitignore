@@ -8,7 +8,7 @@ build/
 
 # Local data & auth
 store/
-data/
+/data/
 logs/
 *.log
 
@@ -26,6 +26,7 @@ groups/global/*
 .env
 *.env
 config/local_settings.py
+secrets/
 
 # Temp files
 .tmp-*

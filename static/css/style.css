@@ -322,6 +322,44 @@ body {
 .send-btn:hover { background: #6d28d9; }
 .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
+/* ── Attach button ─────────────────────────────────────────── */
+.attach-btn {
+  background: rgba(124,58,237,0.15); border: 1px solid rgba(124,58,237,0.25); cursor: pointer;
+  font-size: 1.05rem; padding: 4px 8px; border-radius: 6px;
+  color: var(--violet2); transition: background 0.15s, border-color 0.15s, color 0.15s;
+  flex-shrink: 0; line-height: 1;
+}
+.attach-btn:hover { background: rgba(124,58,237,0.28); border-color: rgba(124,58,237,0.5); color: #c4b5fd; }
+
+/* ── Attachment preview strip ──────────────────────────────── */
+.attach-strip {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 0 2px; margin-bottom: 6px;
+}
+.attach-strip:empty { display: none; }
+
+.attach-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(124,58,237,0.1); border: 1px solid rgba(124,58,237,0.25);
+  border-radius: 8px; padding: 4px 8px 4px 7px;
+  font-size: 12px; color: var(--text2); max-width: 220px;
+}
+.attach-chip-thumb {
+  width: 22px; height: 22px; object-fit: cover;
+  border-radius: 4px; flex-shrink: 0;
+}
+.attach-chip-icon { font-size: 0.85rem; flex-shrink: 0; }
+.attach-chip-name {
+  overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; flex: 1; min-width: 0;
+}
+.attach-chip-size { font-size: 10px; color: var(--text3); flex-shrink: 0; }
+.attach-chip-remove {
+  background: none; border: none; cursor: pointer;
+  color: var(--text3); font-size: 0.85rem; padding: 0; line-height: 1; flex-shrink: 0;
+}
+.attach-chip-remove:hover { color: #ef4444; }
+
 .input-hints { display: flex; justify-content: space-between; margin-top: 8px; padding: 0 2px; }
 .hint-text { font-size: 11px; color: var(--text3); }
 .hint-text kbd {
@@ -437,9 +475,164 @@ body {
 .md-content a { color: var(--sky); text-decoration: none; }
 .md-content a:hover { color: var(--sky2); }
 
+/* ═══════════════════════════════════
+   AUTH MODAL (PROJ-349)
+   ═══════════════════════════════════ */
+/* Hide the whole app until checkAuth() confirms a valid session and
+   app.js adds .authed to <body>. Prevents a flash of the chat UI (and
+   an inevitable 401 from /history) before we know who's logged in. */
+body:not(.authed) .preview-banner,
+body:not(.authed) .layout,
+body:not(.authed) #welcome-overlay {
+  display: none !important;
+}
+#auth-modal {
+  position: fixed; inset: 0; z-index: 10000;
+  display: flex; align-items: center; justify-content: center;
+}
+.auth-backdrop {
+  position: absolute; inset: 0;
+  background: var(--bg);
+}
+.auth-box {
+  position: relative; z-index: 1;
+  width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 16px;
+  padding: 32px 28px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.auth-logo { font-size: 32px; margin-bottom: 10px; }
+.auth-title {
+  font-size: 20px; font-weight: 700; color: var(--text);
+  letter-spacing: -0.3px; margin-bottom: 4px;
+  font-family: 'Inter', sans-serif;
+}
+.auth-subtitle {
+  font-size: 12px; color: var(--text2); margin-bottom: 22px;
+  font-family: 'Inter', sans-serif;
+}
+.auth-label {
+  display: block; text-align: left;
+  font-size: 11px; font-weight: 600; color: var(--text2);
+  margin: 12px 0 6px; text-transform: uppercase; letter-spacing: 0.3px;
+}
+.auth-input {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  outline: none;
+}
+.auth-input:focus { border-color: var(--violet); }
+.auth-error {
+  min-height: 16px;
+  font-size: 12px; color: var(--rose);
+  margin-top: 10px; text-align: left;
+}
+.auth-submit {
+  width: 100%; margin-top: 16px;
+  background: linear-gradient(135deg, var(--violet), var(--sky));
+  border: none; border-radius: 8px;
+  padding: 11px; font-size: 13px; font-weight: 600; color: #fff;
+  cursor: pointer; font-family: 'Inter', sans-serif;
+  transition: opacity 0.15s;
+}
+.auth-submit:hover { opacity: 0.9; }
+.auth-submit:disabled { opacity: 0.5; cursor: default; }
+.auth-switch {
+  margin-top: 18px; font-size: 12px; color: var(--text2);
+  font-family: 'Inter', sans-serif;
+}
+.auth-switch a { color: var(--sky2); text-decoration: none; margin-left: 4px; }
+.auth-switch a:hover { text-decoration: underline; }
+
+/* Sidebar user badge + logout */
+.user-badge {
+  font-size: 11px; color: var(--text2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 90px;
+}
+.logout-btn {
+  background: none; border: 1px solid var(--border2); border-radius: 6px;
+  color: var(--text2); font-size: 13px; width: 26px; height: 26px;
+  cursor: pointer; flex-shrink: 0; transition: all 0.15s;
+}
+.logout-btn:hover { color: var(--rose); border-color: var(--rose); }
+
 /* Error bubble */
 .error-bubble {
   background: rgba(244,63,94,0.08); border: 1px solid rgba(244,63,94,0.2);
   border-radius: 4px 16px 16px 16px;
   padding: 12px 16px; font-size: 13px; color: var(--rose);
 }
+
+/* ══ Knowledge Base tab (PROJ-279-283) ══ */
+.kb-body {
+  flex: 1; overflow-y: auto; padding: 24px 32px; max-width: 720px;
+}
+.kb-upload-row {
+  display: flex; gap: 10px; align-items: center; margin-bottom: 8px;
+}
+.kb-upload-row input[type="file"] {
+  flex: 1; font-size: 13px; color: var(--text2);
+  background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 8px 10px;
+}
+.kb-hint {
+  font-size: 12px; color: var(--text3); margin-bottom: 18px; line-height: 1.5;
+}
+.kb-error {
+  background: rgba(244,63,94,0.08); border: 1px solid rgba(244,63,94,0.2);
+  border-radius: 8px; padding: 8px 12px; font-size: 13px; color: var(--rose);
+  margin-bottom: 14px;
+}
+.kb-search-row {
+  display: flex; gap: 10px; margin-bottom: 12px;
+}
+.kb-search-row input[type="text"] {
+  flex: 1; background: var(--surface); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 9px 12px; color: var(--text); font-size: 13px;
+}
+.kb-search-row input[type="text"]:focus { outline: none; border-color: var(--emerald); }
+#kb-search-results { margin-bottom: 24px; }
+.kb-result {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 14px; margin-bottom: 8px;
+}
+.kb-result-title {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.kb-result-score { font-size: 11px; color: var(--emerald); font-weight: 500; }
+.kb-result-snippet { font-size: 12px; color: var(--text2); margin-top: 4px; line-height: 1.5; }
+.kb-no-results { font-size: 13px; color: var(--text3); padding: 8px 0; }
+
+.kb-section-label {
+  font-size: 12px; font-weight: 600; color: var(--text2);
+  text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 10px;
+}
+.kb-doc-list { display: flex; flex-direction: column; gap: 8px; }
+.kb-doc-item {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 14px;
+}
+.kb-doc-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.kb-doc-name {
+  font-size: 13px; color: var(--text); font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.kb-doc-sub { font-size: 11px; color: var(--text3); }
+.kb-doc-delete-btn {
+  background: none; border: 1px solid var(--border2); border-radius: 6px;
+  color: var(--text2); font-size: 12px; padding: 5px 10px; cursor: pointer;
+  transition: all 0.15s; flex-shrink: 0; margin-left: 12px;
+}
+.kb-doc-delete-btn:hover { color: var(--rose); border-color: var(--rose); }
+.kb-empty { font-size: 13px; color: var(--text3); padding: 8px 0; }

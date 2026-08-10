@@ -30,7 +30,12 @@ class ProductCard:
     bsr:          str        = ""
     category:     str        = ""
 
+    # ── Score colour ───────────────────────────────────────────
     def score_color(self, score: int | None = None) -> str:
+        """
+        Returns 'green' (≥70), 'amber' (40-69), or 'red' (<40)
+        based on the product's composite score.
+        """
         s = score if score is not None else self.score
         if s >= 70:
             return "green"
@@ -38,7 +43,9 @@ class ProductCard:
             return "amber"
         return "red"
 
+    # ── Serialisation ──────────────────────────────────────────
     def to_dict(self) -> dict:
+        """JSON-serialisable dict for the /query API response."""
         return {
             "title":        self.title,
             "price":        self.price,
@@ -55,6 +62,7 @@ class ProductCard:
         }
 
     def to_html_card(self) -> str:
+        """Returns a self-contained HTML card string for embedding."""
         color = self.score_color()
         color_hex = {"green": "#27ae60", "amber": "#f39c12", "red": "#e74c3c"}[color]
         stars = "★" * int(self.rating) + "☆" * (5 - int(self.rating))
@@ -73,28 +81,42 @@ class ProductCard:
   </div>
 </div>"""
 
+    # ── Factory ────────────────────────────────────────────────
     @classmethod
     def from_skill_result(cls, raw: dict) -> "ProductCard":
+        """
+        Build a ProductCard from the raw dict returned by AmazonSkill.
+        Handles variations in key names and value formats (e.g. "4.3
+        out of 5", "12,847 reviews") across skill/scraper versions.
+        """
         import math
+        import re as _re
+
         title        = raw.get("title", "Unknown Product")
         price_str    = raw.get("price", "")
-        _rating_raw  = str(raw.get("rating", 0) or 0)
+
         # Handle "4.3 / 5" or "4.3 out of 5" formats from scraper
-        import re as _re
+        _rating_raw   = str(raw.get("rating", 0) or 0)
         _rating_match = _re.search(r"[\d.]+", _rating_raw)
-        rating       = float(_rating_match.group()) if _rating_match else 0.0
+        rating        = float(_rating_match.group()) if _rating_match else 0.0
+
         # Handle "12,847" or "12847" or "(12847)" formats from scraper
-        _reviews_raw = str(raw.get("reviews", raw.get("review_count", 0)) or 0)
+        _reviews_raw    = str(raw.get("reviews", raw.get("review_count", 0)) or 0)
         _reviews_digits = _re.sub(r"[^\d]", "", _reviews_raw)
-        review_count = int(_reviews_digits) if _reviews_digits else 0
+        review_count    = int(_reviews_digits) if _reviews_digits else 0
+
         url          = raw.get("url", raw.get("link", ""))
         image_url    = raw.get("image_url", raw.get("image", ""))
         bsr          = str(raw.get("bsr", raw.get("best_seller_rank", "")) or "")
         category     = raw.get("category", "")
+
+        # Parse price to float for scoring
         try:
             price_num = float(price_str.replace("$", "").replace(",", "").split()[0])
         except (ValueError, IndexError):
             price_num = 0.0
+
+        # Availability
         avail_raw = str(raw.get("availability", "in stock")).lower()
         if "out" in avail_raw:
             avail_factor, availability = 0.0, "out_of_stock"
@@ -102,11 +124,24 @@ class ProductCard:
             avail_factor, availability = 0.5, "limited"
         else:
             avail_factor, availability = 1.0, "in_stock"
+
+        # Composite score 0–100
         r_norm  = (rating / 5.0) * 40
         rv_norm = (math.log10(review_count + 1) / math.log10(10001)) * 30 if review_count > 0 else 0
         p_norm  = max(0.0, (1.0 - min(price_num, 1000) / 1000)) * 20 if price_num > 0 else 10
         a_norm  = avail_factor * 10
         score   = round(r_norm + rv_norm + p_norm + a_norm)
-        return cls(title=title, price=price_str, rating=rating, review_count=review_count,
-                   score=score, url=url, image_url=image_url, source="amazon",
-                   availability=availability, bsr=bsr, category=category)
+
+        return cls(
+            title=title,
+            price=price_str,
+            rating=rating,
+            review_count=review_count,
+            score=score,
+            url=url,
+            image_url=image_url,
+            source="amazon",
+            availability=availability,
+            bsr=bsr,
+            category=category,
+        )

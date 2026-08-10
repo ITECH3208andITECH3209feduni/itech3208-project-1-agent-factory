@@ -8,6 +8,16 @@
 #   uvicorn app.web_ui.main:app --reload --port 8000
 #
 # Opens: http://localhost:8000
+#
+# Merge note: this file reconciles two independently-built versions
+# of the web app. origin/main's /integrity (routes.py, backed by the
+# real skills/academic_integrity.py — Claude classification + real
+# DuckDuckGo plagiarism search) supersedes the heuristic /integrity
+# route this branch built in app/web_ui/integrity_routes.py before
+# that real implementation was discovered during this merge — that
+# router is intentionally NOT included below to avoid two handlers
+# racing for the same path. See tests/qa/PROJ-369-qa-pass.md / the
+# PROJ-364 Jira comment for the full story.
 # ──────────────────────────────────────────────────────────────
 
 import os
@@ -21,9 +31,13 @@ if _PROJECT not in sys.path:
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse
 
 from app.web_ui.routes import router
+from app.web_ui.auth_routes import router as auth_router
+from app.web_ui.receptionist_routes import router as receptionist_router
+from app.web_ui.calendar_routes import router as calendar_router
+from app.web_ui.kb_routes import router as kb_router
 
 # ── App setup ──────────────────────────────────────────────────
 app = FastAPI(
@@ -38,7 +52,11 @@ if os.path.isdir(_STATIC_DIR):
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
 # Include API routes
-app.include_router(router)
+app.include_router(auth_router)          # /auth/register, /auth/login, /auth/logout, /auth/me
+app.include_router(router)               # /query, /literature, /amazon, /integrity, /seller, /export, /history, /status
+app.include_router(receptionist_router)  # /receptionist
+app.include_router(calendar_router)      # /calendar/ics
+app.include_router(kb_router)            # /kb/upload, /kb/list, /kb/{id}, /kb/search
 
 
 # ── Root — serve the chat UI ───────────────────────────────────

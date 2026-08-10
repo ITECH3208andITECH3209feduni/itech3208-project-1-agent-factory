@@ -4,20 +4,30 @@
 # PROJ-140 + PROJ-146 (Dilraj Singh)
 #
 # Endpoints:
-#   POST /query        — run a research/shopping query, return cards
+#   POST /query        — run a research/shopping query, return cards (login required, PROJ-349)
 #   POST /literature   — dedicated literature search (PROJ-92–94)
+#   POST /amazon       — dedicated Amazon product search (PROJ-166)
 #   POST /integrity    — academic integrity check (PROJ-184–186)
 #   POST /seller       — Amazon seller tools (PROJ-187–190)
 #   POST /export       — export results to PDF/Excel (PROJ-191)
-#   GET  /history      — last 20 messages from memory
+#   GET  /history      — last 20 messages from the logged-in user's own memory (PROJ-349)
 #   GET  /status       — health check
+#
+# Merge note: this file reconciles two branches that diverged —
+# origin/main added /literature, /amazon, /integrity (real Claude +
+# DuckDuckGo backed, not a heuristic), /seller, /export; our branch
+# added login-scoped memory (PROJ-349) to /query and /history. Both
+# are kept. Login was NOT added to the newer origin/main endpoints
+# (/literature, /amazon, /integrity, /seller, /export) since that's a
+# real scope decision (do these need per-user history too?) rather
+# than something to silently decide inside a merge conflict resolution.
 # ──────────────────────────────────────────────────────────────
 
 import sys
 import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -31,6 +41,7 @@ import app.skills.amazon_skill as amazon_ui_skill
 from skills.academic_integrity import AcademicIntegritySkill
 from skills.amazon_seller import AmazonSellerSkill
 from skills.export import ExportSkill, export_to_pdf, export_to_excel
+from app.web_ui.auth_routes import get_current_username
 
 router = APIRouter()
 
@@ -146,19 +157,24 @@ class ExportResponse(BaseModel):
 
 # ── Routes ─────────────────────────────────────────────────────
 @router.post("/query", response_model=QueryResponse)
-async def query_agent(body: QueryRequest):
+async def query_agent(body: QueryRequest, username: str = Depends(get_current_username)):
     """
     Run a research query through the agent.
     Returns the text response plus typed result cards.
 
+    Requires login (PROJ-349) — history and conversation context are
+    scoped to the logged-in user's session_id so one user's queries
+    never bleed into another's.
+
     Response schema:
         response  — human-readable agent answer
         cards     — list of ProductCard or PaperCard dicts
-        type      — "amazon" | "literature" | "unknown"
+        type      — "amazon" | "literature" | "amazon_seller" | "unknown"
     """
-    rendered, result = _orchestrator.run(body.query)
+    rendered, result = _orchestrator.run(body.query, session_id=username)
 
     if result is None:
+        # Clarification response — no cards
         return QueryResponse(response=rendered, cards=[], type="unknown")
 
     skill_type = result.skill_name
@@ -170,7 +186,7 @@ async def query_agent(body: QueryRequest):
                 card = ProductCard.from_skill_result(raw)
                 cards.append(card.to_dict())
             except Exception:
-                pass
+                pass  # skip malformed entries
 
     elif skill_type == "literature" and result.results:
         for raw in result.results:
@@ -202,9 +218,9 @@ async def query_agent(body: QueryRequest):
 
 
 @router.get("/history", response_model=list[HistoryItem])
-async def get_history():
-    """Return the last 20 queries from session memory."""
-    history = _orchestrator.memory.get_history(20)
+async def get_history(username: str = Depends(get_current_username)):
+    """Return the last 20 queries from the logged-in user's own history."""
+    history = _orchestrator.memory.get_history(20, session_id=username)
     return [
         HistoryItem(
             timestamp=h.get("timestamp", ""),
@@ -392,7 +408,6 @@ async def download_export(path: str):
     GET /export/download?path=exports/result_20260515_123456.pdf
     """
     if not os.path.exists(path):
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="File not found")
     return FileResponse(path, filename=os.path.basename(path))
 
