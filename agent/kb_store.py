@@ -134,6 +134,24 @@ def list_documents(username: str) -> list[dict]:
     return [dict(r) for r in rows]
 
 
+def list_documents_with_content(username: str) -> list[dict]:
+    """Same as list_documents but includes full content — used by the
+    integrity checker's KB-plagiarism comparison (agent/integrity.py).
+    Kept separate from list_documents so the /kb/list endpoint (which
+    powers the document list UI) never accidentally ships full file
+    contents to the browser."""
+    conn = _get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id, filename, content, size_bytes, uploaded_at FROM kb_documents"
+            " WHERE username = ? ORDER BY uploaded_at DESC",
+            (username,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [dict(r) for r in rows]
+
+
 def delete_document(username: str, doc_id: int) -> bool:
     """Delete a document if it belongs to username. Returns True if a
     row was deleted, False if not found / not owned by this user."""
