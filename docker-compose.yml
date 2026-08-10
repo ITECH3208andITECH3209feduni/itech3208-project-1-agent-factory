@@ -1,25 +1,202 @@
+# docker-compose.yml — Agent Factory local stack (PROJ-304..308)
+#
+# Services: agent API, ChromaDB, Telegram bot, and a Dapr sidecar per app
+# service. Everything shares one bridge network and reads secrets from .env.
+#
+#   docker compose up -d
+#   docker compose logs -f agent
+#   docker compose down
+#
+# The Dapr sidecars are behind a profile — the core stack runs without them:
+#   docker compose up -d                     # agent + chromadb + telegram
+#   docker compose --profile dapr up -d      # ...plus sidecars and placement
+
+name: agent-factory
+
+# ── Shared config ─────────────────────────────────────────────
+# YAML anchors keep env and logging identical across services. One place to
+# change means the agent and the bot cannot drift apart.
+x-common-env: &common-env
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY must be set in .env}
+  S2_API_KEY: ${S2_API_KEY:-}
+  BOT_TOKEN: ${BOT_TOKEN:-}
+  GOOGLE_CALENDAR_CREDENTIALS: ${GOOGLE_CALENDAR_CREDENTIALS:-}
+  JWT_SECRET: ${JWT_SECRET:-}
+  LOG_LEVEL: ${LOG_LEVEL:-INFO}
+  APP_VERSION: ${APP_VERSION:-3.0.0}
+  # Point the app at the ChromaDB service rather than a local directory.
+  CHROMADB_HOST: chromadb
+  CHROMADB_PORT: "8000"
+  CHROMADB_PATH: /data/chromadb
+  CHROMADB_COLLECTION: ${CHROMADB_COLLECTION:-agent_factory}
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    # Unbounded container logs will fill Dilraj's disk given this runs 24/7.
+    max-size: "10m"
+    max-file: "3"
+
+x-restart: &default-restart
+  restart: unless-stopped
+
+
 services:
+  # ══════════════════════════════════════════════════════════
+  # Agent API — FastAPI + uvicorn
+  # ══════════════════════════════════════════════════════════
   agent:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agent-factory:latest
     container_name: agent-factory
-    env_file:
-      - .env
+    <<: *default-restart
+    logging: *default-logging
+    environment:
+      <<: *common-env
+      HOST: 0.0.0.0
+      PORT: "8000"
+    ports:
+      - "${AGENT_PORT:-8000}:8000"
     volumes:
       - ./outputs:/app/outputs
-    stdin_open: true
-    tty: true
-    restart: unless-stopped
+      - agent-data:/data
+    networks:
+      - agent-net
+    depends_on:
+      chromadb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
 
-  # web-ui:                          # Uncomment when web UI is added
-  #   build: .
-  #   container_name: agent-factory-web
-  #   command: python -m uvicorn app.web_ui.main:app --host 0.0.0.0 --port 8000
-  #   env_file:
-  #     - .env
-  #   ports:
-  #     - "8000:8000"
-  #   volumes:
-  #     - ./outputs:/app/outputs
-  #   depends_on:
-  #     - agent
-  #   restart: unless-stopped
+  # ══════════════════════════════════════════════════════════
+  # ChromaDB — vector store, persistent
+  # ══════════════════════════════════════════════════════════
+  chromadb:
+    image: chromadb/chroma:0.5.23
+    container_name: agent-factory-chromadb
+    <<: *default-restart
+    logging: *default-logging
+    environment:
+      IS_PERSISTENT: "TRUE"
+      PERSIST_DIRECTORY: /chroma/chroma
+      ANONYMIZED_TELEMETRY: "FALSE"
+    volumes:
+      - chroma-data:/chroma/chroma
+    # Not published to the host by default — only the agent needs it, and
+    # Chroma has no auth. Uncomment to inspect it from the Mac directly.
+    # ports:
+    #   - "8001:8000"
+    networks:
+      - agent-net
+    healthcheck:
+      test: ["CMD", "/bin/bash", "-c", "cat < /dev/null > /dev/tcp/127.0.0.1/8000"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
+
+  # ══════════════════════════════════════════════════════════
+  # Telegram bot
+  # ══════════════════════════════════════════════════════════
+  telegram-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: agent-factory:latest
+    container_name: agent-factory-telegram
+    <<: *default-restart
+    logging: *default-logging
+    command: ["python", "-m", "app.channels.telegram_bot"]
+    environment:
+      <<: *common-env
+      # Reaches the API over the shared network, not through the host.
+      AGENT_API_URL: http://agent:8000
+    volumes:
+      - ./outputs:/app/outputs
+      - agent-data:/data
+    networks:
+      - agent-net
+    depends_on:
+      agent:
+        condition: service_healthy
+    profiles:
+      - telegram
+
+  # ══════════════════════════════════════════════════════════
+  # Dapr sidecars  (docker compose --profile dapr up -d)
+  # ══════════════════════════════════════════════════════════
+  agent-dapr:
+    image: daprio/daprd:1.14.4
+    container_name: agent-factory-agent-dapr
+    <<: *default-restart
+    logging: *default-logging
+    command:
+      - "./daprd"
+      - "--app-id=agent"
+      - "--app-port=8000"
+      - "--dapr-http-port=3500"
+      - "--placement-host-address=dapr-placement:50006"
+      - "--resources-path=/components"
+      - "--log-level=info"
+    volumes:
+      - ./config-examples/dapr/components:/components
+    # Shares the agent's network namespace so daprd reaches the app on
+    # 127.0.0.1:8000, which is what --app-port assumes.
+    network_mode: "service:agent"
+    depends_on:
+      agent:
+        condition: service_healthy
+    profiles:
+      - dapr
+
+  telegram-dapr:
+    image: daprio/daprd:1.14.4
+    container_name: agent-factory-telegram-dapr
+    <<: *default-restart
+    logging: *default-logging
+    command:
+      - "./daprd"
+      - "--app-id=telegram-bot"
+      - "--dapr-http-port=3500"
+      - "--placement-host-address=dapr-placement:50006"
+      - "--resources-path=/components"
+      - "--log-level=info"
+    volumes:
+      - ./config-examples/dapr/components:/components
+    network_mode: "service:telegram-bot"
+    depends_on:
+      - telegram-bot
+    profiles:
+      - dapr
+
+  dapr-placement:
+    image: daprio/dapr:1.14.4
+    container_name: agent-factory-dapr-placement
+    <<: *default-restart
+    logging: *default-logging
+    command: ["./placement", "--port", "50006"]
+    networks:
+      - agent-net
+    profiles:
+      - dapr
+
+
+# ── Networks ──────────────────────────────────────────────────
+networks:
+  agent-net:
+    driver: bridge
+
+# ── Volumes ───────────────────────────────────────────────────
+# Named volumes, not host bind mounts: Chroma's SQLite backing store
+# misbehaves on bind mounts across the macOS virtiofs boundary.
+volumes:
+  chroma-data:
+    driver: local
+  agent-data:
+    driver: local

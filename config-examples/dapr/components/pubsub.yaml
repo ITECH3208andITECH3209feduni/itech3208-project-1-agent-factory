@@ -1,0 +1,14 @@
+# Dapr pub/sub — local development (PROJ-304..308)
+#
+# Carries messages between the Telegram bot and the agent's sub-agents.
+# in-memory is per-sidecar, so it only works while both apps share a sidecar
+# process. For real cross-service messaging on the Mac, switch to pubsub.redis
+# and add a redis service to docker-compose.yml.
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: pubsub
+spec:
+  type: pubsub.in-memory
+  version: v1
+  metadata: []

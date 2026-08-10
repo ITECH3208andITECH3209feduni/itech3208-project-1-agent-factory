@@ -1,0 +1,16 @@
+# Dapr state store — local development (PROJ-304..308)
+#
+# in-memory keeps the local stack dependency-free: no Redis container to run
+# on Dilraj's Mac just to hold agent state. State is lost on sidecar restart,
+# which is acceptable here because ChromaDB owns anything that must persist.
+#
+# To survive restarts, swap this for state.redis and add a redis service to
+# docker-compose.yml.
+apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: statestore
+spec:
+  type: state.in-memory
+  version: v1
+  metadata: []
