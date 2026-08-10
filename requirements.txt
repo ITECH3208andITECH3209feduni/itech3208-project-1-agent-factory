@@ -20,6 +20,9 @@ fastapi>=0.110.0           # ASGI web framework
 uvicorn[standard]>=0.27.0  # ASGI server
 pydantic>=2.6.0            # Request/response models
 
+# ── MCP server packaging (PROJ-324..328) ──────────────────────
+mcp>=2.0.0                 # Model Context Protocol SDK (skills/mcp/*)
+
 # ── Terminal UI ───────────────────────────────────────────────
 rich>=13.0.0               # Pretty terminal output (optional but recommended)
 
