@@ -12,6 +12,14 @@ from skills.base_skill import SkillResult
 
 client = TestClient(app)
 
+# Matches tests/api/conftest.py's autouse _set_api_key fixture, which sets
+# API_KEY=test-api-key-for-pytest for the duration of every test in this
+# package. Now that api/routes/amazon.py actually wires require_api_key via
+# Depends() (PROJ-113 fix), every request below needs this header — this
+# file predates that wiring and previously reached the route unauthenticated.
+VALID_KEY = "test-api-key-for-pytest"
+AUTH_HEADERS = {"X-API-Key": VALID_KEY}
+
 
 def _fake_result(results: list[dict], success: bool = True, error: str = "") -> SkillResult:
     """Build a fake SkillResult for monkeypatching the skill call."""
@@ -51,7 +59,7 @@ def test_amazon_returns_products(monkeypatch):
     ]
     _patch_skill(monkeypatch, _fake_result(fake_results))
 
-    response = client.get("/api/amazon", params={"q": "headphones"})
+    response = client.get("/api/amazon", params={"q": "headphones"}, headers=AUTH_HEADERS)
 
     assert response.status_code == 200
     body = response.json()
@@ -74,13 +82,13 @@ def test_amazon_returns_products(monkeypatch):
 
 def test_amazon_missing_query_returns_422():
     """No q param → FastAPI's automatic validation returns 422."""
-    response = client.get("/api/amazon")
+    response = client.get("/api/amazon", headers=AUTH_HEADERS)
     assert response.status_code == 422
 
 
 def test_amazon_empty_query_returns_422():
     """Empty q param → 422 because of min_length=1."""
-    response = client.get("/api/amazon", params={"q": ""})
+    response = client.get("/api/amazon", params={"q": ""}, headers=AUTH_HEADERS)
     assert response.status_code == 422
 
 
@@ -94,7 +102,7 @@ def test_amazon_skill_failure_returns_502(monkeypatch):
             error="Playwright unavailable; requests fallback returned 503",
         ),
     )
-    response = client.get("/api/amazon", params={"q": "anything"})
+    response = client.get("/api/amazon", params={"q": "anything"}, headers=AUTH_HEADERS)
     assert response.status_code == 502
     assert "playwright" in response.json()["detail"].lower()
 
@@ -102,7 +110,7 @@ def test_amazon_skill_failure_returns_502(monkeypatch):
 def test_amazon_zero_results_with_success_returns_200(monkeypatch):
     """Skill ran successfully but found no products → 200 with empty array."""
     _patch_skill(monkeypatch, _fake_result(results=[], success=True))
-    response = client.get("/api/amazon", params={"q": "xyznonexistent123"})
+    response = client.get("/api/amazon", params={"q": "xyznonexistent123"}, headers=AUTH_HEADERS)
     assert response.status_code == 200
     body = response.json()
     assert body["count"] == 0

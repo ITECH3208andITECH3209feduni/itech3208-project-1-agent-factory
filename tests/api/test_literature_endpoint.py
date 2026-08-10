@@ -12,6 +12,14 @@ from skills.base_skill import SkillResult
 
 client = TestClient(app)
 
+# Matches tests/api/conftest.py's autouse _set_api_key fixture, which sets
+# API_KEY=test-api-key-for-pytest for the duration of every test in this
+# package. Now that api/routes/literature.py actually wires require_api_key
+# via Depends() (PROJ-113 fix), every request below needs this header — this
+# file predates that wiring and previously reached the route unauthenticated.
+VALID_KEY = "test-api-key-for-pytest"
+AUTH_HEADERS = {"X-API-Key": VALID_KEY}
+
 
 def _fake_result(results: list[dict], success: bool = True, error: str = "") -> SkillResult:
     """Build a fake SkillResult for monkeypatching the skill call."""
@@ -53,7 +61,7 @@ def test_literature_returns_papers(monkeypatch):
     ]
     _patch_skill(monkeypatch, _fake_result(fake_results))
 
-    response = client.get("/api/literature", params={"q": "transformers"})
+    response = client.get("/api/literature", params={"q": "transformers"}, headers=AUTH_HEADERS)
 
     assert response.status_code == 200
     body = response.json()
@@ -68,13 +76,13 @@ def test_literature_returns_papers(monkeypatch):
 
 def test_literature_missing_query_returns_422():
     """No q param → FastAPI's automatic validation returns 422."""
-    response = client.get("/api/literature")
+    response = client.get("/api/literature", headers=AUTH_HEADERS)
     assert response.status_code == 422
 
 
 def test_literature_empty_query_returns_422():
     """Empty q param → 422 because of min_length=1."""
-    response = client.get("/api/literature", params={"q": ""})
+    response = client.get("/api/literature", params={"q": ""}, headers=AUTH_HEADERS)
     assert response.status_code == 422
 
 
@@ -88,6 +96,6 @@ def test_literature_skill_failure_returns_502(monkeypatch):
             error="arXiv: timeout; Semantic Scholar: 500",
         ),
     )
-    response = client.get("/api/literature", params={"q": "anything"})
+    response = client.get("/api/literature", params={"q": "anything"}, headers=AUTH_HEADERS)
     assert response.status_code == 502
     assert "timeout" in response.json()["detail"].lower()
