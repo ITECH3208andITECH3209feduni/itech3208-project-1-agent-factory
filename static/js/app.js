@@ -42,6 +42,7 @@ const kbErrorBox     = document.getElementById("kb-error");
 let isLoading = false;
 let activeTab = "shopping";
 let activeLitMode = "search"; // "search" | "general" | "integrity"
+let integrityMode = "auto"; // "auto" | "ai_detection" | "plagiarism" | "full_report"
 
 // Auth (PROJ-349)
 const authModal      = document.getElementById("auth-modal");
@@ -438,6 +439,16 @@ function switchToIntegrity(mode) {
   if (integrityInput) integrityInput.focus();
 }
 
+/** Set the active integrity check mode ("auto" | "ai_detection" | "plagiarism" | "full_report")
+ *  and reflect it in the mode chips (PROJ-184-186). */
+function setIntegrityMode(mode) {
+  integrityMode = mode || "auto";
+  document.querySelectorAll("#lit-integrity-panel .chip[onclick*='setIntegrityMode']").forEach(chip => {
+    const match = chip.getAttribute("onclick").match(/setIntegrityMode\('([^']+)'\)/);
+    chip.classList.toggle("active", match && match[1] === integrityMode);
+  });
+}
+
 function setLitMode(mode) {
   activeLitMode = mode;
   document.getElementById("lit-search-panel").style.display    = mode === "search"    ? "flex" : "none";
@@ -716,7 +727,7 @@ async function sendIntegrityCheck() {
     const res = await fetch(`${API_BASE}/integrity`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, mode: integrityMode }),
     });
     if (!res.ok) throw new Error(`Server error: ${res.status}`);
     const data = await res.json();
@@ -827,14 +838,22 @@ function renderIntegrityResult(area, data) {
   const row = document.createElement("div");
   row.className = "msg-row";
 
-  // Support both flat result and nested .result
+  if (data.error) { appendErrorMsg(area, data.error); return; }
+
+  // Support both the real /integrity response shape (flat IntegrityResponse)
+  // and a nested { result: {...} } wrapper some skills use.
   const result = data.result || data;
-  const prob   = typeof result.ai_probability === "number" ? result.ai_probability : (data.ai_probability || 0);
-  const riskLevel = prob >= 0.7 ? "high" : prob >= 0.4 ? "medium" : "low";
-  const riskLabel = prob >= 0.7 ? "High Risk" : prob >= 0.4 ? "Moderate Risk" : "Low Risk";
-  const pct        = Math.round(prob * 100);
-  const summary    = result.summary || data.response || data.summary || "";
-  const details    = result.details || data.details || [];
+  const prob = typeof result.ai_probability === "number" ? result.ai_probability : 0;
+  const riskLevel = result.risk_level || (prob >= 0.7 ? "high" : prob >= 0.4 ? "medium" : "low");
+  const riskLabel = riskLevel === "high" ? "High Risk" : riskLevel === "medium" ? "Moderate Risk" : "Low Risk";
+  const pct = Math.round(prob * 100);
+  const summary = result.summary || data.response || "";
+  const classification = result.classification || "";
+  const confidence = typeof result.confidence_score === "number" ? Math.round(result.confidence_score * 100) : null;
+  const similarity = typeof result.similarity_score === "number" ? Math.round(result.similarity_score * 100) : null;
+  const details  = Array.isArray(result.details) ? result.details : [];
+  const flagged  = Array.isArray(result.flagged_passages) ? result.flagged_passages : [];
+  const matched  = Array.isArray(result.matched_sources) ? result.matched_sources : [];
 
   let detailsHtml = "";
   if (details.length > 0) {
@@ -843,6 +862,38 @@ function renderIntegrityResult(area, data) {
     }</ul>`;
   }
 
+  let flaggedHtml = "";
+  if (flagged.length > 0) {
+    flaggedHtml = `
+      <div class="summary-block" style="margin-top:12px;">
+        <div class="summary-label">Flagged Passages</div>
+        <ul style="margin-top:6px;padding-left:18px;font-size:13px;color:var(--text2);">${
+          flagged.map(p => `<li>"${escHtml(p)}"</li>`).join("")
+        }</ul>
+      </div>`;
+  }
+
+  let matchedHtml = "";
+  if (matched.length > 0) {
+    matchedHtml = `
+      <div class="summary-block" style="margin-top:12px;">
+        <div class="summary-label">Matched Sources</div>
+        <ul style="margin-top:6px;padding-left:18px;font-size:13px;color:var(--text2);">${
+          matched.map(m => {
+            const url   = m.url || m.link || "#";
+            const title = m.title || m.source || url;
+            const pctMatch = typeof m.similarity === "number" ? ` (${Math.round(m.similarity * 100)}% match)`
+                            : typeof m.match_pct === "number" ? ` (${Math.round(m.match_pct)}% match)` : "";
+            return `<li><a href="${escHtml(url)}" target="_blank" rel="noopener">${escHtml(title)}</a>${pctMatch}</li>`;
+          }).join("")
+        }</ul>
+      </div>`;
+  }
+
+  const headerLabel = classification
+    ? `${escHtml(classification)}${confidence !== null ? ` · ${confidence}% confidence` : ""}`
+    : "AI Authorship Probability";
+
   row.innerHTML = `
     ${aiAvatarHtml()}
     <div class="msg-content">
@@ -850,15 +901,19 @@ function renderIntegrityResult(area, data) {
       <div class="ai-bubble">
         <div class="integrity-card">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-            <span style="font-size:13px;font-weight:600;color:var(--text);">AI Authorship Probability</span>
+            <span style="font-size:13px;font-weight:600;color:var(--text);">${headerLabel}</span>
             <span class="risk-badge ${riskLevel}">${escHtml(riskLabel)}</span>
           </div>
           <div class="ai-prob-bar-wrap">
             <div class="ai-prob-bar ${riskLevel}" style="width:${pct}%;"></div>
           </div>
-          <div style="font-size:12px;color:var(--text2);margin-top:4px;">${pct}% likely AI-generated</div>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;">
+            ${pct}% likely AI-generated${similarity !== null ? ` · ${similarity}% plagiarism similarity` : ""}
+          </div>
           ${summary ? `<div class="summary-block" style="margin-top:12px;"><div class="summary-label">Analysis</div><div class="summary-text">${escHtml(summary)}</div></div>` : ""}
           ${detailsHtml}
+          ${flaggedHtml}
+          ${matchedHtml}
         </div>
       </div>
     </div>`;

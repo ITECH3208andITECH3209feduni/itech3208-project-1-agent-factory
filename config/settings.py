@@ -118,3 +118,8 @@ KB_DB              = os.environ.get("KB_DB") or os.path.join(_BASE_DIR, "outputs
 # ── Output ─────────────────────────────────────────────────────
 OUTPUT_DIR        = os.path.join(_BASE_DIR, "outputs")
 DEFAULT_FORMAT    = "markdown"   # "markdown" | "json"
+
+
+# -- RapidAPI (Amazon fallback) ----------------------------------
+RAPIDAPI_KEY        = os.environ.get("RAPIDAPI_KEY", "")
+RAPIDAPI_AMAZON_HOST = "real-time-amazon-data.p.rapidapi.com"

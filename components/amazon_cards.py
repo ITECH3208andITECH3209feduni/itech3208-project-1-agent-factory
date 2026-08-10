@@ -86,14 +86,25 @@ class ProductCard:
     def from_skill_result(cls, raw: dict) -> "ProductCard":
         """
         Build a ProductCard from the raw dict returned by AmazonSkill.
-        Handles variations in key names across skill versions.
+        Handles variations in key names and value formats (e.g. "4.3
+        out of 5", "12,847 reviews") across skill/scraper versions.
         """
         import math
+        import re as _re
 
         title        = raw.get("title", "Unknown Product")
         price_str    = raw.get("price", "")
-        rating       = float(raw.get("rating", 0) or 0)
-        review_count = int(raw.get("reviews", raw.get("review_count", 0)) or 0)
+
+        # Handle "4.3 / 5" or "4.3 out of 5" formats from scraper
+        _rating_raw   = str(raw.get("rating", 0) or 0)
+        _rating_match = _re.search(r"[\d.]+", _rating_raw)
+        rating        = float(_rating_match.group()) if _rating_match else 0.0
+
+        # Handle "12,847" or "12847" or "(12847)" formats from scraper
+        _reviews_raw    = str(raw.get("reviews", raw.get("review_count", 0)) or 0)
+        _reviews_digits = _re.sub(r"[^\d]", "", _reviews_raw)
+        review_count    = int(_reviews_digits) if _reviews_digits else 0
+
         url          = raw.get("url", raw.get("link", ""))
         image_url    = raw.get("image_url", raw.get("image", ""))
         bsr          = str(raw.get("bsr", raw.get("best_seller_rank", "")) or "")
@@ -108,14 +119,11 @@ class ProductCard:
         # Availability
         avail_raw = str(raw.get("availability", "in stock")).lower()
         if "out" in avail_raw:
-            avail_factor = 0.0
-            availability = "out_of_stock"
+            avail_factor, availability = 0.0, "out_of_stock"
         elif "limited" in avail_raw or "only" in avail_raw:
-            avail_factor = 0.5
-            availability = "limited"
+            avail_factor, availability = 0.5, "limited"
         else:
-            avail_factor = 1.0
-            availability = "in_stock"
+            avail_factor, availability = 1.0, "in_stock"
 
         # Composite score 0–100
         r_norm  = (rating / 5.0) * 40

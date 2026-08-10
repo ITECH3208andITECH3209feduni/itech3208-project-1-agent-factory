@@ -7,17 +7,21 @@
 import anthropic
 
 from skills.base_skill import BaseSkill, SkillResult
-from skills.literature import LiteratureSkill
-from skills.amazon     import AmazonSkill
+from skills.literature         import LiteratureSkill
+from skills.amazon             import AmazonSkill
+from skills.academic_integrity import AcademicIntegritySkill
+from skills.amazon_seller      import AmazonSellerSkill
 from agent.memory      import SessionMemory
 from agent.formatter   import Formatter
 from config.settings   import ANTHROPIC_API_KEY, CLAUDE_MODEL
 
 
-SYSTEM_PROMPT = """You are a 24/7 Research AI Assistant that helps with two specialised tasks:
+SYSTEM_PROMPT = """You are a 24/7 AI Assistant that helps with four specialised tasks:
 
 1. LITERATURE RESEARCH — finding academic papers, studies, and scientific articles
 2. AMAZON PRODUCT RESEARCH — finding, comparing, and recommending products on Amazon
+3. ACADEMIC INTEGRITY — detecting AI-generated text, scanning for plagiarism, generating integrity reports
+4. AMAZON SELLER TOOLS — Alibaba supplier finder, PPC campaign builder, product progress analysis, profit optimiser
 
 Your job is to:
 - Understand what the user wants
@@ -30,9 +34,11 @@ Always be concise, factual, and helpful. When uncertain, ask a short clarifying 
 ROUTING_PROMPT = """Given the user query below, decide which skill to use.
 
 Available skills:
-- "literature" — for academic papers, research, studies, journals, science
-- "amazon"     — for products, shopping, buying, prices, reviews, recommendations
-- "clarify"    — if the query is too ambiguous to route (return a short question to ask the user)
+- "literature"  — academic papers, research, studies, journals, science, arxiv, pubmed
+- "amazon"      — products, shopping, buying, prices, reviews, recommendations
+- "integrity"   — detect AI-written text, plagiarism check, academic integrity report
+- "seller"      — alibaba suppliers, PPC campaign, product progress, profit optimiser, margin analysis
+- "clarify"     — if the query is too ambiguous to route
 
 Recent conversation context:
 {context}
@@ -42,15 +48,17 @@ User query: "{query}"
 Respond with ONLY ONE of:
 SKILL: literature
 SKILL: amazon
+SKILL: integrity
+SKILL: seller
 CLARIFY: <your clarifying question>"""
 
 
-# Module-level skill registry (PROJ-32 spec). Mirrors the instance-level
-# self.skills in Orchestrator.__init__ — both point to the same skill classes.
-# Kept for spec compatibility and external imports.
+# Module-level skill registry (PROJ-32 spec).
 SKILLS = {
     "literature": LiteratureSkill(),
     "amazon":     AmazonSkill(),
+    "integrity":  AcademicIntegritySkill(),
+    "seller":     AmazonSellerSkill(),
 }
 
 
@@ -62,6 +70,8 @@ class Orchestrator:
         self.skills: dict[str, BaseSkill] = {
             "literature": LiteratureSkill(),
             "amazon":     AmazonSkill(),
+            "integrity":  AcademicIntegritySkill(),
+            "seller":     AmazonSellerSkill(),
         }
 
     # ── Main entry point ───────────────────────────────────────
@@ -136,6 +146,10 @@ class Orchestrator:
             return "literature"
         elif "SKILL: amazon" in response:
             return "amazon"
+        elif "SKILL: integrity" in response:
+            return "integrity"
+        elif "SKILL: seller" in response:
+            return "seller"
         elif "CLARIFY:" in response:
             return response  # pass the clarification back
         else:
@@ -145,12 +159,22 @@ class Orchestrator:
     def _quick_route(self, query: str) -> str | None:
         """Fast keyword-based routing — no API call needed."""
         q = query.lower()
-        amazon_keywords    = {"buy", "price", "amazon", "product", "shop", "deal", "cheap", "best", "review"}
-        literature_keywords= {"paper", "research", "study", "journal", "arxiv", "pubmed", "author", "cite"}
+        amazon_keywords     = {"buy", "price", "amazon", "product", "shop", "deal", "cheap", "best", "review"}
+        literature_keywords = {"paper", "research", "study", "journal", "arxiv", "pubmed", "author", "cite"}
+        integrity_keywords  = {"detect ai", "ai written", "plagiarism", "academic integrity",
+                               "ai detection", "gpt detection", "check if ai", "integrity report"}
+        seller_keywords     = {"alibaba", "supplier", "ppc", "campaign", "sponsored", "profit",
+                               "margin", "acos", "bsr trend", "wholesale", "manufacturer"}
 
-        amazon_hits    = sum(1 for k in amazon_keywords    if k in q)
-        literature_hits= sum(1 for k in literature_keywords if k in q)
+        integrity_hits  = sum(1 for k in integrity_keywords  if k in q)
+        seller_hits     = sum(1 for k in seller_keywords     if k in q)
+        amazon_hits     = sum(1 for k in amazon_keywords     if k in q)
+        literature_hits = sum(1 for k in literature_keywords if k in q)
 
+        if integrity_hits >= 1:
+            return "integrity"
+        if seller_hits >= 1:
+            return "seller"
         if amazon_hits > literature_hits and amazon_hits >= 1:
             return "amazon"
         if literature_hits > amazon_hits and literature_hits >= 1:
@@ -169,6 +193,25 @@ class Orchestrator:
                 f"The user asked: '{query}'\n\n"
                 f"Here are the top papers found:\n{items}\n\n"
                 "Write a 2-3 sentence summary highlighting the most relevant findings and what the user should look at first."
+            )
+        elif result.skill_name == "integrity":
+            meta = result.metadata
+            prompt = (
+                f"The user asked: '{query}'\n\n"
+                f"Academic integrity analysis results:\n"
+                f"- AI probability: {meta.get('ai_probability', 0)*100:.0f}%\n"
+                f"- Classification: {meta.get('classification', 'Unknown')}\n"
+                f"- Plagiarism similarity: {meta.get('similarity_score', 0)*100:.0f}%\n"
+                f"- Risk level: {meta.get('risk_level', 'low')}\n\n"
+                "Write a 2-3 sentence summary of the findings and what action should be taken."
+            )
+        elif result.skill_name == "amazon_seller":
+            mode = result.metadata.get("mode", "unknown")
+            prompt = (
+                f"The user asked: '{query}'\n\n"
+                f"Amazon seller tool result (mode: {mode}):\n"
+                f"{result.summary[:400] if result.summary else 'No summary available.'}\n\n"
+                "Write a 2-3 sentence actionable summary for the seller."
             )
         else:  # amazon
             items = "\n".join(

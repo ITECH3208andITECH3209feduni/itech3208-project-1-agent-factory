@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\emonb\\\\Downloads\\\\itech3208-project-1-agent-factory\\\\outputs\" | Select-Object Name, @{N='KB';E={[math]::Round\\($_.Length/1KB,1\\)}})"
+    ]
+  }
+}

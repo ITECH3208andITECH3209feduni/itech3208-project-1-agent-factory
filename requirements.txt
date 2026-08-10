@@ -17,9 +17,15 @@ playwright-stealth>=1.0.6  # Makes the browser invisible to bot detectors
 
 # ── Terminal UI ───────────────────────────────────────────────
 rich>=13.0.0               # Pretty terminal output (optional but recommended)
+tabulate>=0.10.0           # Formatted tables for demo scripts and CLI output
 
 # ── Utils ─────────────────────────────────────────────────────
 python-dotenv>=1.0.0       # Support for .env files
 
 # ── AI Receptionist — Calendar booking (PROJ-209-218) ──────────
 google-auth>=2.35.0        # Service-account auth for Google Calendar (agent/calendar_client.py)
+
+# ── Web API ──────────────────────────────────────────────
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+httpx>=0.27.0

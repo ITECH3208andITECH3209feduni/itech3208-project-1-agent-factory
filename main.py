@@ -14,6 +14,11 @@ import argparse
 import os
 import sys
 
+# Fix Windows console Unicode encoding so emoji/special chars don't crash
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 # ── Rich for pretty terminal output (optional but recommended) ─
 try:
     from rich.console import Console

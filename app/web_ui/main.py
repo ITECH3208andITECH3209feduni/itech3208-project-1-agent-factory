@@ -8,6 +8,16 @@
 #   uvicorn app.web_ui.main:app --reload --port 8000
 #
 # Opens: http://localhost:8000
+#
+# Merge note: this file reconciles two independently-built versions
+# of the web app. origin/main's /integrity (routes.py, backed by the
+# real skills/academic_integrity.py — Claude classification + real
+# DuckDuckGo plagiarism search) supersedes the heuristic /integrity
+# route this branch built in app/web_ui/integrity_routes.py before
+# that real implementation was discovered during this merge — that
+# router is intentionally NOT included below to avoid two handlers
+# racing for the same path. See tests/qa/PROJ-369-qa-pass.md / the
+# PROJ-364 Jira comment for the full story.
 # ──────────────────────────────────────────────────────────────
 
 import os
@@ -28,7 +38,6 @@ from app.web_ui.auth_routes import router as auth_router
 from app.web_ui.receptionist_routes import router as receptionist_router
 from app.web_ui.calendar_routes import router as calendar_router
 from app.web_ui.kb_routes import router as kb_router
-from app.web_ui.integrity_routes import router as integrity_router
 
 # ── App setup ──────────────────────────────────────────────────
 app = FastAPI(
@@ -44,11 +53,10 @@ if os.path.isdir(_STATIC_DIR):
 
 # Include API routes
 app.include_router(auth_router)          # /auth/register, /auth/login, /auth/logout, /auth/me
-app.include_router(router)               # /query, /history, /status
+app.include_router(router)               # /query, /literature, /amazon, /integrity, /seller, /export, /history, /status
 app.include_router(receptionist_router)  # /receptionist
 app.include_router(calendar_router)      # /calendar/ics
 app.include_router(kb_router)            # /kb/upload, /kb/list, /kb/{id}, /kb/search
-app.include_router(integrity_router)     # /integrity
 
 
 # ── Root — serve the chat UI ───────────────────────────────────
@@ -57,8 +65,18 @@ async def serve_index():
     """Serve the main chat interface."""
     index = os.path.join(_STATIC_DIR, "index.html")
     if os.path.exists(index):
-        return FileResponse(index)
+        return FileResponse(index, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
     return {"message": "Agent Factory API is running. Static files not found."}
+
+
+# ── /literature — serve the dedicated literature search page ────
+@app.get("/literature", include_in_schema=False)
+async def serve_literature():
+    """Serve the standalone literature search interface."""
+    page = os.path.join(_STATIC_DIR, "literature.html")
+    if os.path.exists(page):
+        return FileResponse(page, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
+    return {"message": "literature.html not found."}
 
 
 # ── Dev server ─────────────────────────────────────────────────
