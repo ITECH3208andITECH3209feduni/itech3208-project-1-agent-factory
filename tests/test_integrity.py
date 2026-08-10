@@ -21,13 +21,12 @@ from agent.integrity import (
 )
 from app.web_ui.main import app
 
-# Import via `data.integrity_corpus`, not `tests.data.integrity_corpus`:
-# tests/ has no __init__.py (matching every other file in this
-# directory), so pytest's default import mode puts tests/ itself on
-# sys.path rather than the repo root — `data` (tests/data/) resolves
-# as an implicit namespace package from there without depending on
-# `tests` being importable as a package.
-from data.integrity_corpus import (
+# Import via `tests.data.integrity_corpus`: tests/__init__.py now
+# exists (added by the Sprint 3 merge), so tests/ is a real package
+# and pytest's import mode prepends the repo root to sys.path rather
+# than tests/ itself — `tests.data` (tests/data/, an implicit
+# namespace package) is what's importable from there.
+from tests.data.integrity_corpus import (
     AI_STYLE_SAMPLES,
     HUMAN_STYLE_SAMPLES,
     ORIGINAL_SAMPLES,
