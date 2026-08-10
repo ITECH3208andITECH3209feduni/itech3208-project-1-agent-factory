@@ -2,7 +2,11 @@
 # ──────────────────────────────────────────────────────────────
 # Main agent orchestrator — decides which skill to call (PROJ-20)
 # Uses Claude for intent classification + result summarisation
+# PROJ-254..258: skills are now invoked via Dapr service invocation,
+# with an in-process fallback when Dapr is unavailable.
 # ──────────────────────────────────────────────────────────────
+
+import os
 
 import anthropic
 
@@ -13,6 +17,7 @@ from skills.academic_integrity import AcademicIntegritySkill
 from skills.amazon_seller      import AmazonSellerSkill
 from agent.memory      import SessionMemory
 from agent.formatter   import Formatter
+from agent.dapr_client import invoke_skill, DaprUnavailable
 from config.settings   import ANTHROPIC_API_KEY, CLAUDE_MODEL
 
 
@@ -88,9 +93,8 @@ class Orchestrator:
             clarify_msg = skill_name.replace("CLARIFY:", "").strip()
             return clarify_msg, None
 
-        # 3. Run the skill
-        skill  = self.skills[skill_name]
-        result = skill(query)
+        # 3. Run the skill (via Dapr when enabled, else in-process)
+        result = self._run_skill(skill_name, query)
 
         # 4. Let Claude summarise the findings
         if result.success and result.results:
@@ -114,6 +118,23 @@ class Orchestrator:
             path = self.formatter.save(result)
             return rendered, path, result
         return rendered, "", None
+
+    # ── Skill execution ────────────────────────────────────────
+    def _run_skill(self, skill_name: str, query: str) -> SkillResult:
+        """
+        Execute a skill.
+
+        When USE_DAPR=true the call goes out over the Dapr sidecar to the
+        matching sub-agent service. If the sidecar or the service is not
+        reachable we fall back to running the skill in-process, so the app
+        keeps working even with Dapr down.
+        """
+        if os.getenv("USE_DAPR", "false").lower() == "true":
+            try:
+                return invoke_skill(skill_name, query)
+            except DaprUnavailable as exc:
+                print(f"[dapr] unavailable, running in-process: {exc}")
+        return self.skills[skill_name](query)
 
     # ── Intent routing ─────────────────────────────────────────
     def _route(self, query: str) -> str:
