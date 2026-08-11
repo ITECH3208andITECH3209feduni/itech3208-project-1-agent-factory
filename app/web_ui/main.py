@@ -2,6 +2,7 @@
 # ──────────────────────────────────────────────────────────────
 # FastAPI application entry point — Agent Factory Web UI
 # PROJ-139 (Dilraj Singh)
+# PROJ-339..343: JWT auth router mounted at /auth
 #
 # Usage:
 #   python -m app.web_ui.main
@@ -24,6 +25,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from app.web_ui.routes import router
+from auth.routes import router as auth_router
+from auth.db import init_db
 
 # ── App setup ──────────────────────────────────────────────────
 app = FastAPI(
@@ -37,8 +40,12 @@ _STATIC_DIR = os.path.join(_PROJECT, "static")
 if os.path.isdir(_STATIC_DIR):
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
+# Create the users / refresh_tokens tables if they don't exist yet
+init_db()
+
 # Include API routes
 app.include_router(router)
+app.include_router(auth_router)
 
 
 # ── Root — serve the chat UI ───────────────────────────────────
