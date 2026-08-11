@@ -121,3 +121,59 @@ def logout(body: RefreshRequest):
 @router.get("/me", response_model=UserOut)
 def me(user: sqlite3.Row = Depends(current_user)):
     return UserOut(id=user["id"], email=user["email"], is_active=bool(user["is_active"]))
+    # ── API key scoping (PROJ-344..348) ────────────────────────────
+from auth import api_keys, crypto
+
+
+class ApiKeyRequest(BaseModel):
+    api_key: str = Field(min_length=20, max_length=256)
+
+
+class ApiKeyStatus(BaseModel):
+    has_custom_key: bool
+    masked_key: str | None = None
+    updated_at: str | None = None
+    active_source: str
+
+
+@router.put("/api-key", response_model=ApiKeyStatus)
+def set_api_key(body: ApiKeyRequest, user: sqlite3.Row = Depends(current_user)):
+    """Store the caller's own Anthropic key, encrypted at rest."""
+    key = body.api_key.strip()
+    if not key.startswith("sk-"):
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "That doesn't look like an Anthropic API key",
+        )
+    db.set_user_api_key(user["id"], crypto.encrypt(key))
+    return ApiKeyStatus(
+        has_custom_key=True,
+        masked_key=crypto.mask(key),
+        active_source="user",
+    )
+
+
+@router.get("/api-key", response_model=ApiKeyStatus)
+def get_api_key_status(user: sqlite3.Row = Depends(current_user)):
+    """Report whether a custom key is set. Never returns the key itself."""
+    row = db.get_user_by_id(user["id"])
+    enc = row["anthropic_key_enc"] if row else None
+    if not enc:
+        _, source = api_keys.resolve_api_key(user["id"])
+        return ApiKeyStatus(has_custom_key=False, active_source=source)
+
+    plain = crypto.decrypt(enc)
+    return ApiKeyStatus(
+        has_custom_key=True,
+        masked_key=crypto.mask(plain) if plain else None,
+        updated_at=row["anthropic_key_updated_at"],
+        active_source="user" if plain else "system",
+    )
+
+
+@router.delete("/api-key", response_model=ApiKeyStatus)
+def delete_api_key(user: sqlite3.Row = Depends(current_user)):
+    """Remove the caller's key and fall back to the system key."""
+    db.clear_user_api_key(user["id"])
+    _, source = api_keys.resolve_api_key(user["id"])
+    return ApiKeyStatus(has_custom_key=False, active_source=source)
