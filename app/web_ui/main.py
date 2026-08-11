@@ -27,6 +27,7 @@ from fastapi.responses import FileResponse
 from app.web_ui.routes import router
 from auth.routes import router as auth_router
 from auth.db import init_db
+from integrations.twilio_routes import router as twilio_router
 
 # ── App setup ──────────────────────────────────────────────────
 app = FastAPI(
@@ -46,6 +47,7 @@ init_db()
 # Include API routes
 app.include_router(router)
 app.include_router(auth_router)
+app.include_router(twilio_router)
 
 
 # ── Root — serve the chat UI ───────────────────────────────────
