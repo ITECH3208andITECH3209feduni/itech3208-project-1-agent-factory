@@ -7,12 +7,14 @@ from skills.literature         import LiteratureSkill
 from skills.amazon             import AmazonSkill
 from skills.academic_integrity import AcademicIntegritySkill
 from skills.amazon_seller      import AmazonSellerSkill
+from skills.general_qa         import GeneralQASkill
 
 REGISTRY = {
     "literature": LiteratureSkill,
     "amazon":     AmazonSkill,
     "integrity":  AcademicIntegritySkill,
     "seller":     AmazonSellerSkill,
+    "general":    GeneralQASkill,
 }
 
 SKILL_NAME = os.getenv("SKILL_NAME", "literature")

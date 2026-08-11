@@ -4,6 +4,7 @@
 # Uses Claude for intent classification + result summarisation
 # PROJ-254..258: skills are now invoked via Dapr service invocation,
 # with an in-process fallback when Dapr is unavailable.
+# PROJ-249..253: general Q&A sub-agent added as the fallback route.
 # ──────────────────────────────────────────────────────────────
 
 import os
@@ -15,6 +16,7 @@ from skills.literature         import LiteratureSkill
 from skills.amazon             import AmazonSkill
 from skills.academic_integrity import AcademicIntegritySkill
 from skills.amazon_seller      import AmazonSellerSkill
+from skills.general_qa         import GeneralQASkill
 from agent.memory      import SessionMemory
 from agent.formatter   import Formatter
 from agent.dapr_client import invoke_skill, DaprUnavailable
@@ -27,6 +29,8 @@ SYSTEM_PROMPT = """You are a 24/7 AI Assistant that helps with four specialised 
 2. AMAZON PRODUCT RESEARCH — finding, comparing, and recommending products on Amazon
 3. ACADEMIC INTEGRITY — detecting AI-generated text, scanning for plagiarism, generating integrity reports
 4. AMAZON SELLER TOOLS — Alibaba supplier finder, PPC campaign builder, product progress analysis, profit optimiser
+
+Anything outside these four is handled by the general Q&A assistant.
 
 Your job is to:
 - Understand what the user wants
@@ -43,6 +47,7 @@ Available skills:
 - "amazon"      — products, shopping, buying, prices, reviews, recommendations
 - "integrity"   — detect AI-written text, plagiarism check, academic integrity report
 - "seller"      — alibaba suppliers, PPC campaign, product progress, profit optimiser, margin analysis
+- "general"     — any other question that does not fit the skills above
 - "clarify"     — if the query is too ambiguous to route
 
 Recent conversation context:
@@ -55,6 +60,7 @@ SKILL: literature
 SKILL: amazon
 SKILL: integrity
 SKILL: seller
+SKILL: general
 CLARIFY: <your clarifying question>"""
 
 
@@ -64,6 +70,7 @@ SKILLS = {
     "amazon":     AmazonSkill(),
     "integrity":  AcademicIntegritySkill(),
     "seller":     AmazonSellerSkill(),
+    "general":    GeneralQASkill(),
 }
 
 
@@ -77,6 +84,7 @@ class Orchestrator:
             "amazon":     AmazonSkill(),
             "integrity":  AcademicIntegritySkill(),
             "seller":     AmazonSellerSkill(),
+            "general":    GeneralQASkill(),
         }
 
     # ── Main entry point ───────────────────────────────────────
@@ -162,11 +170,13 @@ class Orchestrator:
             return "integrity"
         elif "SKILL: seller" in response:
             return "seller"
+        elif "SKILL: general" in response:
+            return "general"
         elif "CLARIFY:" in response:
             return response  # pass the clarification back
         else:
-            # Default fallback
-            return "literature"
+            # Unrecognised intent — hand off to the general Q&A sub-agent
+            return "general"
 
     def _quick_route(self, query: str) -> str | None:
         """Fast keyword-based routing — no API call needed."""
@@ -196,6 +206,10 @@ class Orchestrator:
     # ── Result summarisation ───────────────────────────────────
     def _summarise(self, query: str, result: SkillResult) -> str:
         """Use Claude to write a human-friendly summary of the results."""
+        # General Q&A already returns a finished markdown answer — don't re-summarise.
+        if result.skill_name == "general":
+            return result.summary
+
         if result.skill_name == "literature":
             items = "\n".join(
                 f"- {r['title']} ({r.get('year','?')}) by {r.get('authors','?')}"

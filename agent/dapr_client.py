@@ -11,6 +11,7 @@ APP_IDS = {
     "amazon":     "amazon-agent",
     "integrity":  "integrity-agent",
     "seller":     "seller-agent",
+    "general":    "general-agent",
 }
 
 
