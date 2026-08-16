@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from app.web_ui.routes import router
+from app.web_ui.twilio_routes import router as twilio_router
 
 # ── App setup ──────────────────────────────────────────────────
 app = FastAPI(
@@ -39,6 +40,7 @@ if os.path.isdir(_STATIC_DIR):
 
 # Include API routes
 app.include_router(router)
+app.include_router(twilio_router)
 
 
 # ── Root — serve the chat UI ───────────────────────────────────

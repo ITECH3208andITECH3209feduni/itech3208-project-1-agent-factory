@@ -3,47 +3,631 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Agent Factory — Research AI</title>
-  <link rel="stylesheet" href="/static/css/style.css" />
+  <title>Agent Factory</title>
+  <link rel="stylesheet" href="/static/css/style.css?v=2" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- PDF.js — lazy-loaded on first PDF attach -->
+  <!-- mammoth.js — lazy-loaded on first DOCX attach -->
 </head>
 <body>
-<div id="app">
 
-  <!-- Header -->
-  <header>
-    <div>
-      <div class="logo">🤖 Agent Factory</div>
-      <div class="subtitle">Literature Search &nbsp;|&nbsp; Amazon Product Research</div>
+<!-- Gradient top bar (same as preview) -->
+<div class="preview-banner"></div>
+
+<div class="layout">
+
+  <!-- ══ SIDEBAR ══ -->
+  <aside class="sidebar">
+
+    <div class="logo-area">
+      <div class="logo-circle">
+        <!-- Exact brain SVG from preview_design.html -->
+        <svg class="brain-svg" width="28" height="28" viewBox="0 0 100 100" fill="none">
+          <defs>
+            <linearGradient id="bgl" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stop-color="#ff3300"/>
+              <stop offset="26%"  stop-color="#ff8800"/>
+              <stop offset="50%"  stop-color="#2299ff"/>
+              <stop offset="74%"  stop-color="#00cc66"/>
+              <stop offset="100%" stop-color="#aa00ee"/>
+            </linearGradient>
+            <radialGradient id="sheen" cx="35%" cy="25%" r="52%">
+              <stop offset="0%"   stop-color="white" stop-opacity="0.3"/>
+              <stop offset="100%" stop-color="black" stop-opacity="0"/>
+            </radialGradient>
+            <radialGradient id="rim" cx="50%" cy="50%" r="50%">
+              <stop offset="60%"  stop-color="black" stop-opacity="0"/>
+              <stop offset="100%" stop-color="black" stop-opacity="0.4"/>
+            </radialGradient>
+            <clipPath id="cL">
+              <path d="M50,10 C47,9 43,9 39,11 C35,13 31,17 28,22 C25,27 23,32 21,37 C19,42 19,47 20,52 C19,57 19,62 21,67 C23,72 27,76 31,79 C35,82 40,84 45,85 C47,85 49,85 50,85 Z"/>
+            </clipPath>
+            <clipPath id="cR">
+              <path d="M50,10 C53,9 57,9 61,11 C65,13 69,17 72,22 C75,27 77,32 79,37 C81,42 81,47 80,52 C81,57 81,62 79,67 C77,72 73,76 69,79 C65,82 60,84 55,85 C53,85 51,85 50,85 Z"/>
+            </clipPath>
+            <filter id="gw">
+              <feGaussianBlur stdDeviation="1" result="b"/>
+              <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+            </filter>
+          </defs>
+          <g clip-path="url(#cL)">
+            <rect x="0" y="0" width="50" height="100" fill="url(#bgl)"/>
+            <rect x="0" y="0" width="50" height="100" fill="url(#sheen)"/>
+            <rect x="0" y="0" width="50" height="100" fill="url(#rim)"/>
+          </g>
+          <path d="M50,10 C47,9 43,9 39,11 C35,13 31,17 28,22 C25,27 23,32 21,37 C19,42 19,47 20,52 C19,57 19,62 21,67 C23,72 27,76 31,79 C35,82 40,84 45,85 C47,85 49,85 50,85"
+                stroke="rgba(255,255,255,0.65)" stroke-width="1.5" fill="none" filter="url(#gw)"/>
+          <g clip-path="url(#cR)">
+            <rect x="50" y="0" width="50" height="100" fill="url(#bgl)"/>
+            <rect x="50" y="0" width="50" height="100" fill="url(#sheen)"/>
+            <rect x="50" y="0" width="50" height="100" fill="url(#rim)"/>
+          </g>
+          <path d="M50,10 C53,9 57,9 61,11 C65,13 69,17 72,22 C75,27 77,32 79,37 C81,42 81,47 80,52 C81,57 81,62 79,67 C77,72 73,76 69,79 C65,82 60,84 55,85 C53,85 51,85 50,85"
+                stroke="rgba(255,255,255,0.65)" stroke-width="1.5" fill="none" filter="url(#gw)"/>
+          <line x1="50" y1="10" x2="50" y2="85" stroke="rgba(0,0,0,0.6)" stroke-width="1.8"/>
+          <path d="M37,19 C34,24 33,29 35,34" stroke="rgba(255,255,255,0.5)" stroke-width="1" stroke-linecap="round" fill="none"/>
+          <path d="M27,38 C26,44 27,50 29,54" stroke="rgba(255,255,255,0.5)" stroke-width="1" stroke-linecap="round" fill="none"/>
+          <path d="M29,60 C31,66 35,70 38,73" stroke="rgba(255,255,255,0.5)" stroke-width="1" stroke-linecap="round" fill="none"/>
+          <path d="M40,25 C39,32 39,39 40,45" stroke="rgba(255,255,255,0.35)" stroke-width="0.8" stroke-linecap="round" fill="none"/>
+          <path d="M63,19 C66,24 67,29 65,34" stroke="rgba(255,255,255,0.5)" stroke-width="1" stroke-linecap="round" fill="none"/>
+          <path d="M73,38 C74,44 73,50 71,54" stroke="rgba(255,255,255,0.5)" stroke-width="1" stroke-linecap="round" fill="none"/>
+          <path d="M71,60 C69,66 65,70 62,73" stroke="rgba(255,255,255,0.5)" stroke-width="1" stroke-linecap="round" fill="none"/>
+          <path d="M60,25 C61,32 61,39 60,45" stroke="rgba(255,255,255,0.35)" stroke-width="0.8" stroke-linecap="round" fill="none"/>
+          <path d="M43,48 C45,44 50,43 55,44 C57,45 59,47 59,49"
+                stroke="rgba(255,255,255,0.5)" stroke-width="1.1" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="logo-text">
+        <div class="logo-name">Agent Factory</div>
+        <div class="logo-status">
+          <div class="status-dot" id="status-dot"></div>
+          <span class="status-label" id="status-label">Online · v2.0.0</span>
+        </div>
+      </div>
     </div>
-    <div id="status-dot" title="Checking agent status…"></div>
-  </header>
 
-  <!-- Chat messages -->
-  <div id="chat-area" role="log" aria-live="polite">
-    <div class="chat-bubble agent-bubble">
-      👋 Hi! I'm your 24/7 Research AI. Ask me to find academic papers or Amazon products.<br>
-      <small style="opacity:0.6">Try: "best wireless earbuds under $50" or "papers on transformer architecture"</small>
+    <div class="nav-section">
+      <div class="nav-section-label">Workspace</div>
+      <div class="nav-item active" data-tab="shopping">
+        <span class="nav-icon">🛒</span> Amazon Seller AI
+      </div>
+      <div class="nav-item" data-tab="integrity">
+        <span class="nav-icon">🧠</span> Literature AI
+      </div>
+      <div class="nav-item" data-tab="receptionist">
+        <span class="nav-icon">📞</span> AI Receptionist
+      </div>
     </div>
-  </div>
 
-  <!-- Result cards -->
-  <div id="cards-section" class="hidden">
-    <div id="cards-title">Results</div>
-    <div id="cards-grid"></div>
-  </div>
+    <div class="recent-section">
+      <div class="nav-section-label">Recent</div>
+      <div id="history-list"></div>
+    </div>
 
-  <!-- Input bar -->
-  <div id="input-bar">
-    <textarea
-      id="query-input"
-      placeholder="Ask about research papers or Amazon products…"
-      rows="1"
-      aria-label="Query input"
-    ></textarea>
-    <button class="send-btn" id="send-btn" title="Send (Enter)" aria-label="Send">&#9654;</button>
-  </div>
+    <div class="sidebar-footer">
+      <div class="model-badge">
+        <span class="model-dot"></span>
+        Claude Haiku · arXiv · S2
+      </div>
+    </div>
 
+  </aside>
+
+  <!-- ══ MAIN ══ -->
+  <main class="main">
+
+    <!-- ── Seller Tools Tab ── -->
+    <div class="tab-panel active" id="tab-shopping">
+      <div class="topbar">
+        <div class="topbar-left">
+          <div class="topbar-title">Amazon Seller AI</div>
+        </div>
+        <div class="topbar-right">
+          <div class="source-chip active"><span class="source-chip-dot"></span> Amazon</div>
+          <div class="source-chip active"><span class="source-chip-dot"></span> Alibaba</div>
+        </div>
+      </div>
+
+      <div class="messages" id="shopping-area">
+        <div class="welcome">
+          <div class="welcome-heading">Amazon &amp; Seller Tools</div>
+          <div class="welcome-sub">Your AI-powered FBA toolkit — research products, source suppliers, launch PPC campaigns and analyse profit margins.</div>
+          <div class="chips">
+            <div class="chip" onclick="prefillShopping('find products: ', 'e.g. wireless earbuds under $50')">🛒 Product Research</div>
+            <div class="chip" onclick="prefillShopping('find alibaba suppliers for: ', 'e.g. bamboo toothbrush')">🏭 Supplier Finder</div>
+            <div class="chip" onclick="prefillShopping('build ppc campaign for: ', 'e.g. yoga mat')">📊 PPC Builder</div>
+            <div class="chip" onclick="prefillShopping('analyse profit for: ', 'e.g. selling_price=29.99 cost_price=8.00')">💰 Profit Analyser</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="input-area">
+        <div class="attach-strip" id="shopping-attach-strip"></div>
+        <div class="input-box">
+          <button class="attach-btn" onclick="triggerAttach('shopping')" title="Attach file (PDF, DOCX, image, text)">📎</button>
+          <input type="text" id="shopping-input" placeholder="e.g. find products: yoga mat  |  find alibaba suppliers for: …  |  build ppc campaign for: …" aria-label="Shopping search" />
+          <button class="send-btn" id="shopping-btn">Search ↑</button>
+        </div>
+        <div class="input-hints">
+          <span class="hint-text">Amazon · Alibaba · PPC · Profit Optimiser · 📎 attach files</span>
+          <span class="hint-text">Press <kbd>Enter</kbd> to search</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Literature AI Tab (Research Search + Integrity Check) ── -->
+    <div class="tab-panel" id="tab-integrity">
+      <div class="topbar">
+        <div class="topbar-left">
+          <div class="topbar-title">Literature AI</div>
+        </div>
+        <div class="topbar-right">
+          <div class="source-chip active" id="lit-mode-search" onclick="setLitMode('search')" style="cursor:pointer">
+            <span class="source-chip-dot"></span> Research Search
+          </div>
+          <div class="source-chip" id="lit-mode-general" onclick="setLitMode('general')" style="cursor:pointer">
+            <span class="source-chip-dot"></span> Ask Anything
+          </div>
+          <div class="source-chip" id="lit-mode-integrity" onclick="setLitMode('integrity')" style="cursor:pointer">
+            <span class="source-chip-dot"></span> Integrity Check
+          </div>
+        </div>
+      </div>
+
+      <!-- Research Search Mode -->
+      <div id="lit-search-panel" style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+        <div class="messages" id="literature-area">
+          <div class="welcome">
+            <div class="welcome-heading">Literature AI</div>
+            <div class="welcome-sub">Search academic papers, detect AI-generated content, and run plagiarism checks — all in one place.</div>
+            <div class="chips">
+              <div class="chip" onclick="prefillLiterature()">📚 Research Papers</div>
+              <div class="chip" onclick="switchToIntegrity('ai_detection')">🤖 AI Detector</div>
+              <div class="chip" onclick="switchToIntegrity('plagiarism')">🔍 Plagiarism Check</div>
+              <div class="chip" onclick="switchToIntegrity('full_report')">📋 Full Report</div>
+            </div>
+          </div>
+        </div>
+        <div class="input-area">
+          <div class="attach-strip" id="literature-attach-strip"></div>
+          <div class="input-box">
+            <button class="attach-btn" onclick="triggerAttach('literature')" title="Attach file (PDF, DOCX, image, text)">📎</button>
+            <input type="text" id="literature-input" placeholder="Search research papers, topics, authors…" aria-label="Literature search" />
+            <button class="send-btn" id="literature-btn" onclick="sendLiteratureQuery()">Search ↑</button>
+          </div>
+          <div class="input-hints">
+            <span class="hint-text">arXiv · Semantic Scholar · AI synthesis · 📎 attach files</span>
+            <span class="hint-text">Press <kbd>Enter</kbd> to search</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ask Anything / General Search Mode -->
+      <div id="lit-general-panel" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+        <div class="messages" id="general-area">
+          <div class="welcome">
+            <div class="welcome-heading">Ask Anything</div>
+            <div class="welcome-sub">Ask any question — general knowledge, definitions, explanations, how-to guides, current topics. Powered by Claude AI.</div>
+            <div class="chips">
+              <div class="chip" onclick="prefillGeneral('What is ')">💡 General Knowledge</div>
+              <div class="chip" onclick="prefillGeneral('Explain ')">📖 Explain a Concept</div>
+              <div class="chip" onclick="prefillGeneral('How does ')">🔧 How Does It Work</div>
+              <div class="chip" onclick="prefillGeneral('What is the difference between ')">⚖️ Compare Two Things</div>
+            </div>
+          </div>
+        </div>
+        <div class="input-area">
+          <div class="attach-strip" id="general-attach-strip"></div>
+          <div class="input-box">
+            <button class="attach-btn" onclick="triggerAttach('general')" title="Attach file">📎</button>
+            <input type="text" id="general-input" placeholder="Ask anything — e.g. what is machine learning? how does GPS work?" aria-label="General search" />
+            <button class="send-btn" id="general-btn">Ask ↑</button>
+          </div>
+          <div class="input-hints">
+            <span class="hint-text">Claude AI · General Knowledge · Any topic</span>
+            <span class="hint-text">Press <kbd>Enter</kbd> to ask</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Integrity Check Mode -->
+      <div id="lit-integrity-panel" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+        <div class="messages" id="integrity-area">
+          <div class="welcome">
+            <div class="welcome-heading">Academic Integrity Check</div>
+            <div class="welcome-sub">Detect AI-generated text, scan for plagiarism, and generate full integrity reports with risk scoring.</div>
+            <div class="chips">
+              <div class="chip" onclick="setIntegrityMode('ai_detection')">🤖 AI Detection</div>
+              <div class="chip" onclick="setIntegrityMode('plagiarism')">🔍 Plagiarism Scan</div>
+              <div class="chip" onclick="setIntegrityMode('full_report')">📋 Full Report</div>
+            </div>
+          </div>
+        </div>
+        <div class="input-area">
+          <div class="attach-strip" id="integrity-attach-strip"></div>
+          <div class="input-box">
+            <button class="attach-btn" onclick="triggerAttach('integrity')" title="Attach document to check (PDF, DOCX, TXT)">📎</button>
+            <textarea id="integrity-input" placeholder="Paste text to check for AI generation or plagiarism… (min 50 words)" rows="3" aria-label="Integrity check"></textarea>
+            <button class="send-btn" id="integrity-btn">Check ↑</button>
+          </div>
+          <div class="input-hints">
+            <span class="hint-text">AI probability · Plagiarism score · Risk report · 📎 attach document</span>
+            <span class="hint-text">Press <kbd>Enter</kbd> to submit · <kbd>Ctrl+Enter</kbd> for new line</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── AI Receptionist Dashboard Tab ── -->
+    <div class="tab-panel" id="tab-receptionist">
+      <div class="topbar">
+        <div class="topbar-left">
+          <div class="topbar-title">AI Receptionist</div>
+        </div>
+        <div class="topbar-right">
+          <div class="source-chip active"><span class="source-chip-dot" style="background:#22c55e"></span> SMS</div>
+          <div class="source-chip active"><span class="source-chip-dot" style="background:#3b82f6"></span> Voice</div>
+          <div class="source-chip active"><span class="source-chip-dot" style="background:#a78bfa"></span> Web Chat</div>
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="recept-stats">
+        <div class="recept-stat">
+          <div class="recept-stat-val" id="stat-calls">—</div>
+          <div class="recept-stat-lbl">Calls today</div>
+        </div>
+        <div class="recept-stat">
+          <div class="recept-stat-val" id="stat-sms">—</div>
+          <div class="recept-stat-lbl">SMS today</div>
+        </div>
+        <div class="recept-stat">
+          <div class="recept-stat-val" id="stat-booked">—</div>
+          <div class="recept-stat-lbl">Booked</div>
+        </div>
+        <div class="recept-stat">
+          <div class="recept-stat-val" id="stat-escalations">—</div>
+          <div class="recept-stat-lbl">Escalations</div>
+        </div>
+      </div>
+
+      <!-- Sub-nav -->
+      <div class="recept-subnav">
+        <div class="recept-tab active" data-rtab="chat" onclick="switchReceptTab('chat')">💬 Chat</div>
+        <div class="recept-tab" data-rtab="activity" onclick="switchReceptTab('activity')">⚡ Activity</div>
+        <div class="recept-tab" data-rtab="escalations" onclick="switchReceptTab('escalations')">🚨 Escalations</div>
+        <div class="recept-tab" data-rtab="calendar" onclick="switchReceptTab('calendar')">📅 Calendar</div>
+      </div>
+
+      <!-- Chat panel -->
+      <div class="recept-panel" id="rtab-chat">
+        <div class="messages" id="receptionist-area">
+          <div class="welcome">
+            <div class="welcome-heading">AI Receptionist</div>
+            <div class="welcome-sub">Your 24/7 virtual receptionist — answers calls and SMS, books appointments, and handles enquiries via voice or text.</div>
+            <div class="chips">
+              <div class="chip" onclick="prefillReceptionist('What are your opening hours?')">🕐 Opening Hours</div>
+              <div class="chip" onclick="prefillReceptionist('I would like to book an appointment')">📅 Book Appointment</div>
+              <div class="chip" onclick="prefillReceptionist('What services do you offer?')">📋 Our Services</div>
+              <div class="chip" onclick="prefillReceptionist('How do I get in touch?')">📞 Contact Info</div>
+            </div>
+          </div>
+        </div>
+        <div class="input-area">
+          <div class="input-box">
+            <input type="text" id="receptionist-input" placeholder="Ask the receptionist anything…" aria-label="Receptionist chat" />
+            <button class="send-btn" id="receptionist-btn" onclick="sendReceptionistQuery()">Send ↑</button>
+          </div>
+          <div class="input-hints">
+            <span class="hint-text">Web chat · SMS · Voice · Calendar booking</span>
+            <span class="hint-text">Press <kbd>Enter</kbd> to send</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity panel -->
+      <div class="recept-panel" id="rtab-activity" style="display:none">
+        <div class="recept-feed" id="activity-feed">
+          <div class="recept-empty">Loading activity…</div>
+        </div>
+      </div>
+
+      <!-- Escalations panel -->
+      <div class="recept-panel" id="rtab-escalations" style="display:none">
+        <div class="recept-feed" id="escalations-feed">
+          <div class="recept-empty">Loading escalations…</div>
+        </div>
+      </div>
+
+      <!-- Calendar panel -->
+      <div class="recept-panel" id="rtab-calendar" style="display:none">
+        <div class="recept-feed" id="calendar-feed">
+          <div class="recept-empty">Loading appointments…</div>
+        </div>
+      </div>
+    </div>
+
+  </main>
 </div>
-<script src="/static/js/app.js"></script>
+
+<script src="/static/js/app.js?v=13"></script>
+
+<!-- ══ WELCOME OVERLAY ══ -->
+<div id="welcome-overlay">
+  <div class="wb-top-bar"></div>
+  <div class="wb-blob wb-blob-1"></div>
+  <div class="wb-blob wb-blob-2"></div>
+  <div class="wb-blob wb-blob-3"></div>
+
+  <div class="wb-inner">
+    <!-- Logo -->
+    <div class="wb-logo">
+      <svg width="44" height="44" viewBox="0 0 100 100" fill="none">
+        <defs>
+          <linearGradient id="wb-bgl" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stop-color="#ff3300"/>
+            <stop offset="26%"  stop-color="#ff8800"/>
+            <stop offset="50%"  stop-color="#2299ff"/>
+            <stop offset="74%"  stop-color="#00cc66"/>
+            <stop offset="100%" stop-color="#aa00ee"/>
+          </linearGradient>
+          <radialGradient id="wb-sheen" cx="35%" cy="25%" r="52%">
+            <stop offset="0%"   stop-color="white" stop-opacity="0.3"/>
+            <stop offset="100%" stop-color="black" stop-opacity="0"/>
+          </radialGradient>
+          <clipPath id="wb-cL">
+            <path d="M50,10 C47,9 43,9 39,11 C35,13 31,17 28,22 C25,27 23,32 21,37 C19,42 19,47 20,52 C19,57 19,62 21,67 C23,72 27,76 31,79 C35,82 40,84 45,85 C47,85 49,85 50,85 Z"/>
+          </clipPath>
+          <clipPath id="wb-cR">
+            <path d="M50,10 C53,9 57,9 61,11 C65,13 69,17 72,22 C75,27 77,32 79,37 C81,42 81,47 80,52 C81,57 81,62 79,67 C77,72 73,76 69,79 C65,82 60,84 55,85 C53,85 51,85 50,85 Z"/>
+          </clipPath>
+          <filter id="wb-gw">
+            <feGaussianBlur stdDeviation="1" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+        <g clip-path="url(#wb-cL)">
+          <rect x="0" y="0" width="50" height="100" fill="url(#wb-bgl)"/>
+          <rect x="0" y="0" width="50" height="100" fill="url(#wb-sheen)"/>
+        </g>
+        <path d="M50,10 C47,9 43,9 39,11 C35,13 31,17 28,22 C25,27 23,32 21,37 C19,42 19,47 20,52 C19,57 19,62 21,67 C23,72 27,76 31,79 C35,82 40,84 45,85 C47,85 49,85 50,85"
+              stroke="rgba(255,255,255,0.65)" stroke-width="1.5" fill="none" filter="url(#wb-gw)"/>
+        <g clip-path="url(#wb-cR)">
+          <rect x="50" y="0" width="50" height="100" fill="url(#wb-bgl)"/>
+          <rect x="50" y="0" width="50" height="100" fill="url(#wb-sheen)"/>
+        </g>
+        <path d="M50,10 C53,9 57,9 61,11 C65,13 69,17 72,22 C75,27 77,32 79,37 C81,42 81,47 80,52 C81,57 81,62 79,67 C77,72 73,76 69,79 C65,82 60,84 55,85 C53,85 51,85 50,85"
+              stroke="rgba(255,255,255,0.65)" stroke-width="1.5" fill="none" filter="url(#wb-gw)"/>
+        <line x1="50" y1="10" x2="50" y2="85" stroke="rgba(0,0,0,0.6)" stroke-width="1.8"/>
+      </svg>
+    </div>
+
+    <div class="wb-title">Agent Factory</div>
+    <div class="wb-subtitle">Your AI-powered research platform. Pick an agent to get started.</div>
+
+    <div class="wb-badge">
+      <span class="wb-badge-dot"></span>
+      Online · v2.0.0 · Powered by Claude AI
+    </div>
+
+    <!-- Agent cards -->
+    <div class="wb-cards">
+
+      <div class="wb-card wb-card-amazon" onclick="launchAgent('shopping')">
+        <span class="wb-card-icon">🛒</span>
+        <div class="wb-card-title">Amazon Seller AI</div>
+        <div class="wb-card-desc">Research products, source suppliers from Alibaba, build PPC campaigns, and optimise profit margins.</div>
+        <div class="wb-card-tags">
+          <span class="wb-tag wb-tag-gold">Product Research</span>
+          <span class="wb-tag wb-tag-gold">PPC Builder</span>
+          <span class="wb-tag wb-tag-gold">Supplier Finder</span>
+          <span class="wb-tag wb-tag-gold">Profit Analyser</span>
+        </div>
+        <div class="wb-arrow wb-arrow-gold">→</div>
+      </div>
+
+      <div class="wb-card wb-card-lit" onclick="launchAgent('integrity')">
+        <span class="wb-card-icon">🧠</span>
+        <div class="wb-card-title">Literature AI</div>
+        <div class="wb-card-desc">Search academic papers, detect AI-generated content, check plagiarism, and ask any general question.</div>
+        <div class="wb-card-tags">
+          <span class="wb-tag wb-tag-violet">Research Search</span>
+          <span class="wb-tag wb-tag-cyan">AI Detector</span>
+          <span class="wb-tag wb-tag-violet">Plagiarism Check</span>
+          <span class="wb-tag wb-tag-cyan">Ask Anything</span>
+        </div>
+        <div class="wb-arrow wb-arrow-violet">→</div>
+      </div>
+
+    </div>
+
+    <div class="wb-footer">
+      <span>Claude Haiku · arXiv · Semantic Scholar</span>
+      <span class="wb-foot-dot"></span>
+      <span>Amazon · Alibaba · RapidAPI</span>
+      <span class="wb-foot-dot"></span>
+      <span>Federation University · 2026</span>
+    </div>
+  </div>
+</div>
+
+<style>
+/* ══ WELCOME OVERLAY STYLES ══ */
+#welcome-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #07090f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+#welcome-overlay.wb-hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.wb-top-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #ff3300, #ff8800, #2299ff, #00cc66, #aa00ee);
+}
+.wb-blob {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  pointer-events: none;
+}
+.wb-blob-1 { width: 600px; height: 600px; background: #7c3aed; opacity: 0.12; top: -200px; left: -200px; }
+.wb-blob-2 { width: 500px; height: 500px; background: #00c2d4; opacity: 0.12; bottom: -150px; right: -150px; }
+.wb-blob-3 { width: 300px; height: 300px; background: #d4af37; opacity: 0.06; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+
+.wb-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  z-index: 1;
+  padding: 40px 20px;
+}
+
+/* Logo */
+.wb-logo {
+  width: 88px; height: 88px;
+  background: linear-gradient(145deg, #1a1f35, #0d1117);
+  border-radius: 24px;
+  border: 1px solid rgba(124,58,237,0.35);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 40px rgba(124,58,237,0.2), 0 8px 32px rgba(0,0,0,0.4);
+  margin-bottom: 28px;
+  position: relative;
+}
+.wb-logo::after {
+  content: '';
+  position: absolute; inset: -1px;
+  border-radius: 25px;
+  background: linear-gradient(145deg, rgba(124,58,237,0.4), transparent, rgba(0,194,212,0.2));
+  pointer-events: none;
+}
+
+.wb-title {
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  background: linear-gradient(135deg, #f0f6fc 0%, #a78bfa 50%, #00c2d4 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 12px;
+  line-height: 1.1;
+  font-family: 'Inter', sans-serif;
+}
+.wb-subtitle {
+  font-size: 15px;
+  color: #8b949e;
+  font-weight: 400;
+  margin-bottom: 8px;
+  max-width: 420px;
+  line-height: 1.6;
+  font-family: 'Inter', sans-serif;
+}
+.wb-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(124,58,237,0.12);
+  border: 1px solid rgba(124,58,237,0.25);
+  border-radius: 20px;
+  padding: 4px 12px;
+  font-size: 11px;
+  color: #a78bfa;
+  font-weight: 500;
+  margin-bottom: 48px;
+  font-family: 'Inter', sans-serif;
+}
+.wb-badge-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 6px #22c55e;
+  display: inline-block;
+}
+
+/* Cards */
+.wb-cards {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 40px;
+}
+.wb-card {
+  width: 260px;
+  background: #0d1117;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px;
+  padding: 28px 24px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  position: relative;
+  overflow: hidden;
+  text-align: left;
+}
+.wb-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: 20px 20px 0 0;
+}
+.wb-card-amazon::before { background: linear-gradient(90deg, #f59e0b, #d4af37); }
+.wb-card-lit::before    { background: linear-gradient(90deg, #7c3aed, #00c2d4); }
+
+.wb-card:hover { transform: translateY(-6px); }
+.wb-card-amazon:hover { border-color: rgba(212,175,55,0.4); box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 30px rgba(212,175,55,0.15); }
+.wb-card-lit:hover    { border-color: rgba(124,58,237,0.4);  box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 30px rgba(124,58,237,0.15); }
+
+.wb-card-icon  { font-size: 2.2rem; margin-bottom: 16px; display: block; }
+.wb-card-title { font-size: 17px; font-weight: 700; color: #f0f6fc; margin-bottom: 8px; font-family: 'Inter', sans-serif; }
+.wb-card-desc  { font-size: 13px; color: #8b949e; line-height: 1.6; margin-bottom: 20px; font-family: 'Inter', sans-serif; }
+
+.wb-card-tags  { display: flex; flex-wrap: wrap; gap: 6px; }
+.wb-tag { font-size: 10px; font-weight: 600; padding: 3px 8px; border-radius: 6px; font-family: 'Inter', sans-serif; }
+.wb-tag-gold   { background: rgba(212,175,55,0.12); color: #d4af37; border: 1px solid rgba(212,175,55,0.25); }
+.wb-tag-violet { background: rgba(124,58,237,0.12); color: #a78bfa; border: 1px solid rgba(124,58,237,0.25); }
+.wb-tag-cyan   { background: rgba(0,194,212,0.10);  color: #00c2d4; border: 1px solid rgba(0,194,212,0.25); }
+
+.wb-arrow {
+  position: absolute;
+  bottom: 24px; right: 24px;
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  transition: transform 0.2s;
+}
+.wb-card:hover .wb-arrow { transform: translateX(3px); }
+.wb-arrow-gold   { background: rgba(212,175,55,0.12); color: #d4af37; }
+.wb-arrow-violet { background: rgba(124,58,237,0.15); color: #a78bfa; }
+
+/* Footer */
+.wb-footer {
+  font-size: 11px;
+  color: #484f58;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-family: 'Inter', sans-serif;
+}
+.wb-foot-dot { width: 4px; height: 4px; border-radius: 50%; background: #484f58; }
+</style>
+
+<script>
+function launchAgent(tab) {
+  const overlay = document.getElementById("welcome-overlay");
+  overlay.classList.add("wb-hidden");
+  switchTab(tab);
+  overlay.addEventListener("transitionend", () => overlay.remove(), { once: true });
+}
+</script>
 </body>
 </html>
