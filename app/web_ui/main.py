@@ -38,6 +38,8 @@ from app.web_ui.auth_routes import router as auth_router
 from app.web_ui.receptionist_routes import router as receptionist_router
 from app.web_ui.calendar_routes import router as calendar_router
 from app.web_ui.kb_routes import router as kb_router
+from app.web_ui.twilio_routes import router as twilio_router
+from app.web_ui.dashboard_routes import router as dashboard_router
 
 # ── App setup ──────────────────────────────────────────────────
 app = FastAPI(
@@ -54,9 +56,11 @@ if os.path.isdir(_STATIC_DIR):
 # Include API routes
 app.include_router(auth_router)          # /auth/register, /auth/login, /auth/logout, /auth/me
 app.include_router(router)               # /query, /literature, /amazon, /integrity, /seller, /export, /history, /status
-app.include_router(receptionist_router)  # /receptionist
+app.include_router(receptionist_router)  # /receptionist (POST)
 app.include_router(calendar_router)      # /calendar/ics
 app.include_router(kb_router)            # /kb/upload, /kb/list, /kb/{id}, /kb/search
+app.include_router(twilio_router)        # /twilio/sms, /twilio/voice, /twilio/voice/reply
+app.include_router(dashboard_router)     # /activity, /activity/stats, /escalations, /calendar/appointments
 
 
 # ── Root — serve the chat UI ───────────────────────────────────

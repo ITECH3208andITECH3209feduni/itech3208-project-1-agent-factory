@@ -25,38 +25,9 @@ const literatureArea  = document.getElementById("literature-area");
 const literatureInput = document.getElementById("literature-input");
 const literatureBtn   = document.getElementById("literature-btn");
 
-// AI Receptionist tab
-const receptionistArea  = document.getElementById("receptionist-area");
-const receptionistInput = document.getElementById("receptionist-input");
-const receptionistBtn   = document.getElementById("receptionist-btn");
-
-// Knowledge Base tab (PROJ-279-283)
-const kbFileInput    = document.getElementById("kb-file-input");
-const kbUploadBtn    = document.getElementById("kb-upload-btn");
-const kbSearchInput  = document.getElementById("kb-search-input");
-const kbSearchBtn    = document.getElementById("kb-search-btn");
-const kbSearchResults = document.getElementById("kb-search-results");
-const kbDocList      = document.getElementById("kb-doc-list");
-const kbErrorBox     = document.getElementById("kb-error");
-
 let isLoading = false;
 let activeTab = "shopping";
 let activeLitMode = "search"; // "search" | "general" | "integrity"
-let integrityMode = "auto"; // "auto" | "ai_detection" | "plagiarism" | "full_report"
-
-// Auth (PROJ-349)
-const authModal      = document.getElementById("auth-modal");
-const authForm       = document.getElementById("auth-form");
-const authUsername   = document.getElementById("auth-username");
-const authPassword   = document.getElementById("auth-password");
-const authError      = document.getElementById("auth-error");
-const authSubmitBtn  = document.getElementById("auth-submit");
-const authSubtitle   = document.getElementById("auth-subtitle");
-const authSwitchText = document.getElementById("auth-switch-text");
-const authSwitchLink = document.getElementById("auth-switch-link");
-const userBadge      = document.getElementById("user-badge");
-const logoutBtn      = document.getElementById("logout-btn");
-let authMode = "login"; // "login" | "register"
 
 /* ── Attachment state ─────────────────────────────────────── */
 // Each entry: { name, ext, size, text, dataUrl }
@@ -245,113 +216,11 @@ function getAttachContext(panel) {
 }
 
 /* ══════════════════════════════════════════════════════════
-   AUTH (PROJ-349) — login / register / logout, gates the rest of the UI
-══════════════════════════════════════════════════════════ */
-
-/** Check for a valid session cookie. Reveals the app on success,
- * shows the login modal on 401. Always resolves (never throws). */
-async function checkAuth() {
-  try {
-    const res = await fetch(`${API_BASE}/auth/me`);
-    if (res.ok) {
-      const data = await res.json();
-      onAuthed(data.username);
-      return;
-    }
-  } catch { /* network error — fall through to login modal */ }
-  showAuthModal();
-}
-
-function onAuthed(username) {
-  document.body.classList.add("authed");
-  authModal.style.display = "none";
-  userBadge.style.display = "block";
-  userBadge.textContent = username;
-  logoutBtn.style.display = "block";
-  loadHistory();
-  loadKbDocuments();
-}
-
-function showAuthModal() {
-  document.body.classList.remove("authed");
-  authModal.style.display = "flex";
-  authUsername.focus();
-}
-
-function setAuthMode(mode) {
-  authMode = mode;
-  authError.textContent = "";
-  if (mode === "register") {
-    authSubtitle.textContent = "Create an account to get started";
-    authSubmitBtn.textContent = "Register";
-    authSwitchText.textContent = "Already have an account?";
-    authSwitchLink.textContent = "Log in";
-    authPassword.autocomplete = "new-password";
-  } else {
-    authSubtitle.textContent = "Log in to continue";
-    authSubmitBtn.textContent = "Log In";
-    authSwitchText.textContent = "Don't have an account?";
-    authSwitchLink.textContent = "Register";
-    authPassword.autocomplete = "current-password";
-  }
-}
-
-async function handleAuthSubmit(e) {
-  e.preventDefault();
-  const username = authUsername.value.trim();
-  const password = authPassword.value;
-  authError.textContent = "";
-  authSubmitBtn.disabled = true;
-
-  try {
-    const res = await fetch(`${API_BASE}/auth/${authMode === "register" ? "register" : "login"}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password }),
-    });
-    const data = await res.json().catch(() => ({}));
-
-    if (!res.ok) {
-      authError.textContent = data.detail || "Something went wrong. Try again.";
-      return;
-    }
-
-    authPassword.value = "";
-    onAuthed(data.username);
-  } catch {
-    authError.textContent = "Couldn't reach the server. Is it running?";
-  } finally {
-    authSubmitBtn.disabled = false;
-  }
-}
-
-async function handleLogout() {
-  try {
-    await fetch(`${API_BASE}/auth/logout`, { method: "POST" });
-  } catch { /* ignore — clearing local UI state either way */ }
-  document.body.classList.remove("authed");
-  userBadge.style.display = "none";
-  logoutBtn.style.display = "none";
-  historyList.innerHTML = "";
-  authUsername.value = "";
-  authPassword.value = "";
-  setAuthMode("login");
-  showAuthModal();
-}
-
-/* ══════════════════════════════════════════════════════════
    INIT
 ══════════════════════════════════════════════════════════ */
 document.addEventListener("DOMContentLoaded", () => {
   checkStatus();
-  checkAuth(); // shows the login modal, or reveals the app + loads history
-
-  authForm.addEventListener("submit", handleAuthSubmit);
-  authSwitchLink.addEventListener("click", e => {
-    e.preventDefault();
-    setAuthMode(authMode === "login" ? "register" : "login");
-  });
-  logoutBtn.addEventListener("click", handleLogout);
+  loadHistory();
 
   // Nav tab switching
   document.querySelectorAll(".nav-item[data-tab]").forEach(item => {
@@ -383,19 +252,6 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Enter" && !e.ctrlKey) { e.preventDefault(); sendIntegrityCheck(); }
   });
   integrityBtn.addEventListener("click", sendIntegrityCheck);
-
-  // AI Receptionist input — Enter to send
-  receptionistInput.addEventListener("keydown", e => {
-    if (e.key === "Enter") { e.preventDefault(); sendReceptionistQuery(); }
-  });
-  receptionistBtn.addEventListener("click", sendReceptionistQuery);
-
-  // Knowledge Base tab (PROJ-279-283)
-  if (kbUploadBtn) kbUploadBtn.addEventListener("click", uploadKbFile);
-  if (kbSearchBtn) kbSearchBtn.addEventListener("click", searchKb);
-  if (kbSearchInput) kbSearchInput.addEventListener("keydown", e => {
-    if (e.key === "Enter") { e.preventDefault(); searchKb(); }
-  });
 });
 
 /* ══════════════════════════════════════════════════════════
@@ -411,7 +267,6 @@ function switchTab(tabName) {
     panel.classList.toggle("active", panel.id === `tab-${tabName}`);
   });
   activeTab = tabName;
-  if (tabName === "kb") loadKbDocuments();
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -437,16 +292,6 @@ function switchToIntegrity(mode) {
   setIntegrityMode(mode);
   const integrityInput = document.getElementById("integrity-input");
   if (integrityInput) integrityInput.focus();
-}
-
-/** Set the active integrity check mode ("auto" | "ai_detection" | "plagiarism" | "full_report")
- *  and reflect it in the mode chips (PROJ-184-186). */
-function setIntegrityMode(mode) {
-  integrityMode = mode || "auto";
-  document.querySelectorAll("#lit-integrity-panel .chip[onclick*='setIntegrityMode']").forEach(chip => {
-    const match = chip.getAttribute("onclick").match(/setIntegrityMode\('([^']+)'\)/);
-    chip.classList.toggle("active", match && match[1] === integrityMode);
-  });
 }
 
 function setLitMode(mode) {
@@ -663,49 +508,6 @@ function prefillGeneral(prefix) {
 }
 
 /* ══════════════════════════════════════════════════════════
-   AI RECEPTIONIST TAB — POST /receptionist (PROJ-195, PROJ-209-218)
-══════════════════════════════════════════════════════════ */
-async function sendReceptionistQuery() {
-  const message = receptionistInput.value.trim();
-  if (!message || isLoading) return;
-
-  appendUserMsg(receptionistArea, message, []);
-  receptionistInput.value = "";
-  setLoading(true, receptionistBtn, receptionistInput);
-  const typingId = showTyping(receptionistArea);
-
-  try {
-    const res = await fetch(`${API_BASE}/receptionist`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message }),
-    });
-    removeTyping(typingId);
-
-    if (res.status === 401) {
-      appendErrorMsg(receptionistArea, "You've been logged out — please log in again.");
-      showAuthModal();
-      return;
-    }
-    if (!res.ok) throw new Error(`Server error: ${res.status}`);
-
-    const data = await res.json();
-    appendAgentBubble(receptionistArea, data.answer, [], "receptionist");
-  } catch (err) {
-    removeTyping(typingId);
-    appendErrorMsg(receptionistArea, err.message);
-  } finally {
-    setLoading(false, receptionistBtn, receptionistInput);
-    scrollToBottom(receptionistArea);
-  }
-}
-
-function prefillReceptionist(text) {
-  receptionistInput.value = text;
-  receptionistInput.focus();
-}
-
-/* ══════════════════════════════════════════════════════════
    INTEGRITY TAB — POST /integrity
 ══════════════════════════════════════════════════════════ */
 async function sendIntegrityCheck() {
@@ -727,7 +529,7 @@ async function sendIntegrityCheck() {
     const res = await fetch(`${API_BASE}/integrity`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, mode: integrityMode }),
+      body: JSON.stringify({ text }),
     });
     if (!res.ok) throw new Error(`Server error: ${res.status}`);
     const data = await res.json();
@@ -778,7 +580,6 @@ function appendAgentBubble(area, responseText, cards, type) {
     : type === "literature" ? "Literature"
     : type === "integrity" ? "Integrity"
     : type === "general" ? "Ask Anything"
-    : type === "receptionist" ? "AI Receptionist"
     : "Agent";
 
   row.innerHTML = `
@@ -838,22 +639,14 @@ function renderIntegrityResult(area, data) {
   const row = document.createElement("div");
   row.className = "msg-row";
 
-  if (data.error) { appendErrorMsg(area, data.error); return; }
-
-  // Support both the real /integrity response shape (flat IntegrityResponse)
-  // and a nested { result: {...} } wrapper some skills use.
+  // Support both flat result and nested .result
   const result = data.result || data;
-  const prob = typeof result.ai_probability === "number" ? result.ai_probability : 0;
-  const riskLevel = result.risk_level || (prob >= 0.7 ? "high" : prob >= 0.4 ? "medium" : "low");
-  const riskLabel = riskLevel === "high" ? "High Risk" : riskLevel === "medium" ? "Moderate Risk" : "Low Risk";
-  const pct = Math.round(prob * 100);
-  const summary = result.summary || data.response || "";
-  const classification = result.classification || "";
-  const confidence = typeof result.confidence_score === "number" ? Math.round(result.confidence_score * 100) : null;
-  const similarity = typeof result.similarity_score === "number" ? Math.round(result.similarity_score * 100) : null;
-  const details  = Array.isArray(result.details) ? result.details : [];
-  const flagged  = Array.isArray(result.flagged_passages) ? result.flagged_passages : [];
-  const matched  = Array.isArray(result.matched_sources) ? result.matched_sources : [];
+  const prob   = typeof result.ai_probability === "number" ? result.ai_probability : (data.ai_probability || 0);
+  const riskLevel = prob >= 0.7 ? "high" : prob >= 0.4 ? "medium" : "low";
+  const riskLabel = prob >= 0.7 ? "High Risk" : prob >= 0.4 ? "Moderate Risk" : "Low Risk";
+  const pct        = Math.round(prob * 100);
+  const summary    = result.summary || data.response || data.summary || "";
+  const details    = result.details || data.details || [];
 
   let detailsHtml = "";
   if (details.length > 0) {
@@ -862,38 +655,6 @@ function renderIntegrityResult(area, data) {
     }</ul>`;
   }
 
-  let flaggedHtml = "";
-  if (flagged.length > 0) {
-    flaggedHtml = `
-      <div class="summary-block" style="margin-top:12px;">
-        <div class="summary-label">Flagged Passages</div>
-        <ul style="margin-top:6px;padding-left:18px;font-size:13px;color:var(--text2);">${
-          flagged.map(p => `<li>"${escHtml(p)}"</li>`).join("")
-        }</ul>
-      </div>`;
-  }
-
-  let matchedHtml = "";
-  if (matched.length > 0) {
-    matchedHtml = `
-      <div class="summary-block" style="margin-top:12px;">
-        <div class="summary-label">Matched Sources</div>
-        <ul style="margin-top:6px;padding-left:18px;font-size:13px;color:var(--text2);">${
-          matched.map(m => {
-            const url   = m.url || m.link || "#";
-            const title = m.title || m.source || url;
-            const pctMatch = typeof m.similarity === "number" ? ` (${Math.round(m.similarity * 100)}% match)`
-                            : typeof m.match_pct === "number" ? ` (${Math.round(m.match_pct)}% match)` : "";
-            return `<li><a href="${escHtml(url)}" target="_blank" rel="noopener">${escHtml(title)}</a>${pctMatch}</li>`;
-          }).join("")
-        }</ul>
-      </div>`;
-  }
-
-  const headerLabel = classification
-    ? `${escHtml(classification)}${confidence !== null ? ` · ${confidence}% confidence` : ""}`
-    : "AI Authorship Probability";
-
   row.innerHTML = `
     ${aiAvatarHtml()}
     <div class="msg-content">
@@ -901,19 +662,15 @@ function renderIntegrityResult(area, data) {
       <div class="ai-bubble">
         <div class="integrity-card">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-            <span style="font-size:13px;font-weight:600;color:var(--text);">${headerLabel}</span>
+            <span style="font-size:13px;font-weight:600;color:var(--text);">AI Authorship Probability</span>
             <span class="risk-badge ${riskLevel}">${escHtml(riskLabel)}</span>
           </div>
           <div class="ai-prob-bar-wrap">
             <div class="ai-prob-bar ${riskLevel}" style="width:${pct}%;"></div>
           </div>
-          <div style="font-size:12px;color:var(--text2);margin-top:4px;">
-            ${pct}% likely AI-generated${similarity !== null ? ` · ${similarity}% plagiarism similarity` : ""}
-          </div>
+          <div style="font-size:12px;color:var(--text2);margin-top:4px;">${pct}% likely AI-generated</div>
           ${summary ? `<div class="summary-block" style="margin-top:12px;"><div class="summary-label">Analysis</div><div class="summary-text">${escHtml(summary)}</div></div>` : ""}
           ${detailsHtml}
-          ${flaggedHtml}
-          ${matchedHtml}
         </div>
       </div>
     </div>`;
@@ -1149,122 +906,140 @@ function fillShoppingInput(text) {
   }, 50);
 }
 
-/* ══════════════════════════════════════════════════════════
-   KNOWLEDGE BASE TAB — /kb/upload, /kb/list, /kb/{id}, /kb/search
-   (PROJ-279-283)
-══════════════════════════════════════════════════════════ */
-function kbShowError(message) {
-  if (!kbErrorBox) return;
-  kbErrorBox.textContent = message;
-  kbErrorBox.style.display = message ? "block" : "none";
+/* ══ RECEPTIONIST DASHBOARD (PROJ-386) ══ */
+
+function switchReceptTab(tabName) {
+  document.querySelectorAll(".recept-tab").forEach(t => t.classList.remove("active"));
+  document.querySelectorAll(".recept-panel[id^='rtab-']").forEach(p => (p.style.display = "none"));
+  const btn = document.querySelector(`.recept-tab[data-rtab="${tabName}"]`);
+  if (btn) btn.classList.add("active");
+  const panel = document.getElementById(`rtab-${tabName}`);
+  if (panel) panel.style.display = "flex";
+  if (tabName === "activity")    loadReceptActivity();
+  if (tabName === "escalations") loadReceptEscalations();
+  if (tabName === "calendar")    loadReceptCalendar();
 }
 
-async function loadKbDocuments() {
-  if (!kbDocList) return;
+function prefillReceptionist(text) {
+  const inp = document.getElementById("receptionist-input");
+  if (inp) { inp.value = text; inp.focus(); }
+  switchTab("receptionist");
+}
+
+async function sendReceptionistQuery() {
+  const inp = document.getElementById("receptionist-input");
+  const msgs = document.getElementById("receptionist-area");
+  const query = inp ? inp.value.trim() : "";
+  if (!query || !msgs) return;
+  inp.value = "";
+  appendReceptMsg("user", query);
+  appendReceptMsg("assistant", "…", "recept-thinking");
   try {
-    const res = await fetch(`${API_BASE}/kb/list`);
-    if (res.status === 401) return; // not logged in yet — auth modal already showing
-    if (!res.ok) throw new Error(`Server error: ${res.status}`);
+    const res = await fetch("/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
     const data = await res.json();
-    renderKbDocuments(data.documents || []);
-  } catch (err) {
-    kbShowError(`Couldn't load documents: ${err.message}`);
+    const thinking = msgs.querySelector(".recept-thinking");
+    if (thinking) thinking.remove();
+    appendReceptMsg("assistant", data.response || data.error || "No response");
+  } catch (e) {
+    const thinking = msgs.querySelector(".recept-thinking");
+    if (thinking) thinking.remove();
+    appendReceptMsg("assistant", "Error: " + e.message);
   }
 }
 
-function renderKbDocuments(documents) {
-  if (documents.length === 0) {
-    kbDocList.innerHTML = `<div class="kb-empty">No documents uploaded yet.</div>`;
-    return;
-  }
-  kbDocList.innerHTML = documents.map(doc => `
-    <div class="kb-doc-item" data-doc-id="${doc.id}">
-      <div class="kb-doc-meta">
-        <div class="kb-doc-name">${escHtml(doc.filename)}</div>
-        <div class="kb-doc-sub">${(doc.size_bytes / 1024).toFixed(1)} KB · uploaded ${new Date(doc.uploaded_at).toLocaleString()}</div>
-      </div>
-      <button class="kb-doc-delete-btn" onclick="deleteKbDocument(${doc.id})">Delete</button>
-    </div>
-  `).join("");
+function appendReceptMsg(role, text, extraClass) {
+  const msgs = document.getElementById("receptionist-area");
+  if (!msgs) return;
+  const div = document.createElement("div");
+  div.className = `chat-msg ${role}${extraClass ? " " + extraClass : ""}`;
+  div.textContent = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
 }
 
-async function uploadKbFile() {
-  kbShowError("");
-  const file = kbFileInput?.files?.[0];
-  if (!file) {
-    kbShowError("Choose a file first.");
-    return;
-  }
-  const formData = new FormData();
-  formData.append("file", file);
-
-  kbUploadBtn.disabled = true;
-  kbUploadBtn.textContent = "Uploading…";
+async function loadReceptStats() {
   try {
-    const res = await fetch(`${API_BASE}/kb/upload`, { method: "POST", body: formData });
-    if (res.status === 401) {
-      kbShowError("You've been logged out — please log in again.");
-      showAuthModal();
-      return;
-    }
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || `Server error: ${res.status}`);
-    kbFileInput.value = "";
-    await loadKbDocuments();
-  } catch (err) {
-    kbShowError(err.message);
-  } finally {
-    kbUploadBtn.disabled = false;
-    kbUploadBtn.textContent = "Upload ↑";
-  }
+    const res = await fetch("/activity/stats");
+    if (!res.ok) return;
+    const d = await res.json();
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? "—"; };
+    set("stat-calls", d.calls ?? d.voice ?? 0);
+    set("stat-sms", d.sms ?? 0);
+    set("stat-booked", d.appointments ?? d.booked ?? 0);
+    set("stat-escalations", d.escalations ?? 0);
+  } catch (_) { /* backend not yet wired — silently skip */ }
 }
 
-async function deleteKbDocument(docId) {
-  kbShowError("");
+async function loadReceptActivity() {
+  const feed = document.getElementById("activity-feed");
+  if (!feed) return;
   try {
-    const res = await fetch(`${API_BASE}/kb/${docId}`, { method: "DELETE" });
-    if (res.status === 401) {
-      kbShowError("You've been logged out — please log in again.");
-      showAuthModal();
-      return;
-    }
-    if (!res.ok) throw new Error(`Server error: ${res.status}`);
-    await loadKbDocuments();
-  } catch (err) {
-    kbShowError(`Couldn't delete document: ${err.message}`);
-  }
+    const res = await fetch("/activity");
+    if (!res.ok) throw new Error("no data");
+    const items = await res.json();
+    if (!items.length) { feed.innerHTML = '<p class="recept-empty">No recent activity.</p>'; return; }
+    feed.innerHTML = items.map(i => `
+      <div class="recept-row">
+        <div class="recept-row-header">
+          <span class="recept-row-badge badge-${(i.channel||"web").toLowerCase()}">${i.channel || "web"}</span>
+          <span class="recept-row-time">${i.time || ""}</span>
+        </div>
+        <div class="recept-row-body">${escapeHtml(i.summary || i.message || "")}</div>
+      </div>`).join("");
+  } catch (_) { feed.innerHTML = '<p class="recept-empty">Activity data loading…</p>'; }
 }
 
-async function searchKb() {
-  const query = kbSearchInput.value.trim();
-  if (!query) return;
-  kbSearchResults.innerHTML = `<div class="kb-no-results">Searching…</div>`;
+async function loadReceptEscalations() {
+  const feed = document.getElementById("escalations-feed");
+  if (!feed) return;
   try {
-    const res = await fetch(`${API_BASE}/kb/search?q=${encodeURIComponent(query)}`);
-    if (res.status === 401) {
-      showAuthModal();
-      return;
-    }
-    if (!res.ok) throw new Error(`Server error: ${res.status}`);
-    const data = await res.json();
-    renderKbSearchResults(data.results || []);
-  } catch (err) {
-    kbSearchResults.innerHTML = `<div class="kb-no-results">Error: ${escHtml(err.message)}</div>`;
-  }
+    const res = await fetch("/escalations");
+    if (!res.ok) throw new Error("no data");
+    const items = await res.json();
+    if (!items.length) { feed.innerHTML = '<p class="recept-empty">No open escalations.</p>'; return; }
+    feed.innerHTML = items.map(i => `
+      <div class="recept-row">
+        <div class="recept-row-header">
+          <span class="recept-row-badge badge-${(i.priority||"web").toLowerCase()}">${i.priority || "normal"}</span>
+          <span class="recept-row-time">${i.time || ""}</span>
+        </div>
+        <div class="recept-row-body">${escapeHtml(i.reason || i.message || "")}</div>
+      </div>`).join("");
+  } catch (_) { feed.innerHTML = '<p class="recept-empty">Escalation data loading…</p>'; }
 }
 
-function renderKbSearchResults(results) {
-  if (results.length === 0) {
-    kbSearchResults.innerHTML = `<div class="kb-no-results">No matching documents.</div>`;
-    return;
-  }
-  kbSearchResults.innerHTML = results.map(r => `
-    <div class="kb-result">
-      <div class="kb-result-title">
-        <span>${escHtml(r.filename)}</span>
-        <span class="kb-result-score">${Math.round(r.score * 100)}% match</span>
-      </div>
-      <div class="kb-result-snippet">${escHtml(r.snippet)}</div>
-    </div>
-  `).join("");
+async function loadReceptCalendar() {
+  const feed = document.getElementById("calendar-feed");
+  if (!feed) return;
+  try {
+    const res = await fetch("/calendar/appointments");
+    if (!res.ok) throw new Error("no data");
+    const items = await res.json();
+    if (!items.length) { feed.innerHTML = '<p class="recept-empty">No upcoming appointments.</p>'; return; }
+    feed.innerHTML = items.map(i => `
+      <div class="cal-row">
+        <div class="cal-row-time">${escapeHtml(i.datetime || i.time || "")}</div>
+        <div class="cal-row-summary">${escapeHtml(i.summary || i.title || "")}</div>
+        <div class="cal-row-from">${escapeHtml(i.caller || i.from || "")}</div>
+      </div>`).join("");
+  } catch (_) { feed.innerHTML = '<p class="recept-empty">Calendar data loading…</p>'; }
 }
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+/* Wire up receptionist input on Enter */
+document.addEventListener("DOMContentLoaded", () => {
+  const inp = document.getElementById("receptionist-input");
+  if (inp) {
+    inp.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReceptionistQuery(); } });
+  }
+  /* Poll stats every 30s when receptionist tab is visible */
+  loadReceptStats();
+  setInterval(loadReceptStats, 30_000);
+});
