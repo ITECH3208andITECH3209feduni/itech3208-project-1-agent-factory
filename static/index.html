@@ -439,6 +439,19 @@
         <div class="wb-arrow wb-arrow-violet">→</div>
       </div>
 
+      <div class="wb-card wb-card-recept" onclick="launchAgent('receptionist')">
+        <span class="wb-card-icon">📞</span>
+        <div class="wb-card-title">AI Receptionist</div>
+        <div class="wb-card-desc">24/7 virtual receptionist — answers calls and SMS, books appointments, and handles enquiries via voice or text.</div>
+        <div class="wb-card-tags">
+          <span class="wb-tag wb-tag-teal">Voice & SMS</span>
+          <span class="wb-tag wb-tag-teal">Appointments</span>
+          <span class="wb-tag wb-tag-green">FAQ Lookup</span>
+          <span class="wb-tag wb-tag-green">Escalations</span>
+        </div>
+        <div class="wb-arrow wb-arrow-teal">→</div>
+      </div>
+
     </div>
 
     <div class="wb-footer">
@@ -581,10 +594,12 @@
 }
 .wb-card-amazon::before { background: linear-gradient(90deg, #f59e0b, #d4af37); }
 .wb-card-lit::before    { background: linear-gradient(90deg, #7c3aed, #00c2d4); }
+.wb-card-recept::before { background: linear-gradient(90deg, #00c2d4, #00e6a0); }
 
 .wb-card:hover { transform: translateY(-6px); }
 .wb-card-amazon:hover { border-color: rgba(212,175,55,0.4); box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 30px rgba(212,175,55,0.15); }
 .wb-card-lit:hover    { border-color: rgba(124,58,237,0.4);  box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 30px rgba(124,58,237,0.15); }
+.wb-card-recept:hover { border-color: rgba(0,194,212,0.4);   box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 30px rgba(0,194,212,0.15); }
 
 .wb-card-icon  { font-size: 2.2rem; margin-bottom: 16px; display: block; }
 .wb-card-title { font-size: 17px; font-weight: 700; color: #f0f6fc; margin-bottom: 8px; font-family: 'Inter', sans-serif; }
@@ -595,6 +610,8 @@
 .wb-tag-gold   { background: rgba(212,175,55,0.12); color: #d4af37; border: 1px solid rgba(212,175,55,0.25); }
 .wb-tag-violet { background: rgba(124,58,237,0.12); color: #a78bfa; border: 1px solid rgba(124,58,237,0.25); }
 .wb-tag-cyan   { background: rgba(0,194,212,0.10);  color: #00c2d4; border: 1px solid rgba(0,194,212,0.25); }
+.wb-tag-teal   { background: rgba(0,194,212,0.10);  color: #00c2d4; border: 1px solid rgba(0,194,212,0.25); }
+.wb-tag-green  { background: rgba(0,230,160,0.10);  color: #00e6a0; border: 1px solid rgba(0,230,160,0.25); }
 
 .wb-arrow {
   position: absolute;
@@ -608,6 +625,7 @@
 .wb-card:hover .wb-arrow { transform: translateX(3px); }
 .wb-arrow-gold   { background: rgba(212,175,55,0.12); color: #d4af37; }
 .wb-arrow-violet { background: rgba(124,58,237,0.15); color: #a78bfa; }
+.wb-arrow-teal   { background: rgba(0,194,212,0.12);  color: #00c2d4; }
 
 /* Footer */
 .wb-footer {
