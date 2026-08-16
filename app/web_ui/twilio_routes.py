@@ -23,6 +23,8 @@ from twilio.twiml.messaging_response import MessagingResponse
 from twilio.twiml.voice_response import Gather, VoiceResponse
 
 from agent.orchestrator import Orchestrator
+from app.web_ui.activity_db import log_activity
+from app.web_ui.receptionist_routes import log_escalation
 
 router = APIRouter()
 
@@ -70,8 +72,15 @@ async def sms_webhook(
         if not validator.validate(url, dict(form), sig):
             return Response(content="Forbidden", status_code=403)
 
-    rendered, _ = _orchestrator.run(Body or "Hello")
+    rendered, result = _orchestrator.run(Body or "Hello")
     reply = _strip_markdown(rendered)[:1600]  # Twilio SMS limit
+
+    log_activity(
+        channel="sms",
+        caller=From or "unknown",
+        intent=result.skill_name if result else "",
+        summary=(result.summary if result else reply)[:200],
+    )
 
     twiml = MessagingResponse()
     twiml.message(reply)
@@ -154,8 +163,15 @@ async def voice_reply(
         resp.hangup()
         return Response(content=str(resp), media_type="application/xml")
 
-    rendered, _ = _orchestrator.run(query)
+    rendered, result = _orchestrator.run(query)
     reply = _strip_markdown(rendered)
+
+    log_activity(
+        channel="voice",
+        caller=CallSid or "unknown",
+        intent=result.skill_name if result else "",
+        summary=(result.summary if result else reply[:200]),
+    )
 
     # Trim to ~250 words for voice suitability
     words = reply.split()
