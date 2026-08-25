@@ -16,15 +16,18 @@ from config.settings import MEMORY_DB
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS activity (
-    id        INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp TEXT    NOT NULL,
-    channel   TEXT    NOT NULL,
-    caller    TEXT    NOT NULL DEFAULT '',
-    intent    TEXT    NOT NULL DEFAULT '',
-    summary   TEXT    NOT NULL DEFAULT ''
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp      TEXT    NOT NULL,
+    channel        TEXT    NOT NULL,
+    caller         TEXT    NOT NULL DEFAULT '',
+    intent         TEXT    NOT NULL DEFAULT '',
+    summary        TEXT    NOT NULL DEFAULT '',
+    caller_message TEXT    NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_activity_ts ON activity (timestamp);
 """
+
+_MIGRATE = "ALTER TABLE activity ADD COLUMN caller_message TEXT NOT NULL DEFAULT ''"
 
 _db: sqlite3.Connection | None = None
 
@@ -37,21 +40,33 @@ def _get_db() -> sqlite3.Connection:
         _db.row_factory = sqlite3.Row
         _db.execute("PRAGMA journal_mode=WAL")
         _db.executescript(_SCHEMA)
+        try:
+            _db.execute(_MIGRATE)
+            _db.commit()
+        except Exception:
+            pass  # column already exists
     return _db
 
 
-def log_activity(channel: str, caller: str, intent: str = "", summary: str = "") -> None:
+def log_activity(
+    channel: str,
+    caller: str,
+    intent: str = "",
+    summary: str = "",
+    caller_message: str = "",
+) -> None:
     """Insert one interaction row into the activity table."""
     db = _get_db()
     db.execute(
-        "INSERT INTO activity (timestamp, channel, caller, intent, summary)"
-        " VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO activity (timestamp, channel, caller, intent, summary, caller_message)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
         (
             datetime.now(timezone.utc).isoformat(),
             channel,
             caller,
             (intent or "")[:100],
             (summary or "")[:300],
+            (caller_message or "")[:300],
         ),
     )
     db.commit()

@@ -263,6 +263,10 @@
       <div class="topbar">
         <div class="topbar-left">
           <div class="topbar-title">AI Receptionist</div>
+          <div class="client-switcher">
+            <span class="client-label">Client:</span>
+            <select id="client-select" onchange="switchClient(this.value)"></select>
+          </div>
         </div>
         <div class="topbar-right">
           <div class="source-chip active"><span class="source-chip-dot" style="background:#22c55e"></span> SMS</div>

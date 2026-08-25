@@ -258,15 +258,14 @@ document.addEventListener("DOMContentLoaded", () => {
    TAB SWITCHING
 ══════════════════════════════════════════════════════════ */
 function switchTab(tabName) {
-  // Update nav
   document.querySelectorAll(".nav-item[data-tab]").forEach(item => {
     item.classList.toggle("active", item.dataset.tab === tabName);
   });
-  // Show/hide panels
   document.querySelectorAll(".tab-panel").forEach(panel => {
     panel.classList.toggle("active", panel.id === `tab-${tabName}`);
   });
   activeTab = tabName;
+  if (tabName === "receptionist") loadClients();
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -961,6 +960,28 @@ function appendReceptMsg(role, text, extraClass) {
   msgs.scrollTop = msgs.scrollHeight;
 }
 
+async function loadClients() {
+  try {
+    const [listRes, activeRes] = await Promise.all([fetch("/clients"), fetch("/clients/active")]);
+    const clients = await listRes.json();
+    const active  = await activeRes.json();
+    const sel = document.getElementById("client-select");
+    if (!sel) return;
+    sel.innerHTML = clients.map(c =>
+      `<option value="${c.id}" ${c.id === active.active_id ? "selected" : ""}>${c.name}</option>`
+    ).join("");
+  } catch (_) {}
+}
+
+async function switchClient(id) {
+  try {
+    await fetch("/clients/active", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({id}) });
+    const active = await (await fetch("/clients/active")).json();
+    const banner = document.getElementById("client-banner");
+    if (banner) banner.textContent = active.name;
+  } catch (_) {}
+}
+
 async function loadReceptStats() {
   try {
     const res = await fetch("/activity/stats");
@@ -982,14 +1003,47 @@ async function loadReceptActivity() {
     if (!res.ok) throw new Error("no data");
     const items = await res.json();
     if (!items.length) { feed.innerHTML = '<p class="recept-empty">No recent activity.</p>'; return; }
-    feed.innerHTML = items.map(i => `
-      <div class="recept-row">
-        <div class="recept-row-header">
-          <span class="recept-row-badge badge-${(i.channel||"web").toLowerCase()}">${i.channel || "web"}</span>
-          <span class="recept-row-time">${i.time || ""}</span>
-        </div>
-        <div class="recept-row-body">${escapeHtml(i.summary || i.message || "")}</div>
-      </div>`).join("");
+
+    // Group turns by session (caller ID), preserving newest-session-first order
+    const sessionOrder = [];
+    const sessions = {};
+    for (const item of items) {
+      const key = item.caller || "unknown";
+      if (!sessions[key]) { sessions[key] = []; sessionOrder.push(key); }
+      sessions[key].push(item);
+    }
+
+    feed.innerHTML = sessionOrder.map(key => {
+      const turns = sessions[key];
+      const first = turns[0]; // newest turn (list is newest-first)
+      const ch = (first.channel || "web").toLowerCase();
+
+      // Human-readable session label
+      let label = key;
+      if (ch === "voice") {
+        // CallSid is opaque — show short tail
+        label = "Call …" + key.slice(-6);
+      } else if (key.startsWith("+")) {
+        label = key; // phone number for SMS
+      }
+
+      const turnsHtml = [...turns].reverse().map(i => `
+        <div class="session-turn">
+          ${i.caller_message ? `<div class="recept-row-caller"><span class="recept-caller-label">Caller</span> ${escapeHtml(i.caller_message)}</div>` : ""}
+          <div class="recept-row-body"><span class="recept-ai-label">AI</span> ${escapeHtml(i.summary || i.message || "")}</div>
+          <div class="session-turn-time">${i.time || ""}</div>
+        </div>`).join("");
+
+      return `
+        <div class="session-card">
+          <div class="session-header">
+            <span class="recept-row-badge badge-${ch}">${first.channel || "web"}</span>
+            <span class="session-caller">${escapeHtml(label)}</span>
+            <span class="session-meta">${turns.length} turn${turns.length !== 1 ? "s" : ""} · ${first.time || ""}</span>
+          </div>
+          <div class="session-turns">${turnsHtml}</div>
+        </div>`;
+    }).join("");
   } catch (_) { feed.innerHTML = '<p class="recept-empty">Activity data loading…</p>'; }
 }
 

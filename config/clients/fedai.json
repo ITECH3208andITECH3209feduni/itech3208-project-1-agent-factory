@@ -1,0 +1,56 @@
+{
+  "id": "fedai",
+  "name": "FedAI",
+  "tagline": "AI Receptionist Prototype for Federation University — Student & Library Support",
+  "greeting": "Hi, I'm FedAI — a student-built AI receptionist prototype for Federation University. I can help with library hours, borrowing, referencing, and general student questions. How can I help?",
+  "goodbye": "Thanks for chatting with FedAI. If I couldn't fully answer your question, please contact the Library or Student Services directly. Have a great day!",
+  "missed_call_text": "Hi! This is FedAI, a student project prototype for Federation University. Reply here and I'll try to help with your question.",
+  "contact": {
+    "email": "library@federation.edu.au",
+    "website": "www.federation.edu.au",
+    "address": "Multiple campuses: Mt Helen, Berwick, Gippsland, SMB, Wimmera",
+    "timezone": "Australia/Melbourne"
+  },
+  "hours": {
+    "monday":    "Library: Mt Helen/Gippsland/Berwick 8:30am-5pm, SMB 8:30am-4:30pm, Wimmera 10am-2pm",
+    "tuesday":   "Library: Mt Helen/Gippsland/Berwick 8:30am-5pm, SMB 8:30am-4:30pm, Wimmera 10am-2pm",
+    "wednesday": "Library: Mt Helen/Gippsland/Berwick 8:30am-5pm, SMB 8:30am-4:30pm, Wimmera 10am-2pm",
+    "thursday":  "Library: Mt Helen/Gippsland/Berwick 8:30am-5pm, SMB 8:30am-4:30pm, Wimmera 10am-2pm",
+    "friday":    "Library: Mt Helen/Gippsland/Berwick 8:30am-5pm, SMB 8:30am-4:30pm, Wimmera 10am-2pm",
+    "saturday":  "Library closed — FedAI available 24/7 for general questions",
+    "sunday":    "Library closed — FedAI available 24/7 for general questions"
+  },
+  "services": [
+    {"name": "Library Support",   "price": "Free",  "description": "Borrowing, returns, referencing (FedCite), database access, study space booking"},
+    {"name": "Student Essentials","price": "Free",  "description": "Enrolment basics, timetables, key dates, general fee info"},
+    {"name": "Get Started",       "price": "Free",  "description": "Orientation info, new student checklist, tech requirements, student ID"},
+    {"name": "Wellbeing Support", "price": "Free",  "description": "Pointers to counselling, health and financial wellbeing services"},
+    {"name": "Career Ready",      "price": "Free",  "description": "Career advice, job search support, work experience pointers"}
+  ],
+  "faqs": [
+    {"q": "How do I find my textbook?", "a": "Ordering items is done through School Locker: select 'Subjects', choose your semester, search by unit code, then add items to your cart and check out. Wimmera-based students can also purchase from the Horsham Campus Bookshop (phone 5362 2651 or email horsham.bookshop@federation.edu.au)."},
+    {"q": "What is MIMS Online?", "a": "eMIMSelite is the web version of MIMS — Australia's comprehensive pharmaceutical database, covering over 4,500 prescription and non-prescription drugs. Federation University students and staff can log in using their university credentials."},
+    {"q": "How long can I borrow books for?", "a": "It depends on your student type: Undergraduate and TAFE students can borrow books for 14 days (2 weeks), and Postgraduate students can borrow for 42 days (6 weeks). Textbooks are a 2-week loan for all Fed Uni staff and students."},
+    {"q": "What are the library hours?", "a": "Hours vary by campus and change regularly — Mt Helen, Gippsland and Berwick are typically 8:30am-5pm, SMB is 8:30am-4:30pm, and Wimmera is 10am-2pm on weekdays. Always check the Library's live hours page for today's exact hours, since they can vary."},
+    {"q": "How do I contact the library?", "a": "You can chat with a librarian online, email library@federation.edu.au, call 1800 333 864 (1800 FED UNI), or visit any of our five campus libraries. Live support is generally available 9am-5pm Monday to Friday."},
+    {"q": "How do I book a study space?", "a": "You can reserve a meeting room or study space in advance through the Library's online booking system, so you've got a space when you need it."},
+    {"q": "What quicklinks do current students need?", "a": "The main student systems are my Student Centre, Moodle, student email (Outlook), mySchedule, the Co-op placement portal, and InPlace — all accessible from the Current Students page."},
+    {"q": "Who do I talk to about enrolment or fees?", "a": "For anything account-specific — your enrolment status, fees owed, or results — please contact Student Services directly or log in to my Student Centre, since I don't have access to individual student accounts."},
+    {"q": "I'm having a personal or safety concern, what do I do?", "a": "Please reach out to Federation's Respect and Safety service directly, or in an emergency call 1800 333 864. I can flag this for a real person to follow up, but safety concerns need direct human support."}
+  ],
+  "booking": {
+    "enabled": false,
+    "fields": [],
+    "payment_terms": "Not applicable — FedAI does not process payments or bookings"
+  },
+  "personality": {
+    "style": "helpful, clear, honest about being a student-built prototype — never claims to be an official Federation University service",
+    "transfer_phrase": "let me flag this for a real person at the Library or Student Services to follow up"
+  },
+  "rag_enabled": true,
+  "escalation": {
+    "keywords": ["visa", "appeal", "complaint", "crisis", "counsellor", "counseling", "emergency", "safety", "mental health", "harassment", "misconduct", "talk to a human", "real person"],
+    "priority_keywords": ["crisis", "emergency", "safety", "harassment", "mental health"],
+    "note": "This is a student capstone project prototype, not an official Federation University channel. Not authorized to represent the university publicly. All library FAQ content is sourced from federation.edu.au's own public FAQ pages (libanswers.federation.edu.au), not from licensed/paywalled resources."
+  }
+}

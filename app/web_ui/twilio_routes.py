@@ -22,14 +22,14 @@ from fastapi.responses import Response
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.twiml.voice_response import Gather, VoiceResponse
 
-from agent.orchestrator import Orchestrator
+from agent.receptionist import Receptionist
 from app.web_ui.activity_db import log_activity
 from app.web_ui.dashboard_routes import log_escalation
+from app.web_ui.client_manager import get_active_client, build_system_prompt
 
 router = APIRouter()
 
-# One shared orchestrator — the memory module handles per-session context via session_id
-_orchestrator = Orchestrator()
+_receptionist = Receptionist()
 
 POLLY_VOICE = "Polly.Joanna"
 POLLY_LANG = "en-AU"
@@ -45,6 +45,26 @@ def _strip_markdown(text: str) -> str:
     text = re.sub(r"^[-*•]\s+", "", text, flags=re.MULTILINE)  # bullets
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+_EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001F300-\U0001FAFF"  # symbols/pictographs, emoticons, transport, supplemental
+    "\U00002600-\U000027BF"  # misc symbols, dingbats
+    "\U0001F1E6-\U0001F1FF"  # regional indicators (flags)
+    "\U00002700-\U000027BF"
+    "\U0001F900-\U0001F9FF"
+    "\U00002B00-\U00002BFF"
+    "\U0000FE0F"              # variation selector (emoji presentation)
+    "]+"
+)
+
+
+def _strip_emoji(text: str) -> str:
+    """Polly reads emoji aloud on voice calls instead of silently skipping
+    them — strip before speaking. Left out of SMS, where emoji are normal."""
+    text = _EMOJI_PATTERN.sub("", text)
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
 
 
 # ── SMS ────────────────────────────────────────────────────────
@@ -72,14 +92,18 @@ async def sms_webhook(
         if not validator.validate(url, dict(form), sig):
             return Response(content="Forbidden", status_code=403)
 
-    rendered, result = _orchestrator.run(Body or "Hello")
-    reply = _strip_markdown(rendered)[:1600]  # Twilio SMS limit
+    client = get_active_client()
+    system_prompt = build_system_prompt(client, query=Body)
+    result = _receptionist.handle(Body or "Hello", session_id=From, system_prompt=system_prompt,
+                                    skip_global_faq=client.get("rag_enabled", False))
+    reply = _strip_markdown(result["answer"])[:1600]  # Twilio SMS limit
 
     log_activity(
         channel="sms",
         caller=From or "unknown",
-        intent=result.skill_name if result else "",
-        summary=(result.summary if result else reply)[:200],
+        intent=result.get("intent", ""),
+        summary=reply[:200],
+        caller_message=Body,
     )
 
     twiml = MessagingResponse()
@@ -96,6 +120,8 @@ async def voice_greeting(request: Request) -> Response:
     a Gather element to capture speech input.
     PROJ-384
     """
+    client = get_active_client()
+    greeting = _strip_emoji(client.get("greeting", "Hello! How can I help you today?"))
     resp = VoiceResponse()
     gather = Gather(
         input="speech",
@@ -104,13 +130,8 @@ async def voice_greeting(request: Request) -> Response:
         speech_timeout="auto",
         language=POLLY_LANG,
     )
-    gather.say(
-        "Hello! Thank you for calling Agent Factory. How can I help you today?",
-        voice=POLLY_VOICE,
-        language=POLLY_LANG,
-    )
+    gather.say(greeting, voice=POLLY_VOICE, language=POLLY_LANG)
     resp.append(gather)
-    # Fallback if no speech detected
     resp.say(
         "Sorry, I didn't hear anything. Please call back when you're ready.",
         voice=POLLY_VOICE,
@@ -137,11 +158,8 @@ async def voice_reply(
 
     # Goodbye detection
     if any(kw in query.lower() for kw in GOODBYE_WORDS):
-        resp.say(
-            "Thank you for calling Agent Factory. Have a wonderful day. Goodbye!",
-            voice=POLLY_VOICE,
-            language=POLLY_LANG,
-        )
+        goodbye = _strip_emoji(get_active_client().get("goodbye", "Thank you for calling. Have a wonderful day. Goodbye!"))
+        resp.say(goodbye, voice=POLLY_VOICE, language=POLLY_LANG)
         resp.hangup()
         return Response(content=str(resp), media_type="application/xml")
 
@@ -163,14 +181,18 @@ async def voice_reply(
         resp.hangup()
         return Response(content=str(resp), media_type="application/xml")
 
-    rendered, result = _orchestrator.run(query)
-    reply = _strip_markdown(rendered)
+    client = get_active_client()
+    system_prompt = build_system_prompt(client, query=query)
+    result = _receptionist.handle(query, session_id=CallSid, system_prompt=system_prompt,
+                                    skip_global_faq=client.get("rag_enabled", False))
+    reply = _strip_emoji(_strip_markdown(result["answer"]))
 
     log_activity(
         channel="voice",
         caller=CallSid or "unknown",
-        intent=result.skill_name if result else "",
-        summary=(result.summary if result else reply[:200]),
+        intent=result.get("intent", ""),
+        summary=reply[:200],
+        caller_message=query,
     )
 
     # Trim to ~250 words for voice suitability
@@ -188,11 +210,17 @@ async def voice_reply(
         speech_timeout="auto",
         language=POLLY_LANG,
     )
-    gather.say(
-        "Is there anything else I can help you with?",
-        voice=POLLY_VOICE,
-        language=POLLY_LANG,
-    )
+    # If the AI's own reply already ends in a question (e.g. a clarifying
+    # follow-up like "Which campus are you based at?"), don't also stack
+    # the generic "anything else" prompt on top of it — the caller would
+    # hear two different questions back to back and not know which one to
+    # answer. Just listen for their answer to the AI's own question.
+    if not reply.rstrip().endswith("?"):
+        gather.say(
+            "Is there anything else I can help you with?",
+            voice=POLLY_VOICE,
+            language=POLLY_LANG,
+        )
     resp.append(gather)
     resp.say(
         "Thank you for calling. Goodbye!",

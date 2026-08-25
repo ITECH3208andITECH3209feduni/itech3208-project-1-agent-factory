@@ -1,0 +1,42 @@
+{
+  "id": "agent_factory",
+  "name": "Agent Factory",
+  "tagline": "AI Receptionist Platform — Demo",
+  "greeting": "Hello! Thank you for calling Agent Factory. How can I help you today?",
+  "goodbye": "Thank you for calling Agent Factory. Have a wonderful day. Goodbye!",
+  "missed_call_text": "Hi! You just called Agent Factory but we missed you. Reply here and our AI will assist you right away.",
+  "contact": {
+    "email": "hello@agentfactory.ai",
+    "website": "agentfactory.ai",
+    "address": "Melbourne, Australia",
+    "timezone": "Australia/Melbourne"
+  },
+  "hours": {
+    "monday":    "24/7",
+    "tuesday":   "24/7",
+    "wednesday": "24/7",
+    "thursday":  "24/7",
+    "friday":    "24/7",
+    "saturday":  "24/7",
+    "sunday":    "24/7"
+  },
+  "services": [
+    {"name": "AI Receptionist",      "price": "Contact us", "description": "24/7 phone, SMS and web chat receptionist powered by Claude AI"},
+    {"name": "Literature Research",  "price": "Contact us", "description": "AI-powered academic paper search via arXiv and Semantic Scholar"},
+    {"name": "Amazon Research",      "price": "Contact us", "description": "Product and seller intelligence via Playwright and RapidAPI"}
+  ],
+  "faqs": [
+    {"q": "What are your hours?",    "a": "Agent Factory AI is available 24/7 — phone, SMS, and web chat are always on. There are no closed hours."},
+    {"q": "What do you offer?",      "a": "Agent Factory offers AI-powered literature research, Amazon product research, and a 24/7 AI receptionist for appointments, FAQs, and general questions."},
+    {"q": "How do I book a demo?",   "a": "Just tell me a date and time and I'll get it on the calendar for you."}
+  ],
+  "booking": {
+    "enabled": true,
+    "fields": ["name", "email", "date", "notes"],
+    "payment_terms": ""
+  },
+  "personality": {
+    "style": "professional, concise, tech-savvy",
+    "transfer_phrase": "let me connect you with our team"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "id": "chase_exotic",
+  "name": "Chase Exotic",
+  "tagline": "Premium Exotic Car Rentals — Las Vegas",
+  "greeting": "Thank you for calling Chase Exotic, Las Vegas's premier exotic car rental. How can I help you today?",
+  "goodbye": "Thank you for calling Chase Exotic. We look forward to making your experience unforgettable. Have a wonderful day!",
+  "missed_call_text": "Hi! You just called Chase Exotic but we missed you. Reply here or call us back — we'd love to get you behind the wheel of something special.",
+  "contact": {
+    "email": "info@chaseexotic.com",
+    "website": "www.chaseexotic.com",
+    "address": "Las Vegas, Nevada",
+    "timezone": "America/Los_Angeles"
+  },
+  "hours": {
+    "monday":    "8:00 AM - 6:00 PM",
+    "tuesday":   "8:00 AM - 6:00 PM",
+    "wednesday": "8:00 AM - 6:00 PM",
+    "thursday":  "8:00 AM - 6:00 PM",
+    "friday":    "8:00 AM - 6:00 PM",
+    "saturday":  "8:00 AM - 6:00 PM",
+    "sunday":    "8:00 AM - 6:00 PM"
+  },
+  "services": [
+    {"name": "Lamborghini Huracan",   "price": "$1,200/day", "description": "V10 supercar, the ultimate driving experience"},
+    {"name": "Ferrari 488",           "price": "$1,100/day", "description": "Italian masterpiece with 660hp twin-turbo"},
+    {"name": "McLaren 720S",          "price": "$1,300/day", "description": "British precision engineering, 710hp"},
+    {"name": "Rolls-Royce Ghost",     "price": "$1,500/day", "description": "Ultimate luxury for weddings and events"},
+    {"name": "Bentley Continental GT","price": "$900/day",   "description": "Grand touring luxury"}
+  ],
+  "faqs": [
+    {"q": "What are your hours?",         "a": "We are open 7 days a week from 8:00 AM to 6:00 PM."},
+    {"q": "Where are you located?",       "a": "We are located in Las Vegas, Nevada. Our team will provide the exact pickup location when your booking is confirmed."},
+    {"q": "What is your most popular car?","a": "Our most popular vehicles are the Lamborghini Huracan and the Rolls-Royce Ghost for weddings and special occasions."},
+    {"q": "Do you require a deposit?",    "a": "Yes, we require a deposit to secure your booking. Our team will provide full details when confirming your reservation."},
+    {"q": "What do you need to rent a car?","a": "You need a valid driver's license, to be at least 25 years old, and a major credit card. Insurance documentation may also be required."},
+    {"q": "Do you offer airport delivery?","a": "Yes, we offer delivery and pickup services. Please mention this when making your booking and our team will arrange the details."}
+  ],
+  "booking": {
+    "enabled": true,
+    "fields": ["name", "phone", "date", "service", "occasion", "notes"],
+    "payment_terms": "50% deposit required, balance due on day of rental"
+  },
+  "personality": {
+    "style": "professional, enthusiastic, knowledgeable about luxury cars",
+    "transfer_phrase": "let me connect you with our reservations team"
+  }
+}

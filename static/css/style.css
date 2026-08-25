@@ -139,9 +139,12 @@ body {
   border-bottom: 1px solid var(--border);
   background: var(--surface); flex-shrink: 0;
 }
-.topbar-left { display: flex; align-items: center; gap: 16px; }
+.topbar-left { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .topbar-title { font-size: 14px; font-weight: 600; color: var(--text); }
 .topbar-right { display: flex; align-items: center; gap: 8px; }
+.client-switcher { display: flex; align-items: center; gap: 6px; }
+.client-label { font-size: 11px; color: var(--text2); font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; }
+#client-select { font-size: 12px; font-weight: 600; background: var(--surface2); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 3px 8px; cursor: pointer; }
 
 .source-chip {
   display: flex; align-items: center; gap: 5px;
@@ -530,7 +533,30 @@ body {
 .badge-voice { background: rgba(59,130,246,0.12); color: #3b82f6; }
 .badge-web   { background: rgba(167,139,250,0.12); color: #a78bfa; }
 .recept-row-time { font-size: 11px; color: var(--text2); }
+.recept-row-caller { color: var(--text2); margin-bottom: 4px; font-size: 12px; }
+.recept-caller-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(251,191,36,0.15); color: #fbbf24; border-radius: 4px; padding: 1px 6px; margin-right: 6px; }
+.recept-ai-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; background: rgba(59,130,246,0.12); color: #3b82f6; border-radius: 4px; padding: 1px 6px; margin-right: 6px; }
 .recept-row-body { color: var(--text); }
+
+/* Session-grouped activity cards */
+.session-card {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; overflow: hidden;
+}
+.session-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; background: var(--surface3);
+  border-bottom: 1px solid var(--border);
+}
+.session-caller { font-size: 12px; font-weight: 600; color: var(--text); flex: 1; }
+.session-meta { font-size: 11px; color: var(--text2); }
+.session-turns { display: flex; flex-direction: column; gap: 0; }
+.session-turn {
+  padding: 10px 14px; font-size: 13px;
+  border-bottom: 1px solid var(--border);
+}
+.session-turn:last-child { border-bottom: none; }
+.session-turn-time { font-size: 10px; color: var(--text2); margin-top: 4px; }
 
 .cal-row {
   background: var(--surface2); border: 1px solid var(--border);

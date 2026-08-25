@@ -35,7 +35,9 @@ NOT the literature-search or Amazon-research specialist — if someone
 clearly wants deep product or paper research, gently point them at the
 "Amazon Seller AI" / "Literature AI" tabs instead of trying to do that
 research yourself.
-Keep replies to 2-4 sentences unless the question genuinely needs more."""
+Keep replies to 2-4 sentences unless the question genuinely needs more.
+IMPORTANT: Agent Factory AI is available 24/7 — phone, SMS, and web chat
+are always on. Never say there are limited hours or that we are closed."""
 
 APPOINTMENT_EXTRACT_PROMPT = """Extract appointment details from the user's message.
 Today's date/time is: {now} ({timezone}).
@@ -63,20 +65,41 @@ _APPOINTMENT_KEYWORDS = {
 }
 
 
+def _keyword_pattern(keywords: set[str]) -> re.Pattern:
+    """Word-boundary matching so a keyword only fires on the literal
+    word (or phrase), never as a substring of an unrelated word — e.g.
+    "book" no longer false-matches inside "books" or "booking", which
+    previously misrouted plain FAQ questions like "how long can I
+    borrow books for" into the appointment-booking flow."""
+    return re.compile(r"\b(?:" + "|".join(re.escape(k) for k in keywords) + r")\b")
+
+
+_ESCALATE_PATTERN = _keyword_pattern(_ESCALATE_KEYWORDS)
+_APPOINTMENT_PATTERN = _keyword_pattern(_APPOINTMENT_KEYWORDS)
+
+
 class Receptionist:
     def __init__(self):
         self.client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         self.memory = SessionMemory()
 
     # ── Main entry point ─────────────────────────────────────────
-    def handle(self, message: str, session_id: str | None = None) -> dict:
-        """Returns {"answer": str, "intent": str, ...extra fields}."""
+    def handle(self, message: str, session_id: str | None = None, system_prompt: str | None = None,
+               skip_global_faq: bool = False) -> dict:
+        """Returns {"answer": str, "intent": str, ...extra fields}.
+        system_prompt overrides RECEPTIONIST_SYSTEM_PROMPT for the active client.
+        skip_global_faq=True bypasses config/faq_seed.json — that seed is
+        generic "Agent Factory" demo content, not scoped per-client, so a
+        client with its own FAQs/RAG (e.g. FedAI) can get false-matched by
+        an unrelated global entry (e.g. "available" in a scholarships
+        question matching the global hours FAQ's tags) before ever reaching
+        its own, better-informed system prompt."""
         message = (message or "").strip()
         if not message:
             return {"answer": "Sorry, I didn't catch that — could you say that again?", "intent": "general"}
 
         # 1. FAQ lookup first (PROJ-214: KB before skill routing)
-        faq_hit = find_answer(message)
+        faq_hit = None if skip_global_faq else find_answer(message)
         if faq_hit:
             self.memory.save_context(message, "receptionist_faq", faq_hit["answer"], session_id=session_id)
             return {"answer": faq_hit["answer"], "intent": "faq", "faq_score": faq_hit["score"]}
@@ -98,18 +121,16 @@ class Receptionist:
             return result
 
         # 4. General conversation fallback
-        answer = self._general_reply(message, session_id)
+        answer = self._general_reply(message, session_id, system_prompt=system_prompt)
         self.memory.save_context(message, "receptionist_general", answer, session_id=session_id)
         return {"answer": answer, "intent": "general"}
 
     # ── Intent keyword pre-checks ────────────────────────────────
     def _wants_human(self, message: str) -> bool:
-        m = message.lower()
-        return any(k in m for k in _ESCALATE_KEYWORDS)
+        return bool(_ESCALATE_PATTERN.search(message.lower()))
 
     def _wants_appointment(self, message: str) -> bool:
-        m = message.lower()
-        return any(k in m for k in _APPOINTMENT_KEYWORDS)
+        return bool(_APPOINTMENT_PATTERN.search(message.lower()))
 
     # ── Escalation logging ───────────────────────────────────────
     def _log_escalation(self, message: str, session_id: str | None) -> None:
@@ -215,13 +236,13 @@ class Receptionist:
         return data
 
     # ── General conversation ─────────────────────────────────────
-    def _general_reply(self, message: str, session_id: str | None) -> str:
+    def _general_reply(self, message: str, session_id: str | None, system_prompt: str | None = None) -> str:
         context = self.memory.get_context_string(last_n=4, session_id=session_id)
         try:
             resp = self.client.messages.create(
                 model=CLAUDE_MODEL,
                 max_tokens=250,
-                system=RECEPTIONIST_SYSTEM_PROMPT,
+                system=system_prompt or RECEPTIONIST_SYSTEM_PROMPT,
                 messages=[
                     {
                         "role": "user",

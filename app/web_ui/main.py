@@ -40,6 +40,7 @@ from app.web_ui.calendar_routes import router as calendar_router
 from app.web_ui.kb_routes import router as kb_router
 from app.web_ui.twilio_routes import router as twilio_router
 from app.web_ui.dashboard_routes import router as dashboard_router
+from app.web_ui.client_routes import router as client_router
 
 # ── App setup ──────────────────────────────────────────────────
 app = FastAPI(
@@ -61,6 +62,7 @@ app.include_router(calendar_router)      # /calendar/ics
 app.include_router(kb_router)            # /kb/upload, /kb/list, /kb/{id}, /kb/search
 app.include_router(twilio_router)        # /twilio/sms, /twilio/voice, /twilio/voice/reply
 app.include_router(dashboard_router)     # /activity, /activity/stats, /escalations, /calendar/appointments
+app.include_router(client_router)        # /clients, /clients/active
 
 
 # ── Root — serve the chat UI ───────────────────────────────────

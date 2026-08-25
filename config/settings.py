@@ -115,6 +115,11 @@ ESCALATION_LOG     = os.environ.get("ESCALATION_LOG") or os.path.join(_BASE_DIR,
 # scope note (keyword search, not ChromaDB; text files only).
 KB_DB              = os.environ.get("KB_DB") or os.path.join(_BASE_DIR, "outputs", "kb.db")
 
+# ── FedAI site-wide RAG (real ChromaDB semantic search) ──────────
+# The corpus this indexes lives outside the repo — see agent/fedai_rag.py.
+FEDAI_CHROMA_DIR   = os.environ.get("FEDAI_CHROMA_DIR") or os.path.join(_BASE_DIR, "outputs", "fedai_chroma")
+FEDAI_EMBED_MODEL  = os.environ.get("FEDAI_EMBED_MODEL", "all-MiniLM-L6-v2")
+
 # ── Output ─────────────────────────────────────────────────────
 OUTPUT_DIR        = os.path.join(_BASE_DIR, "outputs")
 DEFAULT_FORMAT    = "markdown"   # "markdown" | "json"
