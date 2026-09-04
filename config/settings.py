@@ -123,3 +123,21 @@ DEFAULT_FORMAT    = "markdown"   # "markdown" | "json"
 # -- RapidAPI (Amazon fallback) ----------------------------------
 RAPIDAPI_KEY        = os.environ.get("RAPIDAPI_KEY", "")
 RAPIDAPI_AMAZON_HOST = "real-time-amazon-data.p.rapidapi.com"
+
+# ── Delivery Channels (PROJ-396) ────────────────────────────────
+# Twilio — reuses the same account already wired up for the AI
+# Receptionist's inbound SMS/voice webhooks (app/web_ui/twilio_routes.py),
+# just used here for outbound sends instead.
+TWILIO_ACCOUNT_SID  = os.environ.get("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN   = os.environ.get("TWILIO_AUTH_TOKEN", "")
+TWILIO_FROM_NUMBER  = os.environ.get("TWILIO_FROM_NUMBER", "")
+
+# SMTP — free-tier email delivery per the client brief ("smtp is free
+# we can prefer it"). Any standard SMTP provider works (Gmail app
+# password, SendGrid free tier, etc.) — nothing Twilio-specific here.
+SMTP_HOST       = os.environ.get("SMTP_HOST", "")
+SMTP_PORT       = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USERNAME   = os.environ.get("SMTP_USERNAME", "")
+SMTP_PASSWORD   = os.environ.get("SMTP_PASSWORD", "")
+SMTP_FROM_EMAIL = os.environ.get("SMTP_FROM_EMAIL", "")
+SMTP_USE_TLS    = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
