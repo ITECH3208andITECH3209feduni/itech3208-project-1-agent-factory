@@ -65,8 +65,10 @@ env/
 
 # Agent outputs
 outputs/
+exports/
 
 # Test artifacts
 .pytest_cache/
 .coverage
 htmlcov/
+
