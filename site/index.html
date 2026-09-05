@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Factory — Autonomous Research & Operational AI</title>
+  <meta name="description" content="Agent Factory is an autonomous multi-agent platform combining academic literature research, Amazon commerce intelligence, and a 24/7 AI voice receptionist.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+  <div class="bg-ambient"></div>
+
+  <!-- Navigation -->
+  <header class="site-nav">
+    <div class="nav-container">
+      <a href="index.html" class="nav-brand" id="nav-brand-link">
+        <span class="brand-icon">⚡</span>
+        <span>Agent Factory</span>
+      </a>
+
+      <button class="mobile-nav-toggle" id="mobile-nav-toggle" aria-label="Toggle Navigation">☰</button>
+
+      <ul class="nav-links" id="nav-links">
+        <li><a href="index.html" class="nav-link active">Home</a></li>
+        <li><a href="features.html" class="nav-link">Features</a></li>
+        <li><a href="pricing.html" class="nav-link">Architecture & Tiers</a></li>
+        <li><a href="about.html" class="nav-link">About Project</a></li>
+        <li><a href="faq.html" class="nav-link">FAQ</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle Dark/Light Mode">
+          <span id="theme-icon">☀️</span>
+        </button>
+        <a href="/" class="btn btn-primary" id="launch-app-btn">Open Web UI →</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="site-main">
+    <!-- Hero Section -->
+    <section class="hero">
+      <div class="badge">ITECH3208 / 3209 • Capstone Project</div>
+      <h1>Next-Generation <span class="gradient-text">Autonomous AI Agents</span> for Research & Operations</h1>
+      <p>
+        An enterprise-grade multi-agent platform featuring Claude synthesis, multi-source academic paper retrieval, Amazon commercial intelligence, and an automated 24/7 Voice/SMS Receptionist.
+      </p>
+
+      <div class="hero-cta">
+        <a href="features.html" class="btn btn-primary" id="hero-features-btn">Explore Capabilities</a>
+        <a href="pricing.html" class="btn btn-secondary" id="hero-pricing-btn">Architecture & Specs</a>
+        <a href="faq.html" class="btn btn-secondary" id="hero-faq-btn">Read FAQ</a>
+      </div>
+
+      <!-- Live Metric Strip -->
+      <div class="stats-strip">
+        <div class="stat-box">
+          <div class="stat-number" data-target="98.5" data-suffix="%">0%</div>
+          <div class="stat-label">Delivery & Reach Rate</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number" data-target="3" data-suffix=" APIs">0</div>
+          <div class="stat-label">Live Literature Sources (arXiv, Semantic Scholar, PubMed)</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number" data-target="24" data-suffix="/7">24/7</div>
+          <div class="stat-label">Voice & SMS Receptionist Availability</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number" data-target="100" data-suffix="%">0%</div>
+          <div class="stat-label">Academic Integrity & Citations</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Core Agent Pillars -->
+    <section class="section">
+      <div class="section-header">
+        <div class="badge">Multi-Agent Ecosystem</div>
+        <h2>Designed for Deep Discovery and Real-World Execution</h2>
+        <p>Three specialized agents work cooperatively to automate research synthesis, market product intelligence, and visitor reception.</p>
+      </div>
+
+      <div class="cards-grid">
+        <!-- Card 1: Academic Literature Agent -->
+        <div class="card" id="card-literature">
+          <div class="card-icon">📚</div>
+          <span class="card-tag">Research Intelligence</span>
+          <h3>Academic Literature Agent</h3>
+          <p>Multi-source academic querying across arXiv, Semantic Scholar, and PubMed with automated Claude AI synthesis, deduplication, and BibTeX citation exports.</p>
+          <ul>
+            <li>Unified query dispatch across 3 peer-reviewed repositories</li>
+            <li>Direct link generation and PDF download verification</li>
+            <li>Automated synthesis paragraph and BibTeX citation formatting</li>
+          </ul>
+        </div>
+
+        <!-- Card 2: Amazon Commercial Scraper -->
+        <div class="card" id="card-amazon">
+          <div class="card-icon">🛒</div>
+          <span class="card-tag">E-Commerce Scraper</span>
+          <h3>Amazon Product Intelligence</h3>
+          <p>Real-time e-commerce product search with dual-tier scraping, automated bot-detection avoidance via stealth Playwright, and a 0–100 quality scoring engine.</p>
+          <ul>
+            <li>Playwright stealth scraping with RapidAPI secondary fallback</li>
+            <li>Multi-factor quality scoring (ratings, review velocity, price)</li>
+            <li>TTL disk caching to minimize latency and avoid rate limits</li>
+          </ul>
+        </div>
+
+        <!-- Card 3: AI Receptionist -->
+        <div class="card" id="card-receptionist">
+          <div class="card-icon">📞</div>
+          <span class="card-tag">Communication & Ops</span>
+          <h3>24/7 AI Receptionist</h3>
+          <p>Natural conversation engine integrated with Twilio Voice and SMS, Amazon Polly TTS, multi-turn dialog memory, and automatic Google Calendar appointment booking.</p>
+          <ul>
+            <li>Inbound SMS & phone call handling with Polly.Joanna voice</li>
+            <li>ChromaDB vector store RAG semantic search over site knowledge</li>
+            <li>Delivery tracking, email bounce handling, and operator dashboard</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- Architecture Section -->
+    <section class="section">
+      <div class="section-header">
+        <div class="badge">System Architecture</div>
+        <h2>Modular, Resilient, and Privacy-Focused</h2>
+        <p>Built with FastAPI, SQLite WAL storage, ChromaDB vector search, and containerized Docker isolation.</p>
+      </div>
+
+      <div class="architecture-box">
+        <div class="arch-steps">
+          <div class="arch-step">
+            <div class="step-num">1</div>
+            <h4>Omni-Channel Ingestion</h4>
+            <p>Web dashboard, REST API endpoints, Twilio SMS webhooks, and Voice phone streams route to a unified orchestrator.</p>
+          </div>
+          <div class="arch-step">
+            <div class="step-num">2</div>
+            <h4>Intent & Skill Routing</h4>
+            <p>Session memory and intent classification route prompts to Literature, Amazon, Integrity Check, or Calendar skills.</p>
+          </div>
+          <div class="arch-step">
+            <div class="step-num">3</div>
+            <h4>LLM Synthesis & Vector RAG</h4>
+            <p>Claude Anthropic models combine live skill outputs with ChromaDB vector embeddings for factual, grounded answers.</p>
+          </div>
+          <div class="arch-step">
+            <div class="step-num">4</div>
+            <h4>Delivery & Analytics</h4>
+            <p>Outbound confirmations track via Twilio status callbacks and bounce webhooks, feeding live operational charts.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <a href="index.html" class="nav-brand">
+          <span class="brand-icon">⚡</span>
+          <span>Agent Factory</span>
+        </a>
+        <p>An autonomous research and operational AI system developed for Federation University Australia (ITECH3208 / 3209).</p>
+      </div>
+
+      <div class="footer-links">
+        <h4>Pages</h4>
+        <ul>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="pricing.html">Architecture & Tiers</a></li>
+          <li><a href="about.html">About Project</a></li>
+          <li><a href="faq.html">FAQ</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>Agents</h4>
+        <ul>
+          <li><a href="features.html#literature">Literature Review</a></li>
+          <li><a href="features.html#amazon">Amazon Intelligence</a></li>
+          <li><a href="features.html#receptionist">AI Receptionist</a></li>
+          <li><a href="features.html#integrity">Academic Integrity</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>System</h4>
+        <ul>
+          <li><a href="/">Live Web UI</a></li>
+          <li><a href="/docs">API Documentation</a></li>
+          <li><a href="https://github.com/ITECH3208andITECH3209feduni/itech3208-project-1-agent-factory" target="_blank" rel="noopener">GitHub Repository</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>© 2026 Federation University Australia — ITECH3208/3209 Team. All rights reserved.</span>
+      <span>Information Website • No trial or signup required</span>
+    </div>
+  </footer>
+
+  <script src="js/site.js"></script>
+</body>
+</html>

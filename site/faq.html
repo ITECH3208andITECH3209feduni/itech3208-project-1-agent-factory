@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Frequently Asked Questions — Agent Factory</title>
+  <meta name="description" content="Searchable FAQ and comprehensive documentation answers for Agent Factory multi-agent research platform and AI receptionist.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+  <div class="bg-ambient"></div>
+
+  <!-- Navigation -->
+  <header class="site-nav">
+    <div class="nav-container">
+      <a href="index.html" class="nav-brand">
+        <span class="brand-icon">⚡</span>
+        <span>Agent Factory</span>
+      </a>
+
+      <button class="mobile-nav-toggle" id="mobile-nav-toggle" aria-label="Toggle Navigation">☰</button>
+
+      <ul class="nav-links" id="nav-links">
+        <li><a href="index.html" class="nav-link">Home</a></li>
+        <li><a href="features.html" class="nav-link">Features</a></li>
+        <li><a href="pricing.html" class="nav-link">Architecture & Tiers</a></li>
+        <li><a href="about.html" class="nav-link">About Project</a></li>
+        <li><a href="faq.html" class="nav-link active">FAQ</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle Dark/Light Mode">
+          <span id="theme-icon">☀️</span>
+        </button>
+        <a href="/" class="btn btn-primary">Open Web UI →</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="site-main">
+    <section class="section">
+      <div class="section-header">
+        <div class="badge">Knowledge & Assistance</div>
+        <h1>Frequently Asked Questions</h1>
+        <p>Comprehensive written answers regarding platform architecture, research skills, receptionist phone integration, and delivery analytics.</p>
+      </div>
+
+      <!-- Search & Filters -->
+      <div class="faq-search-wrapper">
+        <span class="faq-search-icon">🔍</span>
+        <input type="text" id="faq-search-input" class="faq-search-input" placeholder="Search questions, keywords (e.g. 'Twilio', 'arXiv', 'bounce', 'theme')..." autocomplete="off">
+      </div>
+
+      <div class="faq-categories">
+        <button class="category-chip active" data-category="all">All Questions</button>
+        <button class="category-chip" data-category="general">General</button>
+        <button class="category-chip" data-category="receptionist">AI Receptionist & Twilio</button>
+        <button class="category-chip" data-category="research">Literature & Research</button>
+        <button class="category-chip" data-category="delivery">Delivery & Analytics</button>
+        <button class="category-chip" data-category="customization">Personalisation</button>
+      </div>
+
+      <!-- FAQ Items Accordion -->
+      <div class="faq-list" id="faq-list">
+        <!-- Item 1 -->
+        <div class="faq-item" data-category="general">
+          <button class="faq-question">
+            <span>What is Agent Factory?</span>
+            <span class="faq-chevron">▼</span>
+          </button>
+          <div class="faq-answer">
+            <p>Agent Factory is a multi-agent artificial intelligence platform developed as a capstone project for Federation University Australia (ITECH3208 / 3209). It integrates autonomous agents capable of conducting literature reviews across arXiv, Semantic Scholar, and PubMed, performing intelligent Amazon commercial product scraping and scoring, answering incoming voice and SMS phone calls via Twilio, and evaluating academic integrity.</p>
+          </div>
+        </div>
+
+        <!-- Item 2 -->
+        <div class="faq-item" data-category="receptionist">
+          <button class="faq-question">
+            <span>How does the 24/7 AI Receptionist handle voice phone calls?</span>
+            <span class="faq-chevron">▼</span>
+          </button>
+          <div class="faq-answer">
+            <p>Inbound phone calls are received via Twilio Webhooks at <code>/twilio/voice</code>. The system answers the caller using Amazon Polly (Joanna voice, Australian accent) and opens a Twilio <code>Gather</code> element to transcribe caller speech. The transcribed query routes through the Orchestrator to query the ChromaDB vector database, and the answer is streamed back via Polly TTS in multi-turn dialogue until the caller says goodbye.</p>
+          </div>
+        </div>
+
+        <!-- Item 3 -->
+        <div class="faq-item" data-category="receptionist">
+          <button class="faq-question">
+            <span>How are appointment bookings processed?</span>
+            <span class="faq-chevron">▼</span>
+          </button>
+          <div class="faq-answer">
+            <p>When a caller or chat user requests an appointment, the system extracts the requested date, time, and topic. If Google Calendar service-account credentials are configured, the appointment is created directly in Google Calendar. If credentials are not present, it gracefully falls back to generating an RFC 5545 <code>.ics</code> calendar file downloadable directly from the dashboard.</p>
+          </div>
+        </div>
+
+        <!-- Item 4 -->
+        <div class="faq-item" data-category="research">
+          <button class="faq-question">
+            <span>Which scientific repositories are queried by the Literature Agent?</span>
+            <span class="faq-chevron">▼</span>
+          </button>
+          <div class="faq-answer">
+            <p>The Academic Literature Review Agent queries three major academic sources simultaneously:
+              <br>• <strong>arXiv:</strong> Preprints in Computer Science, Physics, Mathematics, and Quantitative Biology.
+              <br>• <strong>Semantic Scholar:</strong> Millions of peer-reviewed computer science, engineering, and interdisciplinary papers with citation counts.
+              <br>• <strong>PubMed:</strong> The National Library of Medicine database for biomedical, health, and life science literature.
+            </p>
+          </div>
+        </div>
+
+        <!-- Item 5 -->
+        <div class="faq-item" data-category="research">
+          <button class="faq-question">
+            <span>Can I export citations to BibTeX?</span>
+            <span class="faq-chevron">▼</span>
+          </button>
+          <div class="faq-answer">
+            <p>Yes. Every retrieved paper includes its DOI, author list, publication year, journal, and abstract. The Literature Agent provides a dedicated BibTeX exporter that automatically formats entries ready for inclusion into LaTeX <code>.bib</code> files.</p>
+          </div>
+        </div>
+
+        <!-- Item 6 -->
+        <div class="faq-item" data-category="delivery">
+          <button class="faq-question">
+            <span>How does Twilio status callback tracking work (PROJ-432)?</span>
+            <span class="faq-chevron">▼</span>
+          </button>
+          <div class="faq-answer">
+            <p>When an outbound SMS or Voice call is initiated, a unique message record is registered in the SQLite <code>delivery_history</code> table. Twilio posts asynchronous delivery receipts to <code>/twilio/status-callback</code> with statuses such as <code>delivered</code>, <code>undelivered</code>, or <code>failed</code> along with carrier error codes. The dashboard updates live with these state transitions.</p>
+          </div>
+        </div>
+
+        <!-- Item 7 -->
+        <div class="faq-item" data-category="delivery">
+          <button class="faq-question">
+            <span>How does the system handle email bounces and suppressions (PROJ-433)?</span>
+            <span class="faq-chevron">▼</span>
+          </button>
+          <div class="faq-answer">
+            <p>The <code>/delivery/email/bounce</code> endpoint receives standardized bounce webhook payloads from SMTP or email relay providers. Upon receiving a hard bounce or spam complaint, the delivery status is updated to <code>bounced</code> and the recipient address is permanently added to the <code>email_suppressions</code> table. Subsequent reminder attempts to that address are automatically blocked with a 400 Bad Request to protect domain sender score.</p>
+          </div>
+        </div>
+
+        <!-- Item 8 -->
+        <div class="faq-item" data-category="delivery">
+          <button class="faq-question">
+            <span>What metrics are calculated in Analytics (PROJ-435 & PROJ-436)?</span>
+            <span class="faq-chevron">▼</span>
+          </button>
+          <div class="faq-answer">
+            <p>The Analytics engine computes:
+              <br>• <strong>Delivery Rate %:</strong> Successfully delivered messages divided by total sent attempts.
+              <br>• <strong>Response Rate %:</strong> Inbound reply interactions divided by outbound reminders.
+              <br>• <strong>Channel Breakdown:</strong> Volume and success rates partitioned across SMS, Email, and Voice.
+              <br>• <strong>Daily Volume Trends:</strong> 7-day time series tracking sent vs delivered vs failed counts.
+            </p>
+          </div>
+        </div>
+
+        <!-- Item 9 -->
+        <div class="faq-item" data-category="customization">
+          <button class="faq-question">
+            <span>How is the dashboard personalized and persisted (PROJ-401)?</span>
+            <span class="faq-chevron">▼</span>
+          </button>
+          <div class="faq-answer">
+            <p>Users can customize their theme (Dark, Light, High-Contrast) and select from 5 accent color palettes (Indigo, Emerald, Violet, Amber, Rose). Additionally, dashboard cards and widgets can be reordered or hidden. All preferences persist in both browser <code>localStorage</code> and via the <code>/api/user/settings</code> REST endpoint, with a one-click 'Reset to Default' button.</p>
+          </div>
+        </div>
+
+        <!-- Item 10 -->
+        <div class="faq-item" data-category="general">
+          <button class="faq-question">
+            <span>Is any payment, credit card, or signup required?</span>
+            <span class="faq-chevron">▼</span>
+          </button>
+          <div class="faq-answer">
+            <p>No. Agent Factory is strictly an open-source educational and research platform. There are no trial periods, no subscription tiers, and no payment forms. The system can be deployed freely by university labs, researchers, and students.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <a href="index.html" class="nav-brand">
+          <span class="brand-icon">⚡</span>
+          <span>Agent Factory</span>
+        </a>
+        <p>An autonomous research and operational AI system developed for Federation University Australia (ITECH3208 / 3209).</p>
+      </div>
+
+      <div class="footer-links">
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="pricing.html">Architecture & Tiers</a></li>
+          <li><a href="about.html">About Project</a></li>
+          <li><a href="faq.html">FAQ</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>System</h4>
+        <ul>
+          <li><a href="/">Live Web UI</a></li>
+          <li><a href="/docs">API Documentation</a></li>
+          <li><a href="https://github.com/ITECH3208andITECH3209feduni/itech3208-project-1-agent-factory" target="_blank" rel="noopener">GitHub Repository</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>© 2026 Federation University Australia — ITECH3208/3209 Team. All rights reserved.</span>
+      <span>Information Website • No trial or signup required</span>
+    </div>
+  </footer>
+
+  <script src="js/site.js"></script>
+</body>
+</html>

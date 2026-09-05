@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Architecture & Deployment Tiers — Agent Factory</title>
+  <meta name="description" content="Informational overview of Agent Factory deployment architectures and capacity tiers. Open source academic project with no subscription fees or trial signups.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+  <div class="bg-ambient"></div>
+
+  <!-- Navigation -->
+  <header class="site-nav">
+    <div class="nav-container">
+      <a href="index.html" class="nav-brand">
+        <span class="brand-icon">⚡</span>
+        <span>Agent Factory</span>
+      </a>
+
+      <button class="mobile-nav-toggle" id="mobile-nav-toggle" aria-label="Toggle Navigation">☰</button>
+
+      <ul class="nav-links" id="nav-links">
+        <li><a href="index.html" class="nav-link">Home</a></li>
+        <li><a href="features.html" class="nav-link">Features</a></li>
+        <li><a href="pricing.html" class="nav-link active">Architecture & Tiers</a></li>
+        <li><a href="about.html" class="nav-link">About Project</a></li>
+        <li><a href="faq.html" class="nav-link">FAQ</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle Dark/Light Mode">
+          <span id="theme-icon">☀️</span>
+        </button>
+        <a href="/" class="btn btn-primary">Open Web UI →</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="site-main">
+    <section class="section">
+      <div class="section-header">
+        <div class="badge">Open Source & Deployment Specs</div>
+        <h1>Deployment Tiers & Resource Models</h1>
+        <p>
+          Agent Factory is an academic open-source research initiative. There are <strong>no paywalls, no trial signups, and no recurring subscriptions</strong>. Review the deployment profiles below based on your lab or infrastructure scale.
+        </p>
+      </div>
+
+      <div class="pricing-grid">
+        <!-- Tier 1: Local / Community -->
+        <div class="pricing-card" id="tier-community">
+          <span class="card-tag">Student & Researcher</span>
+          <h3>Local Development</h3>
+          <div class="pricing-price">$0 <span style="font-size: 1rem; color: var(--text-muted); font-weight: 400;">/ Open Source</span></div>
+          <p>Ideal for individual researchers, coursework, and local evaluations running on a single laptop or workstation.</p>
+          <ul>
+            <li>Single-process FastAPI + SQLite WAL backend</li>
+            <li>Local ChromaDB vector database</li>
+            <li>Full Literature Review & arXiv/PubMed integrations</li>
+            <li>Local web dashboard & chat interface</li>
+            <li>Standard mock Twilio mode for testing</li>
+          </ul>
+          <p class="info-note">Clone from GitHub and run locally with Python 3.12+ or Docker.</p>
+        </div>
+
+        <!-- Tier 2: Academic Lab (Featured) -->
+        <div class="pricing-card featured" id="tier-lab">
+          <div class="pricing-badge">Recommended for Labs</div>
+          <span class="card-tag">Research Group</span>
+          <h3>Academic Lab Cluster</h3>
+          <div class="pricing-price">Self-Hosted <span style="font-size: 1rem; color: var(--text-muted); font-weight: 400;">/ Multi-User</span></div>
+          <p>Designed for university research groups and faculty labs requiring persistent knowledge bases and live phone reception.</p>
+          <ul>
+            <li>All Local Development features included</li>
+            <li>Live Twilio Voice & SMS phone numbers</li>
+            <li>Google Calendar service-account appointment sync</li>
+            <li>Multi-user role-based authentication</li>
+            <li>Delivery status tracking & email bounce handler</li>
+            <li>Automated analytics & operational KPI charts</li>
+          </ul>
+          <p class="info-note">Deployable via docker-compose on campus servers or AWS/GCP instances.</p>
+        </div>
+
+        <!-- Tier 3: Enterprise Campus -->
+        <div class="pricing-card" id="tier-campus">
+          <span class="card-tag">Campus Infrastructure</span>
+          <h3>Campus-Wide Production</h3>
+          <div class="pricing-price">Institutional <span style="font-size: 1rem; color: var(--text-muted); font-weight: 400;">/ Scaled</span></div>
+          <p>High-throughput deployment for university-wide student inquiry routing and automated faculty literature reviews.</p>
+          <ul>
+            <li>Containerized agent pools with Linux VM isolation</li>
+            <li>Persistent PostgreSQL or distributed SQLite storage</li>
+            <li>Full FedUni RAG crawl corpus (1,200+ crawled campus pages)</li>
+            <li>Automated GitHub Actions CI/CD deployment pipelines</li>
+            <li>Custom branding passes and theme customization</li>
+            <li>Enterprise SLA monitoring and webhook telemetry</li>
+          </ul>
+          <p class="info-note">Designed for Federation University IT infrastructure specifications.</p>
+        </div>
+      </div>
+
+      <!-- Informational Disclaimer Banner -->
+      <div style="margin-top: 4rem; background: rgba(99, 102, 241, 0.08); border: 1px solid var(--border-glass-strong); border-radius: var(--radius-lg); padding: 2rem; text-align: center;">
+        <h3 style="margin-bottom: 0.5rem;">Academic Project Disclosure</h3>
+        <p style="max-width: 720px; margin: 0 auto; font-size: 0.95rem;">
+          This platform is developed as part of Federation University course units ITECH3208 & ITECH3209. All features are accessible directly through the web UI and REST endpoints without requiring payment, trial signups, or credit card submission.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <a href="index.html" class="nav-brand">
+          <span class="brand-icon">⚡</span>
+          <span>Agent Factory</span>
+        </a>
+        <p>An autonomous research and operational AI system developed for Federation University Australia (ITECH3208 / 3209).</p>
+      </div>
+
+      <div class="footer-links">
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="pricing.html">Architecture & Tiers</a></li>
+          <li><a href="about.html">About Project</a></li>
+          <li><a href="faq.html">FAQ</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>System</h4>
+        <ul>
+          <li><a href="/">Live Web UI</a></li>
+          <li><a href="/docs">API Documentation</a></li>
+          <li><a href="https://github.com/ITECH3208andITECH3209feduni/itech3208-project-1-agent-factory" target="_blank" rel="noopener">GitHub Repository</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>© 2026 Federation University Australia — ITECH3208/3209 Team. All rights reserved.</span>
+      <span>Information Website • No trial or signup required</span>
+    </div>
+  </footer>
+
+  <script src="js/site.js"></script>
+</body>
+</html>
