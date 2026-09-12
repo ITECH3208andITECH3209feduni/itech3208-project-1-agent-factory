@@ -89,8 +89,10 @@ def root() -> dict:
         "version": SERVICE_VERSION,
         "docs":    "/docs",
         "health":  "/health",
-        "skills":  "/skills",
-        "ui":      "/ui",
+        "skills":    "/skills",
+        "ui":        "/ui",
+        "dashboard": "/dashboard",
+        "stats":     "/api/stats",
     }
 
 
@@ -205,6 +207,47 @@ def ui() -> HTMLResponse:
     from app.web.ui import INDEX_HTML
 
     return HTMLResponse(content=INDEX_HTML)
+
+
+# ── Dashboard (PROJ-437) ──────────────────────────────────────
+def current_user() -> dict | None:
+    """
+    Auth seam for the dashboard.
+
+    PROJ-399 calls for an *authenticated* landing page, but accounts and
+    sessions are PROJ-392 (Accounts & Multi-tenancy), which has not landed.
+    Rather than fake a login — which would be worse than none, because it
+    would look like access control — this returns None and the dashboard
+    renders a visible "not authenticated" banner.
+
+    When PROJ-392 lands, enforce it here: this is the single place the
+    dashboard and /api/stats consult.
+    """
+    return None
+
+
+@app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
+def dashboard() -> HTMLResponse:
+    """Dashboard shell — KPI counters and nav."""
+    from app.web.dashboard import INDEX_HTML
+
+    return HTMLResponse(content=INDEX_HTML)
+
+
+@app.get("/api/stats")
+def api_stats() -> dict:
+    """
+    Metrics behind the dashboard's KPI row.
+
+    Metrics whose data source does not exist yet report `available: false` and
+    name the ticket blocking them. They deliberately do NOT report 0 — a zero
+    meaning "no store yet" is indistinguishable from a measured zero.
+    """
+    from app.web import stats
+
+    payload = stats.summary()
+    payload["authenticated"] = current_user() is not None
+    return payload
 
 
 @app.post("/query", response_model=QueryResponse)
