@@ -106,19 +106,54 @@ def contacts_total() -> Metric:
 
 
 def reminders_upcoming() -> Metric:
-    return _pending(
-        "reminders_upcoming", "Upcoming reminders",
-        "PROJ-422",
-        "Reminders store not built (Reminders Engine, PROJ-395).",
-    )
+    """
+    Scheduled reminders still in the future.
+
+    Live against the provisional store added by PROJ-439. Real numbers, but
+    from a local JSON file rather than PROJ-422's store — the note says so,
+    because "live" here does not yet mean "production data".
+    """
+    try:
+        from app.web.reminders import upcoming_count
+
+        return Metric(
+            key="reminders_upcoming",
+            label="Upcoming reminders",
+            value=upcoming_count(),
+            note="provisional local store (PROJ-422 pending)",
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("reminders_upcoming failed: %s", exc)
+        return Metric(
+            key="reminders_upcoming", label="Upcoming reminders",
+            available=False, blocked_by="PROJ-422", note=f"store unreadable: {exc}",
+        )
 
 
 def reminders_sent() -> Metric:
-    return _pending(
-        "reminders_sent", "Reminders sent",
-        "PROJ-422",
-        "Send history not available until the reminders store lands.",
-    )
+    """
+    Reminders the engine has marked sent.
+
+    Always 0 today and that zero is honest: the store exists and can be read,
+    there is simply nothing in it with status 'sent' because the Reminders
+    Engine (PROJ-395) does not exist to set it. That is different from having
+    no data source, so this reports a real count rather than 'not available'.
+    """
+    try:
+        from app.web.reminders import sent_count
+
+        return Metric(
+            key="reminders_sent",
+            label="Reminders sent",
+            value=sent_count(),
+            note="nothing sends yet — the engine is PROJ-395",
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("reminders_sent failed: %s", exc)
+        return Metric(
+            key="reminders_sent", label="Reminders sent",
+            available=False, blocked_by="PROJ-422", note=f"store unreadable: {exc}",
+        )
 
 
 # ── Registry ──────────────────────────────────────────────────

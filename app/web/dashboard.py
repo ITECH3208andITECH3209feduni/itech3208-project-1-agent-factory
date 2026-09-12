@@ -217,8 +217,9 @@ INDEX_HTML = """<!DOCTYPE html>
     <a class="pending" aria-disabled="true" title="Blocked by PROJ-417">
       Contacts <span class="tag">PROJ-417</span>
     </a>
+    <a href="/reminders/new">New reminder</a>
     <a class="pending" aria-disabled="true" title="Blocked by PROJ-438">
-      Reminders <span class="tag">PROJ-438</span>
+      Reminders list <span class="tag">PROJ-438</span>
     </a>
     <a class="pending" aria-disabled="true" title="Blocked by PROJ-440">
       Preferences <span class="tag">PROJ-440</span>
@@ -263,8 +264,9 @@ INDEX_HTML = """<!DOCTYPE html>
         <h2>Upcoming reminders</h2>
         <div class="hint">Next scheduled sends, soonest first.</div>
         <div class="empty">
-          Waiting on the reminders store — <code>PROJ-422</code>.
-          The list view itself is <code>PROJ-438</code>.
+          The list view is <code>PROJ-438</code>. You can
+          <a href="/reminders/new">create a reminder</a> now — it saves to the
+          provisional local store until <code>PROJ-422</code> lands.
         </div>
       </div>
       <div class="panel">

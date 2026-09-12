@@ -22,7 +22,7 @@ import os
 import time
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
@@ -232,6 +232,110 @@ def dashboard() -> HTMLResponse:
     from app.web.dashboard import INDEX_HTML
 
     return HTMLResponse(content=INDEX_HTML)
+
+
+# ── Reminders (PROJ-439) ──────────────────────────────────────
+# The store behind these is provisional — PROJ-422 owns the real one, coded
+# against the contract in PROJ-404. Both are still To Do, so the shape used
+# here is written down in docs/contracts/reminder.provisional.schema.json.
+# Validation lives in app.web.reminders and is what survives the swap.
+@app.get("/reminders/new", response_class=HTMLResponse, include_in_schema=False)
+def reminder_new() -> HTMLResponse:
+    from app.web.reminder_form import render
+
+    return HTMLResponse(content=render())
+
+
+@app.get("/reminders/{reminder_id}/edit", response_class=HTMLResponse, include_in_schema=False)
+def reminder_edit(reminder_id: str) -> HTMLResponse:
+    from app.web.reminder_form import render
+
+    # The page renders regardless; the form fetches the record and reports a
+    # missing one itself. Returning 404 here would mean a blank browser error
+    # instead of a message in context.
+    return HTMLResponse(content=render(reminder_id))
+
+
+@app.get("/api/reminders")
+def list_reminders() -> dict:
+    """All reminders, soonest first. Unscoped — there is no tenancy until PROJ-392."""
+    from app.web import reminders
+
+    try:
+        items = reminders.get_store().list()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {"count": len(items), "reminders": [r.to_dict() for r in items]}
+
+
+@app.get("/api/reminders/{reminder_id}")
+def get_reminder(reminder_id: str) -> dict:
+    from app.web import reminders
+
+    try:
+        item = reminders.get_store().get(reminder_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if item is None:
+        raise HTTPException(status_code=404, detail="reminder not found")
+    return item.to_dict()
+
+
+@app.post("/api/reminders", status_code=201)
+def create_reminder(payload: dict) -> dict:
+    """
+    Create a reminder.
+
+    Takes a raw dict rather than a Pydantic model on purpose: the form needs
+    per-field error messages keyed by field name, and Pydantic's 422 body is
+    shaped for developers, not for rendering beside an input. reminders.validate
+    returns exactly that mapping.
+    """
+    from app.web import reminders
+
+    try:
+        clean = reminders.validate(payload, creating=True)
+    except reminders.ValidationError as exc:
+        return JSONResponse(status_code=422, content={"errors": exc.errors})
+
+    try:
+        created = reminders.get_store().create(clean)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return created.to_dict()
+
+
+@app.patch("/api/reminders/{reminder_id}")
+def update_reminder(reminder_id: str, payload: dict) -> dict:
+    from app.web import reminders
+
+    store = reminders.get_store()
+    try:
+        existing = store.get(reminder_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    if existing is None:
+        raise HTTPException(status_code=404, detail="reminder not found")
+
+    try:
+        clean = reminders.validate(payload, creating=False, existing=existing)
+    except reminders.ValidationError as exc:
+        return JSONResponse(status_code=422, content={"errors": exc.errors})
+
+    updated = store.update(reminder_id, clean)
+    if updated is None:
+        # Deleted between the read and the write.
+        raise HTTPException(status_code=404, detail="reminder not found")
+    return updated.to_dict()
+
+
+@app.delete("/api/reminders/{reminder_id}", status_code=204)
+def delete_reminder(reminder_id: str) -> Response:
+    from app.web import reminders
+
+    if not reminders.get_store().delete(reminder_id):
+        raise HTTPException(status_code=404, detail="reminder not found")
+    return Response(status_code=204)
 
 
 @app.get("/api/stats")
