@@ -23,6 +23,12 @@ pydantic>=2.6.0            # Request/response models
 # ── MCP server packaging (PROJ-324..328) ──────────────────────
 mcp>=2.0.0                 # Model Context Protocol SDK (skills/mcp/*)
 
+# ── Testing (PROJ-452) ────────────────────────────────────────
+# fastapi.testclient needs httpx. Without it scripts/test_web_api.py and
+# test_skills_endpoint.py skip themselves rather than fail, so CI would have
+# reported green while silently running 64 fewer checks.
+httpx>=0.27.0
+
 # ── Terminal UI ───────────────────────────────────────────────
 rich>=13.0.0               # Pretty terminal output (optional but recommended)
 

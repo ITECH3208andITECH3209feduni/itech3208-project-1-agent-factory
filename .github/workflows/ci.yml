@@ -1,12 +1,88 @@
 name: CI
 
+# Runs on master AND main. The repo's remote HEAD is `main` but all team work
+# lands on `master`, and the previous version of this file only listened for
+# PRs to `main` — so CI silently never ran on a single team PR (PROJ-452).
+# Listening to both means it runs regardless of which branch you target, and
+# keeps working if the default branch is ever consolidated.
 on:
   pull_request:
-    branches: [main]
+    branches: [master, main]
+  push:
+    branches: [master, main]
+
+# A new push to a PR makes the previous run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  ci:
+  # ── Python: the Agent Factory application ────────────────────
+  # This is the job that matters for the Python app and was entirely absent
+  # before: 208 checks existed in scripts/test_*.py and none of them ran in CI.
+  python:
+    name: Python tests
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Validate environment config loads
+        # No secrets in CI, so validate_env() will report missing keys. That is
+        # expected and must not fail the build — we assert it *loads*, since an
+        # import-time crash in settings.py breaks everything downstream.
+        run: python -c "from config.settings import validate_env; print('\n'.join(validate_env()) or 'all set')"
+
+      - name: Run test suites
+        # Every suite runs even if an earlier one fails, so one red suite does
+        # not hide the state of the others.
+        run: |
+          rc=0
+          for suite in scripts/test_*.py; do
+            echo "::group::$suite"
+            python "$suite" || rc=1
+            echo "::endgroup::"
+          done
+          exit $rc
+
+      - name: MCP stdio smoke test
+        run: python scripts/smoke_mcp_stdio.py
+
+  # ── Secrets audit ────────────────────────────────────────────
+  secrets:
+    name: Secrets audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the audit scans every commit, and the default
+          # shallow clone would make it pass vacuously.
+          fetch-depth: 0
+
+      - name: Audit repository history for credentials
+        run: |
+          chmod +x scripts/audit_secrets.sh
+          ./scripts/audit_secrets.sh
+
+  # ── Node: the NanoClaw side ──────────────────────────────────
+  # Kept as it was, apart from the branch fix. Marked continue-on-error
+  # because it has never actually run against this branch, so its true state
+  # is unknown — making it blocking today could wedge every PR on a
+  # pre-existing failure nobody has seen yet. Remove continue-on-error once
+  # it is confirmed green.
+  node:
+    name: Node checks (non-blocking)
+    runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
