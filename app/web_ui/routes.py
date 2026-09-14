@@ -241,7 +241,7 @@ async def get_history(username: str = Depends(get_current_username)):
 
 
 @router.post("/literature", response_model=LiteratureResponse)
-async def search_literature(body: LiteratureRequest):
+async def search_literature(body: LiteratureRequest, user: sqlite3.Row = Depends(current_user)):
     """
     Search academic literature by topic.
     Calls LiteratureSkill directly — no orchestrator routing needed.
@@ -318,7 +318,7 @@ async def search_amazon(body: AmazonRequest):
 
 
 @router.post("/integrity", response_model=IntegrityResponse)
-async def check_integrity(body: IntegrityRequest):
+async def check_integrity(body: IntegrityRequest, user: sqlite3.Row = Depends(current_user)):
     """
     Academic integrity check on submitted text.
 
@@ -360,7 +360,7 @@ async def check_integrity(body: IntegrityRequest):
 
 
 @router.post("/seller", response_model=SellerResponse)
-async def seller_tools(body: SellerRequest):
+async def seller_tools(body: SellerRequest, user: sqlite3.Row = Depends(current_user)):
     """
     Amazon Seller Intelligence — four tools in one endpoint.
 
@@ -382,7 +382,7 @@ async def seller_tools(body: SellerRequest):
 
 
 @router.post("/export", response_model=ExportResponse)
-async def export_results(body: ExportRequest):
+async def export_results(body: ExportRequest, user: sqlite3.Row = Depends(current_user)):
     """
     Export any skill result to PDF or Excel (PROJ-191).
 
@@ -409,8 +409,8 @@ async def export_results(body: ExportRequest):
         )
 
 
-@router.get("/export/download")
-async def download_export(path: str):
+# superseded by download_export_secure below (PROJ-407 path traversal fix)
+async def _download_export_unused(path: str):
     """
     Download a previously exported file by its path.
     GET /export/download?path=exports/result_20260515_123456.pdf
@@ -421,6 +421,25 @@ async def download_export(path: str):
 
 
 @router.get("/status", response_model=StatusResponse)
-async def get_status():
-    """Health check — confirms API is running and agent is ready."""
-    return StatusResponse(status="ok", agent="ready")
+
+@router.get("/export/download")
+async def download_export_secure(path: str, user: sqlite3.Row = Depends(current_user)):
+    """
+    Download a previously exported file.
+
+    PROJ-407 security fix: path was previously passed straight to
+    FileResponse with no auth, so any readable file was retrievable,
+    including .env and auth_users.db. Only the basename is used now,
+    resolved inside the exports directory, and auth is required.
+    """
+    from fastapi import HTTPException
+
+    exports_root = os.path.realpath("exports")
+    candidate = os.path.realpath(os.path.join(exports_root, os.path.basename(path)))
+
+    if not candidate.startswith(exports_root + os.sep):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if not os.path.isfile(candidate):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(candidate, filename=os.path.basename(candidate))
