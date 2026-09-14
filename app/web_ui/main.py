@@ -45,6 +45,8 @@ if os.path.isdir(_STATIC_DIR):
 init_db()
 from auth.tenancy import init_tenancy
 init_tenancy()
+from auth.password_reset import init_reset_table
+init_reset_table()
 
 # Include API routes
 app.include_router(router)
@@ -65,6 +67,16 @@ async def serve_index():
 
 
 # ── /literature — serve the dedicated literature search page ────
+@app.get("/forgot-password", include_in_schema=False)
+async def serve_forgot():
+    return FileResponse(os.path.join(_STATIC_DIR, "forgot-password.html"))
+
+
+@app.get("/reset-password", include_in_schema=False)
+async def serve_reset():
+    return FileResponse(os.path.join(_STATIC_DIR, "reset-password.html"))
+
+
 @app.get("/login", include_in_schema=False)
 async def serve_login():
     return FileResponse(os.path.join(_STATIC_DIR, "login.html"))

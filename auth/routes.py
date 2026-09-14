@@ -1,6 +1,8 @@
 # auth/routes.py
 # ──────────────────────────────────────────────────────────────
 # Registration / login / refresh / me endpoints (PROJ-339..343)
+# API key scoping (PROJ-344..348)
+# Password recovery (PROJ-408)
 # ──────────────────────────────────────────────────────────────
 
 import sqlite3
@@ -9,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, EmailStr, Field
 
-from auth import db
+from auth import api_keys, crypto, db, password_reset
 from auth.security import (
     create_access_token,
     create_refresh_token,
@@ -121,10 +123,9 @@ def logout(body: RefreshRequest):
 @router.get("/me", response_model=UserOut)
 def me(user: sqlite3.Row = Depends(current_user)):
     return UserOut(id=user["id"], email=user["email"], is_active=bool(user["is_active"]))
-    # ── API key scoping (PROJ-344..348) ────────────────────────────
-from auth import api_keys, crypto
 
 
+# ── API key scoping (PROJ-344..348) ────────────────────────────
 class ApiKeyRequest(BaseModel):
     api_key: str = Field(min_length=20, max_length=256)
 
@@ -177,3 +178,53 @@ def delete_api_key(user: sqlite3.Row = Depends(current_user)):
     db.clear_user_api_key(user["id"])
     _, source = api_keys.resolve_api_key(user["id"])
     return ApiKeyStatus(has_custom_key=False, active_source=source)
+
+
+# ── Password recovery (PROJ-408) ───────────────────────────────
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=10, max_length=200)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class ForgotPasswordResponse(BaseModel):
+    message: str
+    delivery: str | None = None
+@router.post("/forgot-password", response_model=ForgotPasswordResponse, status_code=202)
+def forgot_password(body: ForgotPasswordRequest):
+    """
+    Start a password reset.
+
+    Always returns 202 with the same message whether or not the
+    address is registered — a different response for unknown emails
+    would let anyone enumerate accounts.
+    """
+    user = db.get_user_by_email(body.email)
+    delivery = None
+
+    if user is not None and user["is_active"]:
+        token = password_reset.create_reset_token(user["id"])
+        delivery = password_reset.deliver_reset_link(user["email"], token)
+
+    return ForgotPasswordResponse(
+        message="If that address is registered, a reset link has been sent.",
+        delivery=delivery,
+    )
+
+
+@router.post("/reset-password", status_code=200)
+def reset_password(body: ResetPasswordRequest):
+    """Complete a reset. The token is single-use and expires."""
+    user_id = password_reset.consume_reset_token(body.token)
+    if user_id is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "That reset link is invalid, expired, or already used",
+        )
+
+    password_reset.set_password(user_id, hash_password(body.new_password))
+    return {"message": "Password updated. Please sign in with your new password."}
+
