@@ -21,7 +21,10 @@ from fastapi import APIRouter
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+import sqlite3
+from fastapi import Depends
 from agent.orchestrator import Orchestrator
+from auth.routes import current_user
 from components.amazon_cards import ProductCard
 from components.literature_cards import PaperCard
 from components.integrity_cards import IntegrityCard
@@ -34,7 +37,10 @@ from skills.export import ExportSkill, export_to_pdf, export_to_excel
 router = APIRouter()
 
 # ── Shared skill instances (one per process) ───────────────────
-_orchestrator  = Orchestrator()
+# PROJ-410: no shared module-level orchestrator. One per request,
+# scoped to the caller's organisation, so memory cannot cross tenants.
+def _orchestrator_for(user) -> Orchestrator:
+    return Orchestrator(user_id=user["id"], org_id=user["org_id"])
 _lit_skill     = LiteratureSkill()
 _integrity     = AcademicIntegritySkill()
 _seller        = AmazonSellerSkill()
@@ -132,7 +138,7 @@ class ExportResponse(BaseModel):
 
 # ── Routes ─────────────────────────────────────────────────────
 @router.post("/query", response_model=QueryResponse)
-async def query_agent(body: QueryRequest):
+async def query_agent(body: QueryRequest, user: sqlite3.Row = Depends(current_user)):
     """
     Run a research query through the agent.
     Returns the text response plus typed result cards.
@@ -142,7 +148,7 @@ async def query_agent(body: QueryRequest):
         cards     — list of ProductCard or PaperCard dicts
         type      — "amazon" | "literature" | "unknown"
     """
-    rendered, result = _orchestrator.run(body.query)
+    rendered, result = _orchestrator_for(user).run(body.query)
 
     if result is None:
         return QueryResponse(response=rendered, cards=[], type="unknown")
@@ -188,9 +194,9 @@ async def query_agent(body: QueryRequest):
 
 
 @router.get("/history", response_model=list[HistoryItem])
-async def get_history():
+async def get_history(user: sqlite3.Row = Depends(current_user)):
     """Return the last 20 queries from session memory."""
-    history = _orchestrator.memory.get_history(20)
+    history = _orchestrator_for(user).memory.get_history(20)
     return [
         HistoryItem(
             timestamp=h.get("timestamp", ""),
