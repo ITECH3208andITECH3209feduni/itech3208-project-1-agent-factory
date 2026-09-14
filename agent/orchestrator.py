@@ -63,9 +63,11 @@ SKILLS = {
 
 
 class Orchestrator:
-    def __init__(self, output_format: str = "markdown"):
+    def __init__(self, output_format: str = "markdown", user_id: int | None = None, org_id: int | None = None):
         self.client    = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
-        self.memory    = SessionMemory()
+        self.user_id   = user_id
+        self.org_id    = org_id
+        self.memory    = SessionMemory(org_id=org_id)
         self.formatter = Formatter(output_format=output_format)
         self.skills: dict[str, BaseSkill] = {
             "literature": LiteratureSkill(),

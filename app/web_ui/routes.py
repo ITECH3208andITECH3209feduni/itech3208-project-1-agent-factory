@@ -46,6 +46,14 @@ from app.web_ui.auth_routes import get_current_username
 router = APIRouter()
 
 # ── Shared skill instances (one per process) ───────────────────
+# PROJ-410 note: org-scoped memory (agent/memory.py's org_id column)
+# is in place, but wiring /query and /history to it needs the
+# current_user dependency from auth/routes.py — that module's JWT
+# session foundation (PROJ-339/344) is on the same source branch as
+# this ticket set but predates it and was NOT part of this cherry-pick
+# (it's not merged into main either). Left on get_current_username
+# (PROJ-349) below rather than silently deciding that scope expansion
+# inside a merge conflict resolution.
 _orchestrator  = Orchestrator()
 _lit_skill     = LiteratureSkill()
 _integrity     = AcademicIntegritySkill()
