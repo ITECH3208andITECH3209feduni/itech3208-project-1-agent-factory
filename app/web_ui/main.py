@@ -60,7 +60,10 @@ from auth.tenancy import init_tenancy
 init_tenancy()
 
 # Include API routes
+from auth.org_routes import router as org_router
+
 app.include_router(auth_router)          # /auth/register, /auth/login, /auth/logout, /auth/me
+app.include_router(org_router)           # /orgs — PROJ-406 organisation registration
 app.include_router(router)               # /query, /literature, /amazon, /integrity, /seller, /export, /history, /status
 app.include_router(receptionist_router)  # /receptionist (POST)
 app.include_router(calendar_router)      # /calendar/ics
