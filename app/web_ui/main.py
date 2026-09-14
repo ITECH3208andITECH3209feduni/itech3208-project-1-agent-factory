@@ -83,6 +83,14 @@ async def serve_index():
 
 
 # ── /literature — serve the dedicated literature search page ────
+@app.get("/login", include_in_schema=False)
+async def serve_login():
+    return FileResponse(os.path.join(_STATIC_DIR, "login.html"))
+
+@app.get("/register", include_in_schema=False)
+async def serve_register():
+    return FileResponse(os.path.join(_STATIC_DIR, "register.html"))
+
 @app.get("/literature", include_in_schema=False)
 async def serve_literature():
     """Serve the standalone literature search interface."""
