@@ -53,6 +53,12 @@ _STATIC_DIR = os.path.join(_PROJECT, "static")
 if os.path.isdir(_STATIC_DIR):
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
+# Create the org/user tenancy tables if they don't exist yet (PROJ-405).
+# init_db() from the pre-Sprint-3 legacy auth module isn't needed here —
+# app/web_ui/auth_routes.py (Sprint 3) initialises its own DB internally.
+from auth.tenancy import init_tenancy
+init_tenancy()
+
 # Include API routes
 app.include_router(auth_router)          # /auth/register, /auth/login, /auth/logout, /auth/me
 app.include_router(router)               # /query, /literature, /amazon, /integrity, /seller, /export, /history, /status
