@@ -49,6 +49,8 @@ init_tenancy()
 # Include API routes
 app.include_router(router)
 app.include_router(auth_router)
+from auth.org_routes import router as org_router
+app.include_router(org_router)
 app.include_router(twilio_router)
 
 
