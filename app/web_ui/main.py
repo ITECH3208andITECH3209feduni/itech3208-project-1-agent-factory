@@ -43,6 +43,8 @@ if os.path.isdir(_STATIC_DIR):
 
 # Create the users / refresh_tokens tables if they don't exist yet
 init_db()
+from auth.tenancy import init_tenancy
+init_tenancy()
 
 # Include API routes
 app.include_router(router)
