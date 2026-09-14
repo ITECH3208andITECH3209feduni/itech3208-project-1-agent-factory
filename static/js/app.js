@@ -109,7 +109,7 @@ async function checkStatus() {
 ══════════════════════════════════════════════════════════ */
 async function loadHistory() {
   try {
-    const res = await fetch(`${API_BASE}/history`);
+    const res = await authFetch(`${API_BASE}/history`);
     if (!res.ok) return;
     const history = await res.json();
     if (!history || history.length === 0) return;
@@ -146,7 +146,7 @@ async function sendChatMessage() {
 
   const typingId = showTyping(chatArea);
   try {
-    const res = await fetch(`${API_BASE}/query`, {
+    const res = await authFetch(`${API_BASE}/query`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query }),
@@ -209,7 +209,7 @@ async function sendResearchQuery() {
   const typingId = showTyping(researchArea);
 
   try {
-    const res = await fetch(`${API_BASE}/literature`, {
+    const res = await authFetch(`${API_BASE}/literature`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query }),
@@ -242,7 +242,7 @@ async function sendShoppingQuery() {
   const typingId = showTyping(shoppingArea);
 
   try {
-    const res = await fetch(`${API_BASE}/query`, {
+    const res = await authFetch(`${API_BASE}/query`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query }),
@@ -284,7 +284,7 @@ async function sendIntegrityCheck() {
   const typingId = showTyping(integrityArea);
 
   try {
-    const res = await fetch(`${API_BASE}/integrity`, {
+    const res = await authFetch(`${API_BASE}/integrity`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
