@@ -66,6 +66,10 @@ env/
 # Agent outputs
 outputs/
 
+# Runtime databases created outside outputs/ (e.g. auth/db.py's default
+# AUTH_DB_PATH, which resolves relative to cwd, not the project root)
+auth_users.db
+
 # Test artifacts
 .pytest_cache/
 .coverage

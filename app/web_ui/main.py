@@ -61,6 +61,14 @@ from auth.db import init_db
 from auth.tenancy import init_tenancy
 init_db()
 init_tenancy()
+from auth.password_reset import init_reset_table
+init_reset_table()
+# NOTE: the /auth/forgot-password and /auth/reset-password HTTP
+# endpoints that call into this token store live in auth/routes.py's
+# JWT router (PROJ-408), which — like PROJ-409 above — isn't wired in
+# here. The pages below serve, but their submit buttons have nothing
+# to call yet. Same follow-up as PROJ-409: needs the auth-model
+# decision, not a merge-conflict guess.
 
 # Include API routes
 from auth.org_routes import router as org_router
@@ -86,6 +94,16 @@ async def serve_index():
 
 
 # ── /literature — serve the dedicated literature search page ────
+@app.get("/forgot-password", include_in_schema=False)
+async def serve_forgot():
+    return FileResponse(os.path.join(_STATIC_DIR, "forgot-password.html"))
+
+
+@app.get("/reset-password", include_in_schema=False)
+async def serve_reset():
+    return FileResponse(os.path.join(_STATIC_DIR, "reset-password.html"))
+
+
 @app.get("/login", include_in_schema=False)
 async def serve_login():
     return FileResponse(os.path.join(_STATIC_DIR, "login.html"))
