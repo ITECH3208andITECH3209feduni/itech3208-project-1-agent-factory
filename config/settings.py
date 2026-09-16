@@ -141,3 +141,15 @@ SMTP_USERNAME   = os.environ.get("SMTP_USERNAME", "")
 SMTP_PASSWORD   = os.environ.get("SMTP_PASSWORD", "")
 SMTP_FROM_EMAIL = os.environ.get("SMTP_FROM_EMAIL", "")
 SMTP_USE_TLS    = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
+
+# ── Reminders Engine (PROJ-395) ─────────────────────────────────
+# NOTE: Dhiman's contacts/accounts data contract (PROJ-404) isn't
+# merged into this branch yet, so the reminders store below defines
+# its own minimal schema (contact_channel + contact_address as plain
+# strings) rather than a foreign key into a contacts table. Swap in a
+# real contact_id FK once PROJ-404 lands — noted here rather than
+# blocking on it, since the scheduler/timezone/recurrence logic is
+# independent of where the contact address comes from.
+REMINDERS_DB = os.environ.get("REMINDERS_DB") or os.path.join(_BASE_DIR, "outputs", "reminders.db")
+REMINDER_POLL_INTERVAL_SECONDS = int(os.environ.get("REMINDER_POLL_INTERVAL_SECONDS", "30"))
+REMINDER_DEFAULT_LEAD_HOURS = int(os.environ.get("REMINDER_DEFAULT_LEAD_HOURS", "24"))
