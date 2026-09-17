@@ -25,6 +25,7 @@ from twilio.twiml.voice_response import Gather, VoiceResponse
 from agent.orchestrator import Orchestrator
 from app.web_ui.activity_db import log_activity
 from app.web_ui.dashboard_routes import log_escalation
+from integrations.sms_consent import handle_inbound
 
 router = APIRouter()
 
@@ -54,12 +55,17 @@ async def sms_webhook(
     request: Request,
     Body: str = Form(default=""),
     From: str = Form(default=""),
+    To: str = Form(default=""),
 ) -> Response:
     """
     Receive an inbound Twilio SMS and reply through the AI Receptionist.
     Session is scoped to the caller's phone number (From field) so each
     caller has independent conversation history.
     PROJ-391
+
+    PROJ-414: STOP/START/HELP consent keywords are handled before the
+    orchestrator ever sees the message — a STOP must never be treated
+    as a query, cost an API call, or reach a skill.
     """
     validate = os.getenv("TWILIO_VALIDATE_SIGNATURE", "false").lower() == "true"
     if validate:
@@ -71,6 +77,12 @@ async def sms_webhook(
         sig = request.headers.get("X-Twilio-Signature", "")
         if not validator.validate(url, dict(form), sig):
             return Response(content="Forbidden", status_code=403)
+
+    consent_reply = handle_inbound(Body, From, To)
+    if consent_reply is not None:
+        twiml = MessagingResponse()
+        twiml.message(consent_reply)
+        return Response(content=str(twiml), media_type="application/xml")
 
     rendered, result = _orchestrator.run(Body or "Hello")
     reply = _strip_markdown(rendered)[:1600]  # Twilio SMS limit

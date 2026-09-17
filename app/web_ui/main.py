@@ -53,8 +53,36 @@ _STATIC_DIR = os.path.join(_PROJECT, "static")
 if os.path.isdir(_STATIC_DIR):
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
+# Create the org/user tenancy tables if they don't exist yet (PROJ-405).
+# auth/db.py's users table (PROJ-406's org registration writes to it)
+# is a separate SQLite file from Sprint 3's own auth — the two auth
+# systems aren't unified yet, see auth/org_routes.py's header comment.
+from auth.db import init_db
+from auth.tenancy import init_tenancy
+init_db()
+init_tenancy()
+from auth.password_reset import init_reset_table
+init_reset_table()
+# NOTE: the /auth/forgot-password and /auth/reset-password HTTP
+# endpoints that call into this token store live in auth/routes.py's
+# JWT router (PROJ-408), which — like PROJ-409 above — isn't wired in
+# here. The pages below serve, but their submit buttons have nothing
+# to call yet. Same follow-up as PROJ-409: needs the auth-model
+# decision, not a merge-conflict guess.
+from auth.consent import init_consent
+init_consent()
+from auth.consent_audit import init_consent_audit
+init_consent_audit()
+from auth.sms_routing import init_sms_routing
+init_sms_routing()
+from integrations.sms_sender import init_send_log
+init_send_log()
+
 # Include API routes
+from auth.org_routes import router as org_router
+
 app.include_router(auth_router)          # /auth/register, /auth/login, /auth/logout, /auth/me
+app.include_router(org_router)           # /orgs — PROJ-406 organisation registration
 app.include_router(router)               # /query, /literature, /amazon, /integrity, /seller, /export, /history, /status
 app.include_router(receptionist_router)  # /receptionist (POST)
 app.include_router(calendar_router)      # /calendar/ics
@@ -74,6 +102,24 @@ async def serve_index():
 
 
 # ── /literature — serve the dedicated literature search page ────
+@app.get("/forgot-password", include_in_schema=False)
+async def serve_forgot():
+    return FileResponse(os.path.join(_STATIC_DIR, "forgot-password.html"))
+
+
+@app.get("/reset-password", include_in_schema=False)
+async def serve_reset():
+    return FileResponse(os.path.join(_STATIC_DIR, "reset-password.html"))
+
+
+@app.get("/login", include_in_schema=False)
+async def serve_login():
+    return FileResponse(os.path.join(_STATIC_DIR, "login.html"))
+
+@app.get("/register", include_in_schema=False)
+async def serve_register():
+    return FileResponse(os.path.join(_STATIC_DIR, "register.html"))
+
 @app.get("/literature", include_in_schema=False)
 async def serve_literature():
     """Serve the standalone literature search interface."""

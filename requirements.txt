@@ -29,3 +29,7 @@ google-auth>=2.35.0        # Service-account auth for Google Calendar (agent/cal
 fastapi>=0.110.0
 uvicorn[standard]>=0.27.0
 httpx>=0.27.0
+
+# ── Accounts & Multi-tenancy (PROJ-392) ───────────────────
+pydantic[email]>=2.0.0     # EmailStr validation on org registration
+bcrypt>=4.0.0               # Password hashing for auth/security.py
