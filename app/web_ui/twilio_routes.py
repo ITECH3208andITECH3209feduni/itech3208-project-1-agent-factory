@@ -23,7 +23,7 @@ from twilio.twiml.messaging_response import MessagingResponse
 from twilio.twiml.voice_response import Gather, VoiceResponse
 
 from agent.orchestrator import Orchestrator
-from app.web_ui.activity_db import log_activity
+from app.web_ui.activity_db import log_activity, log_delivery_event, update_delivery_status
 from app.web_ui.dashboard_routes import log_escalation
 
 router = APIRouter()
@@ -201,3 +201,85 @@ async def voice_reply(
     )
     resp.hangup()
     return Response(content=str(resp), media_type="application/xml")
+
+
+# ── Delivery Status Webhook (PROJ-432) ─────────────────────────
+
+@router.post("/twilio/status-callback")
+@router.post("/twilio/status")
+async def twilio_status_callback(
+    request: Request,
+    MessageSid: str = Form(default=""),
+    CallSid: str = Form(default=""),
+    SmsSid: str = Form(default=""),
+    MessageStatus: str = Form(default=""),
+    CallStatus: str = Form(default=""),
+    SmsStatus: str = Form(default=""),
+    To: str = Form(default=""),
+    From: str = Form(default=""),
+    ErrorCode: str = Form(default=""),
+    ErrorMessage: str = Form(default=""),
+) -> Response:
+    """
+    Handle Twilio status callbacks for SMS and Voice messages.
+    Updates delivery tracking record, records errors, and logs status transitions.
+    PROJ-432
+    """
+    # Fallback to JSON payload if Content-Type is application/json
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        try:
+            body = await request.json()
+            MessageSid = MessageSid or body.get("MessageSid") or body.get("SmsSid") or body.get("CallSid") or ""
+            MessageStatus = MessageStatus or body.get("MessageStatus") or body.get("SmsStatus") or body.get("CallStatus") or ""
+            To = To or body.get("To") or ""
+            From = From or body.get("From") or ""
+            ErrorCode = ErrorCode or str(body.get("ErrorCode") or "")
+            ErrorMessage = ErrorMessage or body.get("ErrorMessage") or ""
+        except Exception:
+            pass
+
+    msg_id = MessageSid or SmsSid or CallSid
+    status = MessageStatus or SmsStatus or CallStatus or "unknown"
+    channel = "voice" if CallSid and not (MessageSid or SmsSid) else "sms"
+
+    if not msg_id:
+        # Check query params
+        msg_id = request.query_params.get("MessageSid") or request.query_params.get("CallSid") or ""
+        status = status if status != "unknown" else request.query_params.get("MessageStatus", "unknown")
+
+    if not msg_id:
+        return Response(content="<Response/>", media_type="application/xml")
+
+    # Update delivery tracking in database
+    updated = update_delivery_status(
+        message_id=msg_id,
+        status=status,
+        error_code=ErrorCode,
+        error_message=ErrorMessage,
+    )
+
+    if not updated:
+        # If record didn't exist prior to callback, register it now
+        log_delivery_event(
+            message_id=msg_id,
+            recipient=To or "unknown",
+            channel=channel,
+            reminder_type="voice_call" if channel == "voice" else "sms_reminder",
+            status=status,
+            metadata={"from": From, "error_code": ErrorCode, "error_message": ErrorMessage},
+        )
+        if ErrorCode or ErrorMessage or status in ("failed", "undelivered"):
+            update_delivery_status(msg_id, status, ErrorCode, ErrorMessage)
+
+    # If delivery failed, log in activity stream for visibility
+    if status.lower() in ("failed", "undelivered"):
+        log_activity(
+            channel=channel,
+            caller=To or "unknown",
+            intent="delivery_failure",
+            summary=f"Delivery failed for {msg_id}: {ErrorMessage or ErrorCode or status}",
+        )
+
+    return Response(content="<Response/>", media_type="application/xml")
+

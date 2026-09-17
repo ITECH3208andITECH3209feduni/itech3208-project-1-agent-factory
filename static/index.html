@@ -104,7 +104,14 @@
       <div id="history-list"></div>
     </div>
 
-    <div class="sidebar-footer">
+      <div style="padding: 0 12px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px;">
+        <button onclick="openPersonalisationModal()" style="background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; color: var(--text); font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; text-align: left;">
+          <span>🎨</span> Personalise UI & Theme
+        </button>
+        <a href="/showcase" target="_blank" style="background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.25); border-radius: 8px; padding: 7px 12px; color: #a5b4fc; font-size: 11px; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 6px;">
+          <span>🌐</span> Information Website ↗
+        </a>
+      </div>
       <div class="model-badge">
         <span class="model-dot"></span>
         Claude Haiku · arXiv · S2
@@ -295,6 +302,8 @@
       <div class="recept-subnav">
         <div class="recept-tab active" data-rtab="chat" onclick="switchReceptTab('chat')">💬 Chat</div>
         <div class="recept-tab" data-rtab="activity" onclick="switchReceptTab('activity')">⚡ Activity</div>
+        <div class="recept-tab" data-rtab="analytics" onclick="switchReceptTab('analytics')">📊 Analytics</div>
+        <div class="recept-tab" data-rtab="delivery" onclick="switchReceptTab('delivery')">📬 Delivery History</div>
         <div class="recept-tab" data-rtab="escalations" onclick="switchReceptTab('escalations')">🚨 Escalations</div>
         <div class="recept-tab" data-rtab="calendar" onclick="switchReceptTab('calendar')">📅 Calendar</div>
       </div>
@@ -329,6 +338,97 @@
       <div class="recept-panel" id="rtab-activity" style="display:none">
         <div class="recept-feed" id="activity-feed">
           <div class="recept-empty">Loading activity…</div>
+        </div>
+      </div>
+
+      <!-- Analytics panel (PROJ-436) -->
+      <div class="recept-panel" id="rtab-analytics" style="display:none">
+        <div class="analytics-container">
+          <!-- KPI Row -->
+          <div class="analytics-kpis">
+            <div class="kpi-card" id="widget-kpi-delivery">
+              <div class="kpi-lbl">Delivery Rate</div>
+              <div class="kpi-val" id="kpi-delivery-rate">—</div>
+              <div class="kpi-badge-positive" id="kpi-delivery-status">Tracking active</div>
+            </div>
+            <div class="kpi-card" id="widget-kpi-response">
+              <div class="kpi-lbl">Response Rate</div>
+              <div class="kpi-val" id="kpi-response-rate">—</div>
+              <div class="kpi-badge-positive">Inbound replies</div>
+            </div>
+            <div class="kpi-card" id="widget-kpi-sent">
+              <div class="kpi-lbl">Total Outbound Sent</div>
+              <div class="kpi-val" id="kpi-total-sent">—</div>
+              <div class="kpi-lbl" id="kpi-inflight">In-flight: 0</div>
+            </div>
+            <div class="kpi-card" id="widget-kpi-failed">
+              <div class="kpi-lbl">Failed / Bounces</div>
+              <div class="kpi-val" id="kpi-total-failed">—</div>
+              <div class="kpi-badge-negative" id="kpi-suppressed-count">Suppressed emails: 0</div>
+            </div>
+          </div>
+
+          <!-- Charts Row -->
+          <div class="analytics-charts-grid">
+            <div class="chart-card">
+              <div class="chart-title">
+                <span>7-Day Delivery & Activity Trend</span>
+                <button class="retry-action-btn" onclick="seedSampleAnalyticsData()">⚡ Seed Demo Data</button>
+              </div>
+              <div id="trend-chart-container">
+                <svg class="chart-svg" id="trend-chart-svg" viewBox="0 0 600 200"></svg>
+              </div>
+            </div>
+            <div class="chart-card">
+              <div class="chart-title">Channel Breakdown</div>
+              <div id="channel-chart-container">
+                <svg class="chart-svg" id="channel-chart-svg" viewBox="0 0 250 200"></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Delivery History panel (PROJ-434) -->
+      <div class="recept-panel" id="rtab-delivery" style="display:none">
+        <div class="delivery-container">
+          <div class="delivery-toolbar">
+            <input type="text" id="delivery-search-input" class="delivery-input" placeholder="Search recipient, message ID, or error…" oninput="debounceDeliverySearch()" />
+            <select id="delivery-channel-filter" class="delivery-select" onchange="loadDeliveryHistory()">
+              <option value="all">All Channels</option>
+              <option value="sms">SMS</option>
+              <option value="email">Email</option>
+              <option value="voice">Voice</option>
+            </select>
+            <select id="delivery-status-filter" class="delivery-select" onchange="loadDeliveryHistory()">
+              <option value="all">All Statuses</option>
+              <option value="delivered">Delivered</option>
+              <option value="sent">Sent</option>
+              <option value="queued">Queued</option>
+              <option value="failed">Failed</option>
+              <option value="bounced">Bounced</option>
+            </select>
+            <button class="delivery-btn" onclick="openSendReminderModal()">+ Send Reminder</button>
+          </div>
+
+          <div class="delivery-table-wrapper">
+            <table class="delivery-table">
+              <thead>
+                <tr>
+                  <th>Time</th>
+                  <th>Channel</th>
+                  <th>Recipient</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>Error / Diagnostic</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="delivery-table-body">
+                <tr><td colspan="7" style="text-align:center;color:var(--text2);padding:24px;">Loading delivery logs…</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -638,6 +738,111 @@
 }
 .wb-foot-dot { width: 4px; height: 4px; border-radius: 50%; background: #484f58; }
 </style>
+<!-- ══ PERSONALISATION MODAL (PROJ-401, PROJ-442, PROJ-443, PROJ-444) ══ -->
+<div class="modal-overlay" id="personalisation-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">🎨 Interface Personalisation</div>
+      <button class="modal-close" onclick="closePersonalisationModal()">✕</button>
+    </div>
+
+    <!-- Theme selection -->
+    <div class="pref-group">
+      <div class="pref-label">Color Theme (PROJ-442)</div>
+      <div class="theme-options">
+        <button class="theme-btn active" data-theme-val="dark" onclick="selectTheme('dark')">🌙 Dark</button>
+        <button class="theme-btn" data-theme-val="light" onclick="selectTheme('light')">☀️ Light</button>
+        <button class="theme-btn" data-theme-val="contrast" onclick="selectTheme('contrast')">⚡ High Contrast</button>
+      </div>
+    </div>
+
+    <!-- Accent color -->
+    <div class="pref-group">
+      <div class="pref-label">Accent Color (PROJ-442)</div>
+      <div class="accent-options">
+        <button class="accent-btn active" data-accent-val="indigo" onclick="selectAccent('indigo')">Indigo</button>
+        <button class="accent-btn" data-accent-val="emerald" onclick="selectAccent('emerald')">Emerald</button>
+        <button class="accent-btn" data-accent-val="violet" onclick="selectAccent('violet')">Violet</button>
+        <button class="accent-btn" data-accent-val="amber" onclick="selectAccent('amber')">Amber</button>
+        <button class="accent-btn" data-accent-val="rose" onclick="selectAccent('rose')">Rose</button>
+      </div>
+    </div>
+
+    <!-- Widget Visibility (PROJ-443) -->
+    <div class="pref-group">
+      <div class="pref-label">Widget Visibility & Ordering (PROJ-443)</div>
+      <div class="widget-config-list">
+        <label class="widget-config-item">
+          <span>📊 Analytics KPI Cards</span>
+          <input type="checkbox" id="pref-vis-analytics" checked />
+        </label>
+        <label class="widget-config-item">
+          <span>📈 7-Day Trend Chart</span>
+          <input type="checkbox" id="pref-vis-trends" checked />
+        </label>
+        <label class="widget-config-item">
+          <span>📬 Delivery History Log</span>
+          <input type="checkbox" id="pref-vis-delivery" checked />
+        </label>
+        <label class="widget-config-item">
+          <span>⚡ Live Activity Feed</span>
+          <input type="checkbox" id="pref-vis-activity" checked />
+        </label>
+        <label class="widget-config-item">
+          <span>🚨 Escalation Queue</span>
+          <input type="checkbox" id="pref-vis-escalations" checked />
+        </label>
+      </div>
+    </div>
+
+    <!-- Actions (PROJ-444) -->
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--border);">
+      <button class="retry-action-btn" onclick="resetUserSettingsToDefault()" style="color: var(--rose);">Reset to Defaults</button>
+      <button class="delivery-btn" onclick="saveUserSettingsFromModal()">Save & Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══ SEND REMINDER MODAL (PROJ-434) ══ -->
+<div class="modal-overlay" id="send-reminder-modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <div class="modal-title">📬 Send Outbound Reminder</div>
+      <button class="modal-close" onclick="closeSendReminderModal()">✕</button>
+    </div>
+    <div class="pref-group">
+      <div class="pref-label">Recipient (Phone or Email)</div>
+      <input type="text" id="rem-recipient" class="delivery-input" placeholder="+61412345678 or student@federation.edu.au" />
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+      <div class="pref-group">
+        <div class="pref-label">Channel</div>
+        <select id="rem-channel" class="delivery-select">
+          <option value="sms">SMS</option>
+          <option value="email">Email</option>
+          <option value="voice">Voice</option>
+        </select>
+      </div>
+      <div class="pref-group">
+        <div class="pref-label">Type</div>
+        <select id="rem-type" class="delivery-select">
+          <option value="appointment">Appointment</option>
+          <option value="followup">Followup</option>
+          <option value="alert">Alert</option>
+          <option value="general">General</option>
+        </select>
+      </div>
+    </div>
+    <div class="pref-group">
+      <div class="pref-label">Message Text</div>
+      <textarea id="rem-message" class="delivery-input" rows="3" placeholder="Reminder message content…"></textarea>
+    </div>
+    <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px;">
+      <button class="retry-action-btn" onclick="closeSendReminderModal()">Cancel</button>
+      <button class="delivery-btn" onclick="submitSendReminder()">Send Outbound ↑</button>
+    </div>
+  </div>
+</div>
 
 <script>
 function launchAgent(tab) {
