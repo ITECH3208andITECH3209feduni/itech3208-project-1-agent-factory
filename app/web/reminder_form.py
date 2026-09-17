@@ -1,327 +1,213 @@
 """
 app.web.reminder_form — create/edit reminder form (PROJ-439).
 
-Served at /reminders/new and /reminders/{id}/edit. Same conventions as the
-dashboard: one self-contained document, no build step, no CDN, palette tokens
-declared for light and dark.
+Rewritten onto the published contract (PROJ-404): `message`, `send_at`, a
+required `contact_id`, and no per-reminder channel — the contact's
+preferred_channel decides delivery now.
 
-The form posts to /api/reminders and renders the server's per-field errors
-beside the inputs. Client-side checks exist to catch mistakes early, but the
-server is the authority — app.web.reminders.validate is the single source of
-truth and is what survives when PROJ-422 replaces the store.
+Two things the form surfaces that the earlier version could not, because the
+contacts store did not exist:
+
+  - A real contact picker, showing each contact's consent state. Scheduling a
+    reminder to someone who has not opted in is allowed (the reminder is a
+    plan, not a send), but the form says up front that it will be blocked at
+    send time. Discovering that later is worse.
+  - There is no "cancel" status. The contract's fourth status is `blocked`,
+    which means consent or policy stopped it — not the same as a human
+    changing their mind. Cancelling is therefore a delete.
+
+Style and the escape helper are shared with contacts_ui so the pages cannot
+drift apart.
 """
 
+from app.web.contacts_ui import ESC_JS, STYLE
+
 FORM_HTML = """<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
+<html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>__TITLE__ — Agent Factory</title>
-<style>
-  body {
-    color-scheme: light;
-    --surface-1:      #fcfcfb;
-    --page:           #f9f9f7;
-    --text-primary:   #0b0b0b;
-    --text-secondary: #52514e;
-    --text-muted:     #898781;
-    --hairline:       #e1e0d9;
-    --border:         rgba(11,11,11,0.10);
-    --accent:         #2a78d6;
-    --critical:       #d03b3b;
-    --warning:        #fab219;
-    --good:           #0ca30c;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root:where(:not([data-theme="light"])) body {
-      color-scheme: dark;
-      --surface-1:      #1a1a19;
-      --page:           #0d0d0d;
-      --text-primary:   #ffffff;
-      --text-secondary: #c3c2b7;
-      --text-muted:     #898781;
-      --hairline:       #2c2c2a;
-      --border:         rgba(255,255,255,0.10);
-      --accent:         #3987e5;
-      --critical:       #e66767;
-    }
-  }
-  :root[data-theme="dark"] body {
-    color-scheme: dark;
-    --surface-1: #1a1a19; --page: #0d0d0d;
-    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #898781;
-    --hairline: #2c2c2a; --border: rgba(255,255,255,0.10);
-    --accent: #3987e5; --critical: #e66767;
-  }
-
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--page); color: var(--text-primary);
-    font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  }
-  .wrap { max-width: 620px; margin: 0 auto; padding: 28px 22px 60px; }
-
-  .crumb { font-size: 13px; margin-bottom: 14px; }
-  .crumb a { color: var(--accent); text-decoration: none; }
-  .crumb a:hover { text-decoration: underline; }
-  h1 { font-size: 21px; margin: 0 0 4px; }
-  .sub { color: var(--text-secondary); font-size: 13px; margin-bottom: 20px; }
-
-  .banner {
-    display: flex; gap: 10px; align-items: flex-start;
-    background: var(--surface-1); border: 1px solid var(--border);
-    border-left: 3px solid var(--warning);
-    border-radius: 8px; padding: 11px 14px; margin-bottom: 20px;
-    font-size: 13px; color: var(--text-secondary);
-  }
-  .banner .ico { flex: none; font-weight: 700; color: var(--text-primary); }
-  .banner b { color: var(--text-primary); font-weight: 600; }
-
-  form {
-    background: var(--surface-1); border: 1px solid var(--border);
-    border-radius: 10px; padding: 20px 22px;
-  }
-  .field { margin-bottom: 17px; }
-  label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 5px; }
-  .req { color: var(--text-secondary); font-weight: 400; }
-  .hint { color: var(--text-secondary); font-size: 12px; margin-top: 4px; }
-
-  input[type=text], input[type=datetime-local], select, textarea {
-    width: 100%; padding: 9px 11px; font: inherit;
-    color: var(--text-primary); background: var(--page);
-    border: 1px solid var(--border); border-radius: 7px;
-  }
-  textarea { min-height: 88px; resize: vertical; }
-  input:focus, select:focus, textarea:focus {
-    outline: 2px solid var(--accent); outline-offset: -1px;
-  }
-  .field.bad input, .field.bad select, .field.bad textarea { border-color: var(--critical); }
-
-  /* Errors carry an icon and text, never colour alone. */
-  .err {
-    display: none; gap: 6px; align-items: baseline;
-    color: var(--text-primary); font-size: 12.5px; margin-top: 5px;
-  }
-  .field.bad .err { display: flex; }
-  .err .ico { color: var(--critical); font-weight: 700; flex: none; }
-
-  .counter { float: right; color: var(--text-secondary); font-size: 12px; font-weight: 400; }
-
-  .actions { display: flex; gap: 10px; align-items: center; margin-top: 22px; }
-  button {
-    padding: 10px 20px; border-radius: 7px; border: 0; font: inherit;
-    font-weight: 600; cursor: pointer; background: var(--accent); color: #fff;
-  }
-  button.ghost {
-    background: transparent; color: var(--text-secondary);
-    border: 1px solid var(--border); font-weight: 500;
-  }
-  button:disabled { opacity: .55; cursor: default; }
-  #formstatus { font-size: 13px; color: var(--text-primary); }
-</style>
-</head>
-<body>
-<div class="wrap">
-  <div class="crumb"><a href="/dashboard">&larr; Dashboard</a></div>
-  <h1 id="heading">__TITLE__</h1>
-  <div class="sub" id="subtitle">__SUBTITLE__</div>
+<title>__TITLE__ — Agent Factory</title>__STYLE__</head>
+<body><div class="wrap narrow">
+  <div class="crumb"><a href="/reminders">&larr; Reminders</a></div>
+  <h1>__TITLE__</h1>
+  <div class="sub" style="margin-bottom:18px">__SUBTITLE__</div>
 
   <div class="banner">
     <span class="ico" aria-hidden="true">!</span>
-    <div>
-      <b>Provisional backend.</b> Reminders are saved to a local JSON file, not
-      the real store — that is <b>PROJ-422</b>, coded against the data contract
-      <b>PROJ-404</b>, neither of which has landed. The shape used here is
-      written down in <code>docs/contracts/reminder.provisional.schema.json</code>.
-      Nothing sends: the Reminders Engine is <b>PROJ-395</b>.
-    </div>
+    <div><b>Nothing sends yet.</b> The Reminders Engine is <b>PROJ-395</b>, so a
+    scheduled reminder is a record of intent — it will not be delivered until
+    that lands. Consent is still enforced at send time (<b>PROJ-441</b>).</div>
   </div>
 
-  <form id="f" novalidate>
+  <form id="f" class="card pad" novalidate>
     <input type="hidden" id="rid" value="__ID__">
 
-    <div class="field" id="field-title">
-      <label for="title">Title <span class="req">— required</span>
-        <span class="counter"><span id="title-n">0</span>/200</span></label>
-      <input type="text" id="title" maxlength="200" autocomplete="off"
-             placeholder="Follow up with Acme about renewal">
+    <div class="field" id="field-contact_id">
+      <label for="contact_id">Contact <span class="req">— required</span></label>
+      <select id="contact_id"><option value="">Loading contacts…</option></select>
+      <div class="hint" id="contacthint">Every reminder goes to a contact — that is who consent is checked against.</div>
       <div class="err"><span class="ico" aria-hidden="true">!</span><span class="msg"></span></div>
     </div>
 
-    <div class="field" id="field-due_at">
-      <label for="due_at">Due <span class="req">— required</span></label>
-      <input type="datetime-local" id="due_at">
-      <div class="hint" id="due-hint">Interpreted in this machine's timezone and stored with an offset.</div>
+    <div id="consentwarn"></div>
+
+    <div class="field" id="field-message">
+      <label for="message">Message <span class="req">— required</span>
+        <span class="counter"><span id="msg-n">0</span>/1600</span></label>
+      <textarea id="message" maxlength="1600"
+        placeholder="Hi Jane, just a reminder about your appointment tomorrow at 2pm."></textarea>
+      <div class="hint">1600 characters is the contract's limit — roughly ten SMS segments.</div>
       <div class="err"><span class="ico" aria-hidden="true">!</span><span class="msg"></span></div>
     </div>
 
-    <div class="field" id="field-channel">
-      <label for="channel">Channel <span class="req">— required</span></label>
-      <select id="channel">
-        <option value="">Choose…</option>
-        <option value="telegram">Telegram</option>
-        <option value="email">Email</option>
-        <option value="sms">SMS</option>
-      </select>
-      <div class="hint">Per-contact preference and quiet hours are PROJ-400 and are not applied yet.</div>
+    <div class="field" id="field-send_at">
+      <label for="send_at">Send at <span class="req">— required</span></label>
+      <input type="datetime-local" id="send_at">
+      <div class="hint">Read in this machine's timezone and stored with an offset.</div>
       <div class="err"><span class="ico" aria-hidden="true">!</span><span class="msg"></span></div>
     </div>
 
     <div class="field" id="field-status">
-      <label for="status">Status</label>
-      <select id="status">
-        <option value="scheduled">Scheduled</option>
-        <option value="cancelled">Cancelled</option>
-      </select>
-      <div class="hint">Sent and failed are set by the engine, not here.</div>
       <div class="err"><span class="ico" aria-hidden="true">!</span><span class="msg"></span></div>
     </div>
-
-    <div class="field" id="field-contact_id">
-      <label for="contact_id">Contact <span class="req">— optional</span></label>
-      <input type="text" id="contact_id" autocomplete="off" placeholder="Contact ID">
-      <div class="hint">A free-text ID for now — the contacts store is PROJ-417, so this is not checked.</div>
-      <div class="err"><span class="ico" aria-hidden="true">!</span><span class="msg"></span></div>
-    </div>
-
-    <div class="field" id="field-notes">
-      <label for="notes">Notes <span class="req">— optional</span>
-        <span class="counter"><span id="notes-n">0</span>/2000</span></label>
-      <textarea id="notes" maxlength="2000"></textarea>
-      <div class="err"><span class="ico" aria-hidden="true">!</span><span class="msg"></span></div>
-    </div>
-
     <div class="field" id="field-_">
       <div class="err"><span class="ico" aria-hidden="true">!</span><span class="msg"></span></div>
     </div>
 
-    <div class="actions">
-      <button type="submit" id="save">__SAVE_LABEL__</button>
-      <button type="button" class="ghost" id="cancel">Cancel</button>
+    <div id="dispatch"></div>
+
+    <div class="row-actions" style="margin-top:6px">
+      <button type="submit" class="btn" id="save">__SAVE__</button>
+      <button type="button" class="btn ghost" id="cancel">Cancel</button>
+      <button type="button" class="btn ghost" id="del" hidden>Delete</button>
       <span id="formstatus" role="status" aria-live="polite"></span>
     </div>
   </form>
 </div>
-
-<script>
+<script>__ESC__
 const RID = document.getElementById("rid").value;
-const FIELDS = ["title", "due_at", "channel", "status", "contact_id", "notes"];
+let CONTACTS = [];
 
 function clearErrors() {
   document.querySelectorAll(".field").forEach(f => {
     f.classList.remove("bad");
-    const m = f.querySelector(".err .msg");
-    if (m) m.textContent = "";
+    const m = f.querySelector(".err .msg"); if (m) m.textContent = "";
   });
 }
-
 function showErrors(errors) {
-  // Keyed by field name, so each message lands beside the input it concerns.
-  for (const [key, msg] of Object.entries(errors || {})) {
-    const f = document.getElementById("field-" + key);
-    if (f) {
-      f.classList.add("bad");
-      f.querySelector(".err .msg").textContent = msg;
-    }
+  for (const [k, msg] of Object.entries(errors || {})) {
+    const f = document.getElementById("field-" + k);
+    if (f) { f.classList.add("bad"); f.querySelector(".err .msg").textContent = msg; }
   }
-  const first = document.querySelector(".field.bad input, .field.bad select, .field.bad textarea");
+  const first = document.querySelector(".field.bad select, .field.bad textarea, .field.bad input");
   if (first) first.focus();
 }
+function setStatus(t) { document.getElementById("formstatus").textContent = t; }
 
-function setStatus(text, kind) {
-  const el = document.getElementById("formstatus");
-  el.textContent = text;
-  el.className = kind || "";
-}
+const msg = document.getElementById("message");
+const msgN = document.getElementById("msg-n");
+msg.addEventListener("input", () => { msgN.textContent = msg.value.length; });
 
-// Live counters — cheap, and stops people discovering the limit on submit.
-for (const [id, out] of [["title", "title-n"], ["notes", "notes-n"]]) {
-  const input = document.getElementById(id);
-  const label = document.getElementById(out);
-  const sync = () => { label.textContent = input.value.length; };
-  input.addEventListener("input", sync);
-  sync();
-}
-
-// Client-side checks mirror the server's, but the server is the authority —
-// these only save a round trip on obvious mistakes.
-function localErrors() {
-  const errs = {};
-  const title = document.getElementById("title").value.trim();
-  if (!title) errs.title = "Enter a title.";
-
-  const due = document.getElementById("due_at").value;
-  if (!due) {
-    errs.due_at = "Enter a valid date and time.";
-  } else if (document.getElementById("status").value === "scheduled"
-             && new Date(due) <= new Date()) {
-    errs.due_at = "Pick a time in the future — a past reminder will never send.";
+// Say up front that a send will be blocked, rather than after the fact.
+function showConsentWarning() {
+  const id = document.getElementById("contact_id").value;
+  const c = CONTACTS.find(x => String(x.id) === String(id));
+  const box = document.getElementById("consentwarn");
+  if (!c) { box.innerHTML = ""; return; }
+  if (c.consent_state === "opted_in") {
+    box.innerHTML = `<div class="banner ok"><span class="ico" aria-hidden="true">\\u2713</span>
+      <div>${esc(c.name || c.phone_number)} has opted in.</div></div>`;
+  } else {
+    box.innerHTML = `<div class="banner bad"><span class="ico" aria-hidden="true">!</span>
+      <div><b>This will be blocked at send time.</b> ${esc(c.name || c.phone_number)} is
+      ${esc(CONSENT_LABEL[c.consent_state] || c.consent_state).toLowerCase()} — only an explicit
+      opt-in permits a send. You can still schedule it.
+      <a href="/contacts/${esc(String(c.id))}">Record consent</a>.</div></div>`;
   }
-
-  if (!document.getElementById("channel").value) errs.channel = "Choose a channel.";
-  return errs;
 }
 
-async function loadExisting() {
-  if (!RID) return;
+async function loadContacts(selected) {
+  const sel = document.getElementById("contact_id");
   try {
-    const r = await fetch("/api/reminders/" + encodeURIComponent(RID));
-    if (!r.ok) {
-      setStatus(r.status === 404 ? "That reminder no longer exists." : "Could not load it.", "bad");
+    const r = await fetch("/api/contacts");
+    const d = await r.json();
+    CONTACTS = d.contacts || [];
+    if (!CONTACTS.length) {
+      sel.innerHTML = `<option value="">No contacts yet</option>`;
+      document.getElementById("contacthint").innerHTML =
+        `You need a contact first — <a href="/contacts/new">add one</a>.`;
       document.getElementById("save").disabled = true;
       return;
     }
-    const d = await r.json();
-    document.getElementById("title").value = d.title || "";
-    // datetime-local wants no offset, so trim it off for display while the
-    // stored value keeps its offset.
-    document.getElementById("due_at").value = (d.due_at || "").slice(0, 16);
-    document.getElementById("channel").value = d.channel || "";
-    document.getElementById("contact_id").value = d.contact_id || "";
-    document.getElementById("notes").value = d.notes || "";
-
-    const sel = document.getElementById("status");
-    // A reminder the engine already marked sent/failed must remain visible in
-    // the dropdown without becoming client-settable.
-    if (d.status && !["scheduled", "cancelled"].includes(d.status)) {
-      const opt = document.createElement("option");
-      opt.value = d.status;
-      opt.textContent = d.status + " (set by the engine)";
-      opt.disabled = true;
-      sel.appendChild(opt);
-    }
-    sel.value = d.status || "scheduled";
-
-    document.getElementById("title-n").textContent = (d.title || "").length;
-    document.getElementById("notes-n").textContent = (d.notes || "").length;
+    sel.innerHTML = `<option value="">Choose…</option>` + CONTACTS.map(c =>
+      `<option value="${esc(String(c.id))}">${esc(c.name || "(no name)")} — ${
+        esc(c.phone_number)} · ${esc(CONSENT_LABEL[c.consent_state] || c.consent_state)}</option>`
+    ).join("");
+    const pre = selected || new URLSearchParams(location.search).get("contact_id");
+    if (pre) sel.value = String(pre);
+    showConsentWarning();
   } catch (err) {
-    setStatus("Could not load it: " + err.message, "bad");
+    sel.innerHTML = `<option value="">Could not load contacts</option>`;
+  }
+}
+document.getElementById("contact_id").addEventListener("change", showConsentWarning);
+
+async function loadExisting() {
+  if (!RID) { await loadContacts(); return; }
+  document.getElementById("del").hidden = false;
+  const r = await fetch("/api/reminders/" + encodeURIComponent(RID));
+  if (!r.ok) {
+    setStatus(r.status === 404 ? "That reminder no longer exists." : "Could not load it.");
+    document.getElementById("save").disabled = true;
+    await loadContacts();
+    return;
+  }
+  const d = await r.json();
+  msg.value = d.message || ""; msgN.textContent = msg.value.length;
+  document.getElementById("send_at").value = (d.send_at || "").slice(0, 16);
+  await loadContacts(d.contact_id);
+
+  if (d.status && d.status !== "scheduled") {
+    // The engine owns these. Editing is pointless once it has acted.
+    document.getElementById("dispatch").innerHTML =
+      `<div class="banner"><span class="ico" aria-hidden="true">!</span>
+        <div>This reminder is <b>${esc(d.status)}</b>${
+          d.blocked_reason ? ` — ${esc(d.blocked_reason)}` : ""}. Recorded by the engine, not editable here.</div></div>`;
+  } else if (d.dispatch && !d.dispatch.allowed) {
+    document.getElementById("dispatch").innerHTML =
+      `<div class="banner bad"><span class="ico" aria-hidden="true">!</span>
+        <div><b>Would be blocked right now.</b> ${esc(d.dispatch.reason || "")}</div></div>`;
   }
 }
 
-document.getElementById("cancel").onclick = () => { window.location.href = "/dashboard"; };
+document.getElementById("cancel").onclick = () => { window.location.href = "/reminders"; };
+
+document.getElementById("del").onclick = async () => {
+  // Delete is how you cancel: the contract has no 'cancelled' status, and
+  // 'blocked' means consent stopped it, which is a different fact.
+  if (!confirm("Delete this reminder? There is no 'cancelled' state in the data contract, so cancelling is a delete.")) return;
+  const r = await fetch("/api/reminders/" + encodeURIComponent(RID), {method: "DELETE"});
+  if (r.ok || r.status === 204) { window.location.href = "/reminders"; }
+  else setStatus("Could not delete: HTTP " + r.status);
+};
 
 document.getElementById("f").onsubmit = async ev => {
-  ev.preventDefault();
-  clearErrors();
-  setStatus("");
+  ev.preventDefault(); clearErrors(); setStatus("");
 
-  const local = localErrors();
+  const local = {};
+  if (!document.getElementById("contact_id").value) local.contact_id = "Choose a contact.";
+  if (!msg.value.trim()) local.message = "Enter a message.";
+  const when = document.getElementById("send_at").value;
+  if (!when) local.send_at = "Enter a valid date and time.";
+  else if (new Date(when) <= new Date()) local.send_at = "Pick a time in the future — a past reminder will never send.";
   if (Object.keys(local).length) { showErrors(local); return; }
 
   const body = {
-    title:      document.getElementById("title").value.trim(),
-    due_at:     document.getElementById("due_at").value,
-    channel:    document.getElementById("channel").value,
-    status:     document.getElementById("status").value,
-    contact_id: document.getElementById("contact_id").value.trim() || null,
-    notes:      document.getElementById("notes").value,
+    contact_id: parseInt(document.getElementById("contact_id").value, 10),
+    message: msg.value.trim(),
+    send_at: when,
   };
-
   const save = document.getElementById("save");
-  save.disabled = true;
-  setStatus("Saving…");
-
+  save.disabled = true; setStatus("Saving…");
   try {
     const r = await fetch(RID ? "/api/reminders/" + encodeURIComponent(RID) : "/api/reminders", {
       method: RID ? "PATCH" : "POST",
@@ -329,53 +215,23 @@ document.getElementById("f").onsubmit = async ev => {
       body: JSON.stringify(body),
     });
     const d = await r.json().catch(() => ({}));
-
-    if (r.status === 422) {
-      showErrors(d.errors || {});
-      setStatus("Fix the highlighted fields.", "bad");
-      return;
-    }
-    if (!r.ok) {
-      setStatus("Could not save: " + (d.detail || ("HTTP " + r.status)), "bad");
-      return;
-    }
-
-    setStatus(RID ? "Saved." : "Created.", "ok");
-    // Back to the dashboard so the counter reflects the change.
-    setTimeout(() => { window.location.href = "/dashboard"; }, 650);
-  } catch (err) {
-    setStatus("Could not save: " + err.message, "bad");
-  } finally {
-    save.disabled = false;
-  }
+    if (r.status === 422) { showErrors(d.errors || {}); setStatus("Fix the highlighted fields."); return; }
+    if (!r.ok) { setStatus("Could not save: " + (d.detail || ("HTTP " + r.status))); return; }
+    setStatus(RID ? "Saved." : "Created.");
+    setTimeout(() => { window.location.href = "/reminders"; }, 550);
+  } catch (err) { setStatus("Could not save: " + err.message); }
+  finally { save.disabled = false; }
 };
 
 loadExisting();
-</script>
-</body>
-</html>
-"""
+</script></body></html>
+""".replace("__STYLE__", STYLE).replace("__ESC__", ESC_JS)
 
 
 def render(reminder_id: str | None = None) -> str:
-    """Render the form for create (no id) or edit (with id)."""
     if reminder_id:
-        title, subtitle, save = (
-            "Edit reminder",
-            "Change the details and save.",
-            "Save changes",
-        )
+        title, subtitle, save = ("Edit reminder", "Change the details and save.", "Save changes")
     else:
-        title, subtitle, save = (
-            "New reminder",
-            "Schedule a reminder for a contact.",
-            "Create reminder",
-        )
-
-    return (
-        FORM_HTML
-        .replace("__TITLE__", title)
-        .replace("__SUBTITLE__", subtitle)
-        .replace("__SAVE_LABEL__", save)
-        .replace("__ID__", reminder_id or "")
-    )
+        title, subtitle, save = ("New reminder", "Schedule a message to a contact.", "Create reminder")
+    return (FORM_HTML.replace("__TITLE__", title).replace("__SUBTITLE__", subtitle)
+            .replace("__SAVE__", save).replace("__ID__", reminder_id or ""))

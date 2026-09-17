@@ -206,7 +206,7 @@ INDEX_HTML = """<!DOCTYPE html>
   .row .badge .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
   .row .badge.sent .dot { background: var(--good); }
   .row .badge.failed .dot { background: #d03b3b; }
-  .row .badge.cancelled .dot { background: var(--text-muted); }
+  .row .badge.blocked .dot { background: #d03b3b; }
   .more { padding-top: 10px; font-size: 13px; }
 
   /* ── Table view — every value reachable without hover ── */
@@ -237,14 +237,11 @@ INDEX_HTML = """<!DOCTYPE html>
     <a href="/dashboard" aria-current="page">Dashboard</a>
 
     <div class="navsec">Manage</div>
-    <a class="pending" aria-disabled="true" title="Blocked by PROJ-417">
-      Contacts <span class="tag">PROJ-417</span>
-    </a>
+    <a href="/contacts">Contacts</a>
+    <a href="/contacts/import">Import CSV</a>
     <a href="/reminders/new">New reminder</a>
     <a href="/reminders">Reminders</a>
-    <a class="pending" aria-disabled="true" title="Blocked by PROJ-440">
-      Preferences <span class="tag">PROJ-440</span>
-    </a>
+    <a href="/contacts">Preferences</a>
 
     <div class="navsec">Agent</div>
     <a href="/ui">Ask</a>
@@ -288,7 +285,7 @@ INDEX_HTML = """<!DOCTYPE html>
       </div>
       <div class="panel">
         <h2>Recent history</h2>
-        <div class="hint">Reminders that were sent, failed, or cancelled.</div>
+        <div class="hint">Reminders that were sent, blocked, or failed.</div>
         <div id="panel-history"><div class="empty">Loading…</div></div>
       </div>
     </div>
@@ -395,7 +392,7 @@ async function load() {
 
 // ── Panels (PROJ-438) ───────────────────────────────────────
 const STATUS_LABEL = {
-  scheduled: "Scheduled", sent: "Sent", cancelled: "Cancelled", failed: "Failed",
+  scheduled: "Scheduled", sent: "Sent", blocked: "Blocked", failed: "Failed",
 };
 
 function fmtDue(iso) {
@@ -412,8 +409,8 @@ function panelRows(items, opts) {
     const right = opts.showStatus
       ? `<span class="badge ${esc(r.status)}"><span class="dot" aria-hidden="true"></span>${
            esc(STATUS_LABEL[r.status] || r.status)}</span>`
-      : `<span class="w">${esc(fmtDue(r.due_at))}</span>`;
-    return `<div class="row"><span class="t"><a href="${edit}">${esc(r.title)}</a></span>${right}</div>`;
+      : `<span class="w">${esc(fmtDue(r.send_at))}</span>`;
+    return `<div class="row"><span class="t"><a href="${edit}">${esc((r.message || "").slice(0, 60))}</a></span>${right}</div>`;
   }).join("") + `</div>`;
 }
 
@@ -423,25 +420,25 @@ async function loadPanels() {
 
   try {
     // Soonest scheduled first.
-    const r1 = await fetch("/api/reminders?status=scheduled&sort=due_asc&limit=5");
+    const r1 = await fetch("/api/reminders?status=scheduled&sort=send_at_asc&limit=5");
     if (!r1.ok) throw new Error("HTTP " + r1.status);
     const d1 = await r1.json();
     // The API cannot express "future only", so drop overdue ones here —
     // a past scheduled reminder is not "upcoming", it is stuck.
-    const future = (d1.reminders || []).filter(r => new Date(r.due_at) >= new Date());
+    const future = (d1.reminders || []).filter(r => new Date(r.send_at) >= new Date());
     up.innerHTML = future.length
       ? panelRows(future, {showStatus: false}) +
         `<div class="more"><a href="/reminders?status=scheduled">View all</a></div>`
       : `<div class="empty">Nothing scheduled. <a href="/reminders/new">Create a reminder</a>.</div>`;
 
     // History = something actually happened to it.
-    const r2 = await fetch("/api/reminders?status=sent,failed,cancelled&sort=created_desc&limit=5");
+    const r2 = await fetch("/api/reminders?status=sent,failed,blocked&sort=created_desc&limit=5");
     if (!r2.ok) throw new Error("HTTP " + r2.status);
     const d2 = await r2.json();
     hist.innerHTML = (d2.reminders || []).length
       ? panelRows(d2.reminders, {showStatus: true}) +
-        `<div class="more"><a href="/reminders?status=sent,failed,cancelled">View all</a></div>`
-      : `<div class="empty">Nothing has been sent or cancelled yet. Nothing sends until the engine lands (<code>PROJ-395</code>).</div>`;
+        `<div class="more"><a href="/reminders?status=sent,failed,blocked">View all</a></div>`
+      : `<div class="empty">Nothing has been sent or blocked yet. Nothing sends until the engine lands (<code>PROJ-395</code>).</div>`;
   } catch (err) {
     const msg = `<div class="empty">Could not load reminders: ${esc(err.message)}</div>`;
     up.innerHTML = msg;

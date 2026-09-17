@@ -98,11 +98,47 @@ def queries_run() -> Metric:
 
 # ── Providers waiting on other people's tickets ───────────────
 def contacts_total() -> Metric:
-    return _pending(
-        "contacts_total", "Contacts",
-        "PROJ-417",
-        "Contacts store not built. Waits on the org/contact data contract (PROJ-404).",
-    )
+    """Live since PROJ-417 — the contacts store exists, on the PROJ-404 contract."""
+    try:
+        from app.web import contacts
+
+        rows = contacts.list_contacts()
+        opted_in = sum(1 for r in rows if r.get("consent_state") == "opted_in")
+        return Metric(
+            key="contacts_total",
+            label="Contacts",
+            value=len(rows),
+            # The count alone hides the number that can actually be contacted,
+            # which is the figure that matters operationally.
+            note=(f"{opted_in} opted in — only those can be sent to"
+                  if rows else "none yet"),
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("contacts_total failed: %s", exc)
+        return Metric(
+            key="contacts_total", label="Contacts",
+            available=False, blocked_by="PROJ-417", note=f"store unreadable: {exc}",
+        )
+
+
+def reminders_blocked() -> Metric:
+    """Reminders consent or policy stopped (PROJ-441)."""
+    try:
+        from app.web.reminders import blocked_count
+
+        return Metric(
+            key="reminders_blocked",
+            label="Blocked",
+            value=blocked_count(),
+            higher_is_better=False,
+            note="stopped by consent or policy",
+        )
+    except Exception as exc:  # noqa: BLE001
+        log.warning("reminders_blocked failed: %s", exc)
+        return Metric(
+            key="reminders_blocked", label="Blocked",
+            available=False, note=f"store unreadable: {exc}",
+        )
 
 
 def reminders_upcoming() -> Metric:
@@ -162,6 +198,7 @@ PROVIDERS: list[Callable[[], Metric]] = [
     reminders_upcoming,     # hero — what the epic says the page leads with
     contacts_total,
     reminders_sent,
+    reminders_blocked,
     skills_registered,
     queries_run,
 ]

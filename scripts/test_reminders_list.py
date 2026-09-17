@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 # scripts/test_reminders_list.py
 # ──────────────────────────────────────────────────────────────
-# Checks for the reminders list view — filter, search, status (PROJ-438).
-# Run: python scripts/test_reminders_list.py
+# Reminders list view — filter, search, status (PROJ-438).
 #
-# Uses a temporary store seeded with known records, so the developer's own
-# store/reminders.json is never touched.
+# Rewritten for the published contract (PROJ-404): message / send_at /
+# blocked / int ids. CRUD and validation are covered in test_contacts.py;
+# this file focuses on query behaviour — sorting, paging, combined filters,
+# and the two empty states.
+#
+# Run: python scripts/test_reminders_list.py
 # ──────────────────────────────────────────────────────────────
 
 import os
@@ -36,7 +39,7 @@ def iso(**kw) -> str:
 
 
 def main() -> int:
-    print("Reminders list view (PROJ-438)\n")
+    print("Reminders list view on the PROJ-404 contract (PROJ-438)\n")
 
     try:
         from fastapi.testclient import TestClient
@@ -44,186 +47,146 @@ def main() -> int:
         print(f"  SKIP  TestClient unavailable ({exc})")
         return 0
 
-    from app.web import reminders
+    from app.web import reminders, store
     from app.web.main import app
 
-    tmpdir = tempfile.mkdtemp(prefix="af-list-")
-    store = reminders.JsonFileStore(Path(tmpdir) / "reminders.json")
-    reminders.set_store(store)
+    tmp = Path(tempfile.mkdtemp(prefix="af-list-"))
+    for name in ("contacts", "reminders", "consent_events"):
+        store.set_table(name, store.JsonTable(tmp / f"{name}.json", name))
+
     client = TestClient(app)
 
     try:
-        # ── Seed ──────────────────────────────────────────────
-        # Created through the store directly so past dates and engine-owned
-        # statuses can be set — the API correctly refuses both.
+        # Two contacts, so the contact filter has something to bite on.
+        from app.web import contacts
+
+        alice = contacts.create_contact({"phone_number": "0400000101", "name": "Alice"})
+        bobby = contacts.create_contact({"phone_number": "0400000102", "name": "Bobby"})
+
+        # Seeded through the store so past dates and engine-owned statuses can
+        # be set — the API correctly refuses both.
         seed = [
-            {"title": "Acme renewal call", "due_at": iso(days=1),  "channel": "telegram",
-             "status": "scheduled", "notes": "Discuss pricing"},
-            {"title": "Bravo follow-up",   "due_at": iso(days=5),  "channel": "email",
-             "status": "scheduled", "notes": ""},
-            {"title": "Charlie onboarding", "due_at": iso(days=-2), "channel": "sms",
-             "status": "sent", "notes": "welcome pack"},
-            {"title": "Delta cancelled thing", "due_at": iso(days=3), "channel": "email",
-             "status": "cancelled", "notes": ""},
-            {"title": "Echo bounced", "due_at": iso(days=-1), "channel": "sms",
-             "status": "failed", "notes": "bad number"},
-            {"title": "Stuck scheduled item", "due_at": iso(days=-3), "channel": "email",
-             "status": "scheduled", "notes": "overdue on purpose"},
+            ("Acme renewal call", iso(days=1), alice["id"], "scheduled", None),
+            ("Bravo follow-up", iso(days=5), alice["id"], "scheduled", None),
+            ("Charlie onboarding", iso(days=-2), bobby["id"], "sent", iso(days=-2)),
+            ("Delta stopped by consent", iso(days=3), bobby["id"], "blocked", None),
+            ("Echo bounced", iso(days=-1), bobby["id"], "failed", None),
+            ("Stuck scheduled item", iso(days=-3), alice["id"], "scheduled", None),
         ]
-        for s in seed:
-            store.create(s)
-        check("seeded 6 reminders", len(store.list()) == 6, str(len(store.list())))
+        for msg, when, cid, status, sent in seed:
+            reminders.reminders_table().insert({
+                "contact_id": cid, "message": msg, "send_at": when,
+                "sent_at": sent, "status": status,
+                "created_at": iso(seconds=-len(msg)), "updated_at": iso(),
+            })
+        check("seeded 6 reminders", len(reminders.list_reminders()) == 6)
 
         # ── Page ──────────────────────────────────────────────
         r = client.get("/reminders")
-        check("GET /reminders returns 200", r.status_code == 200, f"got {r.status_code}")
+        check("GET /reminders returns 200", r.status_code == 200)
         html = r.text
-        check("list page is HTML", "text/html" in r.headers.get("content-type", ""))
-
-        # One filter row above the table, not per-row filters.
         check("has exactly one filter row", html.count('class="filters"') == 1)
-        for f in ("id=\"q\"", "id=\"status\"", "id=\"channel\"", "id=\"sort\""):
+        for f in ('id="q"', 'id="status"', 'id="contact"', 'id="sort"'):
             check(f"filter row has {f}", f in html)
-        check("has a clear-filters control", 'id="clear"' in html)
+        check("status options match the contract",
+              "blocked" in html and "cancelled" not in html)
+        check("distinguishes the two empty states",
+              "No reminders yet" in html and "Nothing matches these filters" in html)
+        check("calls out overdue scheduled rows", "Overdue" in html)
+        check("shows the contact column", "Contact</th>" in html)
         check("escapes interpolated values", "const esc" in html)
-        check("no external dependencies", "https://" not in html and "cdn." not in html)
-        check("links to the create form", "/reminders/new" in html)
-
-        # Status must not be colour-only.
-        check("status renders a dot and a word", 'class="dot"' in html and "STATUS_LABEL" in html)
-        check("distinguishes the two empty states", "No reminders yet" in html
-              and "Nothing matches these filters" in html)
+        check("no CDN dependency", "https://" not in html and "cdn." not in html)
 
         # ── Unfiltered ────────────────────────────────────────
         d = client.get("/api/reminders").json()
-        check("returns all 6 unfiltered", d["total"] == 6, str(d["total"]))
+        check("returns all 6", d["total"] == 6, str(d["total"]))
         check("reports unfiltered_total", d["unfiltered_total"] == 6)
-        check(
-            "default sort is soonest due first",
-            [x["due_at"] for x in d["reminders"]] == sorted(x["due_at"] for x in d["reminders"]),
-        )
+        check("default sort is soonest send_at",
+              [x["send_at"] for x in d["reminders"]]
+              == sorted(x["send_at"] for x in d["reminders"]))
 
-        # ── Search ────────────────────────────────────────────
+        # ── Search over message ───────────────────────────────
         d = client.get("/api/reminders?q=acme").json()
-        check("search is case-insensitive on title", d["total"] == 1, str(d["total"]))
-        check("search returns the right row", d["reminders"][0]["title"].startswith("Acme"))
+        check("search is case-insensitive", d["total"] == 1, str(d["total"]))
+        d = client.get("/api/reminders?q=CONSENT").json()
+        check("search matches mid-message", d["total"] == 1, str(d["total"]))
+        d = client.get("/api/reminders?q=zzznope").json()
+        check("no matches returns 0", d["total"] == 0)
+        check("no-match keeps unfiltered_total", d["unfiltered_total"] == 6)
 
-        d = client.get("/api/reminders?q=welcome+pack").json()
-        check("search also matches notes", d["total"] == 1, str(d["total"]))
-
-        d = client.get("/api/reminders?q=zzzznope").json()
-        check("search with no matches returns 0", d["total"] == 0)
-        check("no-match response still reports unfiltered_total", d["unfiltered_total"] == 6)
-
-        # ── Status filter ─────────────────────────────────────
+        # ── Status ────────────────────────────────────────────
         d = client.get("/api/reminders?status=scheduled").json()
         check("status filter works", d["total"] == 3, str(d["total"]))
-        check("status filter returns only that status",
-              all(x["status"] == "scheduled" for x in d["reminders"]))
-
-        d = client.get("/api/reminders?status=sent,failed").json()
-        check("status accepts a comma-separated list", d["total"] == 2, str(d["total"]))
-
-        # A mistyped filter must not silently return everything.
+        d = client.get("/api/reminders?status=blocked,failed").json()
+        check("comma-separated statuses work", d["total"] == 2, str(d["total"]))
+        r = client.get("/api/reminders?status=cancelled")
+        check("the removed 'cancelled' status is now a 422", r.status_code == 422)
         r = client.get("/api/reminders?status=schedulled")
-        check("misspelled status is 422, not ignored", r.status_code == 422, f"got {r.status_code}")
-        check("error names the bad value", "schedulled" in str(r.json().get("errors", {})))
+        check("misspelled status is 422, not ignored", r.status_code == 422)
+        check("error names the bad value", "schedulled" in str(r.json()["errors"]))
 
-        # ── Channel filter ────────────────────────────────────
-        d = client.get("/api/reminders?channel=email").json()
-        check("channel filter works", d["total"] == 3, str(d["total"]))
-        r = client.get("/api/reminders?channel=pigeon")
-        check("unknown channel is 422", r.status_code == 422)
+        # ── Contact filter ────────────────────────────────────
+        d = client.get(f"/api/reminders?contact_id={alice['id']}").json()
+        check("contact filter works", d["total"] == 3, str(d["total"]))
+        check("contact filter returns only that contact's",
+              all(x["contact_id"] == alice["id"] for x in d["reminders"]))
 
         # ── Combined ──────────────────────────────────────────
-        d = client.get("/api/reminders?status=scheduled&channel=email").json()
-        check("filters combine (AND)", d["total"] == 2, str(d["total"]))
-        d = client.get("/api/reminders?q=bravo&status=scheduled").json()
-        check("search combines with filters", d["total"] == 1, str(d["total"]))
-        d = client.get("/api/reminders?q=bravo&status=sent").json()
+        d = client.get(f"/api/reminders?contact_id={bobby['id']}&status=sent").json()
+        check("filters combine (AND)", d["total"] == 1, str(d["total"]))
+        d = client.get("/api/reminders?q=acme&status=sent").json()
         check("contradictory filters return 0", d["total"] == 0)
 
         # ── Sort ──────────────────────────────────────────────
-        d = client.get("/api/reminders?sort=due_desc").json()
-        check(
-            "due_desc reverses the order",
-            [x["due_at"] for x in d["reminders"]] == sorted((x["due_at"] for x in d["reminders"]), reverse=True),
-        )
-        d = client.get("/api/reminders?sort=title_asc").json()
-        titles = [x["title"].lower() for x in d["reminders"]]
-        check("title_asc sorts alphabetically", titles == sorted(titles), str(titles[:3]))
+        d = client.get("/api/reminders?sort=send_at_desc").json()
+        check("send_at_desc reverses",
+              [x["send_at"] for x in d["reminders"]]
+              == sorted((x["send_at"] for x in d["reminders"]), reverse=True))
+        d = client.get("/api/reminders?sort=message_asc").json()
+        msgs = [x["message"].lower() for x in d["reminders"]]
+        check("message_asc sorts alphabetically", msgs == sorted(msgs), str(msgs[:2]))
         r = client.get("/api/reminders?sort=sideways")
         check("unknown sort is 422", r.status_code == 422)
 
         # ── Paging ────────────────────────────────────────────
         d = client.get("/api/reminders?limit=2").json()
-        check("limit caps the page", d["count"] == 2, str(d["count"]))
+        check("limit caps the page", d["count"] == 2)
         check("total ignores the limit", d["total"] == 6, str(d["total"]))
-        d = client.get("/api/reminders?limit=2&offset=2").json()
-        check("offset pages forward", d["count"] == 2)
-        first_page = client.get("/api/reminders?limit=2").json()["reminders"]
-        check(
-            "offset returns different rows",
-            d["reminders"][0]["id"] != first_page[0]["id"],
-        )
-        r = client.get("/api/reminders?limit=0")
-        check("limit=0 is rejected", r.status_code == 422)
-        r = client.get("/api/reminders?limit=99999")
-        check("absurd limit is rejected", r.status_code == 422)
-        r = client.get("/api/reminders?offset=-1")
-        check("negative offset is rejected", r.status_code == 422)
+        page2 = client.get("/api/reminders?limit=2&offset=2").json()
+        check("offset pages forward", page2["count"] == 2)
+        check("offset returns different rows",
+              page2["reminders"][0]["id"] != d["reminders"][0]["id"])
+        for bad in ("limit=0", "limit=99999", "offset=-1"):
+            check(f"{bad} is rejected", client.get(f"/api/reminders?{bad}").status_code == 422)
 
-        # ── Dashboard panel helpers ───────────────────────────
-        # "Upcoming" must exclude the deliberately overdue scheduled row —
-        # a past scheduled reminder is stuck, not upcoming.
-        upcoming = reminders.next_upcoming(5)
-        check("next_upcoming excludes overdue", len(upcoming) == 2, str([r.title for r in upcoming]))
-        check("next_upcoming is soonest first", upcoming[0].title.startswith("Acme"))
-        check("next_upcoming honours the count", len(reminders.next_upcoming(1)) == 1)
-
-        history = reminders.recent_history(5)
-        check("recent_history has the 3 finished ones", len(history) == 3, str(len(history)))
-        check(
-            "recent_history excludes scheduled",
-            all(r.status in ("sent", "failed", "cancelled") for r in history),
-        )
-
-        check("upcoming_count matches next_upcoming", reminders.upcoming_count() == 2)
+        # ── Dashboard helpers ─────────────────────────────────
+        up = reminders.next_upcoming(5)
+        check("next_upcoming excludes the overdue one", len(up) == 2, str([r["message"] for r in up]))
+        check("next_upcoming is soonest first", up[0]["message"].startswith("Acme"))
+        hist = reminders.recent_history(5)
+        check("recent_history covers sent/blocked/failed", len(hist) == 3, str(len(hist)))
+        check("recent_history excludes scheduled",
+              all(r["status"] in ("sent", "blocked", "failed") for r in hist))
+        check("upcoming_count agrees", reminders.upcoming_count() == 2)
         check("sent_count counts only sent", reminders.sent_count() == 1)
+        check("blocked_count counts only blocked", reminders.blocked_count() == 1)
 
-        # ── Dashboard wiring ──────────────────────────────────
-        dash = client.get("/dashboard").text
-        check("dashboard nav links to the list", 'href="/reminders"' in dash)
-        # Check the nav no longer carries a *pending tag* for PROJ-438, rather
-        # than that the string is absent: a ticket reference in a CSS comment
-        # is fine and desirable, and matching the bare string picks it up.
-        check(
-            "dashboard no longer tags the list as blocked",
-            '<span class="tag">PROJ-438</span>' not in dash,
-        )
-        check(
-            "dashboard still tags the genuinely blocked sections",
-            '<span class="tag">PROJ-417</span>' in dash,
-        )
-        check("dashboard has both panel containers",
-              'id="panel-upcoming"' in dash and 'id="panel-history"' in dash)
-        check("dashboard panels fetch the API", "/api/reminders?status=scheduled" in dash)
-
-        # ── query() directly, including the pure-function contract ──
-        items = store.list()
+        # ── query() is pure ───────────────────────────────────
+        items = reminders.list_reminders()
+        before = [r["id"] for r in items]
         page, total = reminders.query(items, limit=3)
-        check("query returns (page, total)", len(page) == 3 and total == 6, f"{len(page)},{total}")
-        before = [r.id for r in items]
-        reminders.query(items, sort="title_asc")
-        check("query does not mutate its input", [r.id for r in items] == before)
+        check("query returns (page, total)", len(page) == 3 and total == 6)
+        reminders.query(items, sort="message_asc")
+        check("query does not mutate its input", [r["id"] for r in items] == before)
 
         # ── Corrupt store ─────────────────────────────────────
-        (Path(tmpdir) / "reminders.json").write_text("{ broken", encoding="utf-8")
-        reminders.set_store(reminders.JsonFileStore(Path(tmpdir) / "reminders.json"))
-        r = client.get("/api/reminders?status=scheduled")
-        check("corrupt store is a 500, not an empty list", r.status_code == 500, f"got {r.status_code}")
+        (tmp / "reminders.json").write_text("{ broken", encoding="utf-8")
+        store.set_table("reminders", store.JsonTable(tmp / "reminders.json", "reminders"))
+        check("corrupt store is a 500, not an empty list",
+              client.get("/api/reminders?status=scheduled").status_code == 500)
     finally:
-        reminders.set_store(None)
+        for name in ("contacts", "reminders", "consent_events"):
+            store.set_table(name, None)
 
     print(f"\n{PASS} passed, {FAIL} failed")
     return 1 if FAIL else 0

@@ -22,7 +22,7 @@ import os
 import time
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
@@ -234,11 +234,172 @@ def dashboard() -> HTMLResponse:
     return HTMLResponse(content=INDEX_HTML)
 
 
-# ── Reminders (PROJ-439) ──────────────────────────────────────
-# The store behind these is provisional — PROJ-422 owns the real one, coded
-# against the contract in PROJ-404. Both are still To Do, so the shape used
-# here is written down in docs/contracts/reminder.provisional.schema.json.
-# Validation lives in app.web.reminders and is what survives the swap.
+# -- Contacts (PROJ-417, 418, 419, 420) ------------------------
+@app.get("/contacts", response_class=HTMLResponse, include_in_schema=False)
+def contacts_page() -> HTMLResponse:
+    from app.web.contacts_ui import LIST_HTML
+
+    return HTMLResponse(content=LIST_HTML)
+
+
+@app.get("/contacts/new", response_class=HTMLResponse, include_in_schema=False)
+def contact_new() -> HTMLResponse:
+    from app.web.contacts_ui import render_form
+
+    return HTMLResponse(content=render_form())
+
+
+@app.get("/contacts/import", response_class=HTMLResponse, include_in_schema=False)
+def contact_import_page() -> HTMLResponse:
+    from app.web.contacts_ui import IMPORT_HTML
+
+    return HTMLResponse(content=IMPORT_HTML)
+
+
+@app.get("/contacts/{contact_id}/edit", response_class=HTMLResponse, include_in_schema=False)
+def contact_edit(contact_id: int) -> HTMLResponse:
+    from app.web.contacts_ui import render_form
+
+    return HTMLResponse(content=render_form(str(contact_id)))
+
+
+@app.get("/contacts/{contact_id}", response_class=HTMLResponse, include_in_schema=False)
+def contact_profile(contact_id: int) -> HTMLResponse:
+    from app.web.contacts_ui import render_profile
+
+    return HTMLResponse(content=render_profile(contact_id))
+
+
+@app.get("/api/contacts")
+def api_list_contacts(q: str | None = None, consent_state: str | None = None) -> dict:
+    """Contacts for the current org, name-sorted."""
+    from app.web import contacts
+
+    try:
+        rows = contacts.list_contacts(q=q, consent_state=consent_state)
+    except contacts.ValidationError as exc:
+        return JSONResponse(status_code=422, content={"errors": exc.errors})
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {"count": len(rows), "contacts": rows}
+
+
+@app.get("/api/contacts/{contact_id}")
+def api_get_contact(contact_id: int) -> dict:
+    from app.web import consent, contacts
+
+    row = contacts.get_contact(contact_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="contact not found")
+    return {
+        **row,
+        "consent_history": consent.history(contact_id),
+        # Whether a send would be allowed right now, so the profile can say so
+        # before a reminder is scheduled rather than after it is blocked.
+        "send_decision": consent.check_send(contact_id).to_dict(),
+    }
+
+
+@app.post("/api/contacts", status_code=201)
+def api_create_contact(payload: dict) -> dict:
+    from app.web import contacts
+
+    try:
+        return contacts.create_contact(payload)
+    except contacts.ValidationError as exc:
+        return JSONResponse(status_code=422, content={"errors": exc.errors})
+
+
+@app.patch("/api/contacts/{contact_id}")
+def api_update_contact(contact_id: int, payload: dict) -> dict:
+    from app.web import contacts
+
+    try:
+        row = contacts.update_contact(contact_id, payload)
+    except contacts.ValidationError as exc:
+        return JSONResponse(status_code=422, content={"errors": exc.errors})
+    if row is None:
+        raise HTTPException(status_code=404, detail="contact not found")
+    return row
+
+
+@app.delete("/api/contacts/{contact_id}", status_code=204)
+def api_delete_contact(contact_id: int) -> Response:
+    from app.web import contacts
+
+    if not contacts.delete_contact(contact_id):
+        raise HTTPException(status_code=404, detail="contact not found")
+    return Response(status_code=204)
+
+
+@app.post("/api/contacts/import")
+async def api_import_contacts(request: Request, dry_run: bool = False) -> dict:
+    """
+    CSV bulk import (PROJ-420).
+
+    Reports every row individually: one malformed number does not reject the
+    other 499. dry_run=true validates and reports without writing.
+    """
+    from app.web import contacts
+
+    raw = await request.body()
+    try:
+        return contacts.import_csv(raw, dry_run=dry_run)
+    except contacts.ValidationError as exc:
+        return JSONResponse(status_code=422, content={"errors": exc.errors})
+
+
+@app.get("/api/contacts-template.csv", include_in_schema=False)
+def api_csv_template() -> Response:
+    from app.web import contacts
+
+    return Response(
+        content=contacts.csv_template(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=contacts-template.csv"},
+    )
+
+
+# -- Consent (PROJ-441) ----------------------------------------
+@app.post("/api/contacts/{contact_id}/consent")
+def api_set_consent(contact_id: int, payload: dict) -> dict:
+    """
+    Change consent state, recorded in the append-only audit trail.
+
+    opt_in refuses to reverse an opt-out - that needs separately evidenced
+    action, not a flag flip.
+    """
+    from app.web import consent
+
+    state = str(payload.get("state") or "").strip().lower()
+    source = str(payload.get("source") or "manual").strip().lower()
+    detail = payload.get("detail")
+
+    try:
+        if state == "opted_in":
+            row = consent.opt_in(contact_id, source=source, detail=detail)
+        elif state == "opted_out":
+            row = consent.opt_out(contact_id, source=source, detail=detail)
+        else:
+            row = consent.set_state(contact_id, state, source=source, detail=detail)
+    except PermissionError as exc:
+        return JSONResponse(status_code=409, content={"errors": {"state": str(exc)}})
+    except ValueError as exc:
+        return JSONResponse(status_code=422, content={"errors": {"state": str(exc)}})
+
+    if row is None:
+        raise HTTPException(status_code=404, detail="contact not found")
+    return {**row, "consent_history": consent.history(contact_id)}
+
+
+# -- Reminders (PROJ-438, PROJ-439) ----------------------------
+@app.get("/reminders", response_class=HTMLResponse, include_in_schema=False)
+def reminders_list_page() -> HTMLResponse:
+    from app.web.reminders_list import LIST_HTML
+
+    return HTMLResponse(content=LIST_HTML)
+
+
 @app.get("/reminders/new", response_class=HTMLResponse, include_in_schema=False)
 def reminder_new() -> HTMLResponse:
     from app.web.reminder_form import render
@@ -247,52 +408,32 @@ def reminder_new() -> HTMLResponse:
 
 
 @app.get("/reminders/{reminder_id}/edit", response_class=HTMLResponse, include_in_schema=False)
-def reminder_edit(reminder_id: str) -> HTMLResponse:
+def reminder_edit(reminder_id: int) -> HTMLResponse:
     from app.web.reminder_form import render
 
-    # The page renders regardless; the form fetches the record and reports a
-    # missing one itself. Returning 404 here would mean a blank browser error
-    # instead of a message in context.
-    return HTMLResponse(content=render(reminder_id))
-
-
-@app.get("/reminders", response_class=HTMLResponse, include_in_schema=False)
-def reminders_list_page() -> HTMLResponse:
-    """Reminders list view — filter, search, status (PROJ-438)."""
-    from app.web.reminders_list import LIST_HTML
-
-    return HTMLResponse(content=LIST_HTML)
+    return HTMLResponse(content=render(str(reminder_id)))
 
 
 @app.get("/api/reminders")
 def list_reminders(
     q: str | None = None,
     status: str | None = None,
-    channel: str | None = None,
-    sort: str = "due_asc",
+    contact_id: int | None = None,
+    sort: str = "send_at_asc",
     limit: int | None = None,
     offset: int = 0,
 ) -> dict:
-    """
-    Reminders, filtered and searched (PROJ-438).
-
-    Unscoped — there is no tenancy until PROJ-392.
-
-    `total` is the count before paging, so the UI can say "20 of 83".
-    An unrecognised filter value is a 422 rather than being ignored: silently
-    returning everything when someone mistypes ?status=schedulled looks like
-    the filter is broken.
-    """
+    """Reminders, filtered and searched. `total` is pre-paging."""
     from app.web import reminders
 
     try:
-        items = reminders.get_store().list()
+        items = reminders.list_reminders()
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
     try:
         page, total = reminders.query(
-            items, q=q, status=status, channel=channel,
+            items, q=q, status=status, contact_id=contact_id,
             sort=sort, limit=limit, offset=offset,
         )
     except reminders.ValidationError as exc:
@@ -301,81 +442,62 @@ def list_reminders(
     return {
         "count": len(page),
         "total": total,
-        # Distinguishes "nothing matches your filters" from "nothing exists at
-        # all" — two very different empty states for the reader.
         "unfiltered_total": len(items),
-        "reminders": [r.to_dict() for r in page],
+        "reminders": page,
     }
 
 
 @app.get("/api/reminders/{reminder_id}")
-def get_reminder(reminder_id: str) -> dict:
+def get_reminder(reminder_id: int) -> dict:
     from app.web import reminders
 
-    try:
-        item = reminders.get_store().get(reminder_id)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    item = reminders.get_reminder(reminder_id)
     if item is None:
         raise HTTPException(status_code=404, detail="reminder not found")
-    return item.to_dict()
+    return {**item, "dispatch": reminders.dispatch_check(reminder_id)}
 
 
 @app.post("/api/reminders", status_code=201)
 def create_reminder(payload: dict) -> dict:
-    """
-    Create a reminder.
-
-    Takes a raw dict rather than a Pydantic model on purpose: the form needs
-    per-field error messages keyed by field name, and Pydantic's 422 body is
-    shaped for developers, not for rendering beside an input. reminders.validate
-    returns exactly that mapping.
-    """
     from app.web import reminders
 
     try:
-        clean = reminders.validate(payload, creating=True)
+        return reminders.create_reminder(payload)
     except reminders.ValidationError as exc:
         return JSONResponse(status_code=422, content={"errors": exc.errors})
-
-    try:
-        created = reminders.get_store().create(clean)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return created.to_dict()
 
 
 @app.patch("/api/reminders/{reminder_id}")
-def update_reminder(reminder_id: str, payload: dict) -> dict:
+def update_reminder(reminder_id: int, payload: dict) -> dict:
     from app.web import reminders
 
-    store = reminders.get_store()
     try:
-        existing = store.get(reminder_id)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
-    if existing is None:
-        raise HTTPException(status_code=404, detail="reminder not found")
-
-    try:
-        clean = reminders.validate(payload, creating=False, existing=existing)
+        row = reminders.update_reminder(reminder_id, payload)
     except reminders.ValidationError as exc:
         return JSONResponse(status_code=422, content={"errors": exc.errors})
-
-    updated = store.update(reminder_id, clean)
-    if updated is None:
-        # Deleted between the read and the write.
+    if row is None:
         raise HTTPException(status_code=404, detail="reminder not found")
-    return updated.to_dict()
+    return row
 
 
 @app.delete("/api/reminders/{reminder_id}", status_code=204)
-def delete_reminder(reminder_id: str) -> Response:
+def delete_reminder(reminder_id: int) -> Response:
     from app.web import reminders
 
-    if not reminders.get_store().delete(reminder_id):
+    if not reminders.delete_reminder(reminder_id):
         raise HTTPException(status_code=404, detail="reminder not found")
     return Response(status_code=204)
+
+
+@app.get("/api/reminders/{reminder_id}/dispatch-check")
+def reminder_dispatch_check(reminder_id: int) -> dict:
+    """Would this send right now? The gate PROJ-395 must call (PROJ-441)."""
+    from app.web import reminders
+
+    result = reminders.dispatch_check(reminder_id)
+    if result.get("code") == "no_reminder":
+        raise HTTPException(status_code=404, detail="reminder not found")
+    return result
 
 
 @app.get("/api/stats")

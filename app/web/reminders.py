@@ -1,152 +1,135 @@
 """
-app.web.reminders — reminder model, validation, and store (PROJ-439).
+app.web.reminders — reminders on the published contract (PROJ-438, PROJ-439).
 
-The form needs a backend. Dilraj's reminders store is PROJ-422 and the shape
-it codes against is PROJ-404, neither of which has landed. So:
+Rewritten onto contracts/schemas.py (PROJ-404). What changed from the earlier
+provisional shape, and why it matters if you are reading old code or tickets:
 
-  - The shape is written down in docs/contracts/reminder.provisional.schema.json
-    rather than invented inline, so the diff against Dhiman's real contract is
-    mechanical.
-  - Storage sits behind ReminderStore. JsonFileStore is a deliberately small
-    local implementation; when PROJ-422 lands, implement the same interface and
-    swap get_store(). Nothing above this module changes.
+    provisional            contract (now)
+    ──────────────────     ─────────────────────────────
+    id: UUID string        id: int
+    title + notes          message (1..1600)
+    due_at                 send_at
+    —                      sent_at
+    channel per reminder   (none — channel is a per-contact preference)
+    status 'cancelled'     status 'blocked'
+    contact_id optional    contact_id required
 
-Validation is the part of this ticket that survives the swap unchanged, so it
-is where the care went.
+Three consequences worth knowing:
+
+  - Channel moved to the contact (PROJ-440). The contract's contacts are
+    phone-centric, so a reminder no longer decides how it is delivered; the
+    contact's preferred_channel does.
+  - There is no 'cancelled' status. 'blocked' in the contract means consent or
+    policy stopped it, which is not the same as a user changing their mind, so
+    cancelling is a delete rather than a status change.
+  - contact_id is required. Every reminder goes to someone, and PROJ-441 needs
+    a contact to check consent against — a reminder with nobody attached could
+    never pass the gate anyway.
+
+Nothing sends: the Reminders Engine is PROJ-395. mark_sent/mark_blocked are the
+transitions that engine will drive.
 """
 
 from __future__ import annotations
 
-import json
 import logging
-import threading
-import uuid
-from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any, Iterable
+from datetime import datetime
+from typing import Any
+
+from app.web.store import DEFAULT_ORG_ID, table
 
 log = logging.getLogger("agent_factory.reminders")
 
-CHANNELS = ("telegram", "email", "sms")
-STATUSES = ("scheduled", "sent", "cancelled", "failed")
+STATUSES = ("scheduled", "sent", "blocked", "failed")
+# Only 'scheduled' is client-settable. 'sent', 'blocked' and 'failed' are
+# outcomes the engine records; accepting them from a client would let the UI
+# claim a delivery that never happened.
+CLIENT_SETTABLE_STATUSES = ("scheduled",)
 
-# Only these two are reachable from the UI. 'sent' and 'failed' belong to the
-# Reminders Engine (PROJ-395), which does not exist — accepting them from a
-# client would let the UI fake a delivery that never happened.
-CLIENT_SETTABLE_STATUSES = ("scheduled", "cancelled")
-
-TITLE_MAX = 200
-NOTES_MAX = 2000
+MESSAGE_MAX = 1600          # per the contract — one SMS segment budget
+SORTS = ("send_at_asc", "send_at_desc", "created_desc", "message_asc")
+MAX_LIMIT = 500
 
 
 class ValidationError(ValueError):
-    """Carries per-field messages so the form can show them next to the inputs."""
-
     def __init__(self, errors: dict[str, str]):
         self.errors = errors
         super().__init__("; ".join(f"{k}: {v}" for k, v in errors.items()))
 
 
-# ── Model ─────────────────────────────────────────────────────
-@dataclass
-class Reminder:
-    id:         str
-    title:      str
-    due_at:     str                       # ISO 8601 with offset
-    channel:    str
-    status:     str
-    created_at: str
-    updated_at: str
-    notes:      str = ""
-    org_id:     str | None = None         # until PROJ-392
-    contact_id: str | None = None         # until PROJ-417
-
-    def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
-
-    @property
-    def due_datetime(self) -> datetime:
-        return parse_due(self.due_at)
+def reminders_table():
+    return table("reminders")
 
 
 def _now() -> datetime:
-    # Local zone, not naive. A naive timestamp is how reminders end up firing
-    # hours off once anything crosses a timezone.
     return datetime.now().astimezone()
 
 
-def parse_due(value: str) -> datetime:
+def parse_dt(value: str) -> datetime:
     """
-    Parse an ISO 8601 datetime.
-
-    A naive value — which is exactly what <input type="datetime-local"> sends —
-    is interpreted in the server's local zone rather than silently assumed UTC.
-    'Z' is accepted since fromisoformat rejects it before Python 3.11.
+    Parse ISO 8601. A naive value — what <input type="datetime-local"> sends —
+    is read in the server's local zone, not silently assumed UTC. Storing naive
+    timestamps is how reminders fire hours off.
     """
     if not isinstance(value, str) or not value.strip():
-        raise ValueError("due_at is required")
-
+        raise ValueError("send_at is required")
     raw = value.strip().replace("Z", "+00:00")
     try:
         dt = datetime.fromisoformat(raw)
     except ValueError as exc:
         raise ValueError(f"not a valid ISO 8601 datetime: {value!r}") from exc
-
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=_now().tzinfo)
-    return dt
+    return dt.replace(tzinfo=_now().tzinfo) if dt.tzinfo is None else dt
 
 
 # ── Validation ────────────────────────────────────────────────
-def validate(payload: dict[str, Any], *, creating: bool, existing: Reminder | None = None) -> dict[str, Any]:
-    """
-    Validate and normalise an incoming payload.
-
-    Returns the cleaned field values. Raises ValidationError with per-field
-    messages, collecting every problem rather than stopping at the first — one
-    round trip per mistake makes a form miserable to use.
-    """
+def validate(payload: dict[str, Any], *, creating: bool,
+             existing: dict[str, Any] | None = None,
+             org_id: int = DEFAULT_ORG_ID) -> dict[str, Any]:
     errors: dict[str, str] = {}
     clean: dict[str, Any] = {}
 
-    # ── title ────────────────────────────────────────────────
-    if creating or "title" in payload:
-        title = str(payload.get("title") or "").strip()
-        if not title:
-            errors["title"] = "Enter a title."
-        elif len(title) > TITLE_MAX:
-            errors["title"] = f"Keep the title under {TITLE_MAX} characters ({len(title)} given)."
+    # ── message ──────────────────────────────────────────────
+    if creating or "message" in payload:
+        message = str(payload.get("message") or "").strip()
+        if not message:
+            errors["message"] = "Enter a message."
+        elif len(message) > MESSAGE_MAX:
+            errors["message"] = f"Keep the message under {MESSAGE_MAX} characters ({len(message)} given)."
         else:
-            clean["title"] = title
+            clean["message"] = message
 
-    # ── due_at ───────────────────────────────────────────────
-    if creating or "due_at" in payload:
+    # ── send_at ──────────────────────────────────────────────
+    if creating or "send_at" in payload:
         try:
-            due = parse_due(str(payload.get("due_at") or ""))
+            when = parse_dt(str(payload.get("send_at") or ""))
         except ValueError as exc:
-            errors["due_at"] = str(exc) if "required" in str(exc) else "Enter a valid date and time."
+            errors["send_at"] = str(exc) if "required" in str(exc) else "Enter a valid date and time."
         else:
-            # A reminder scheduled in the past will never fire, so refuse it
-            # rather than accept something that silently cannot work. Editing a
-            # reminder that has already been sent or cancelled is fine — its
-            # due date is history at that point.
-            target_status = str(payload.get("status") or (existing.status if existing else "scheduled"))
-            if target_status == "scheduled" and due <= _now():
-                errors["due_at"] = "Pick a time in the future — a past reminder will never send."
+            target = str(payload.get("status") or (existing or {}).get("status") or "scheduled")
+            if target == "scheduled" and when <= _now():
+                errors["send_at"] = "Pick a time in the future — a past reminder will never send."
             else:
-                clean["due_at"] = due.isoformat()
+                clean["send_at"] = when.isoformat()
 
-    # ── channel ──────────────────────────────────────────────
-    if creating or "channel" in payload:
-        channel = str(payload.get("channel") or "").strip().lower()
-        if not channel:
-            errors["channel"] = "Choose a channel."
-        elif channel not in CHANNELS:
-            errors["channel"] = f"Choose one of: {', '.join(CHANNELS)}."
+    # ── contact_id (required by the contract) ────────────────
+    if creating or "contact_id" in payload:
+        raw = payload.get("contact_id")
+        if raw in (None, ""):
+            errors["contact_id"] = "Choose a contact."
         else:
-            clean["channel"] = channel
+            try:
+                cid = int(raw)
+            except (TypeError, ValueError):
+                errors["contact_id"] = "Contact must be a numeric id."
+            else:
+                from app.web import contacts
+
+                if contacts.get_contact(cid, org_id) is None:
+                    # Now checkable, unlike the provisional version — the
+                    # contacts store exists.
+                    errors["contact_id"] = f"Contact #{cid} does not exist."
+                else:
+                    clean["contact_id"] = cid
 
     # ── status ───────────────────────────────────────────────
     if "status" in payload:
@@ -154,33 +137,14 @@ def validate(payload: dict[str, Any], *, creating: bool, existing: Reminder | No
         if status not in STATUSES:
             errors["status"] = f"Unknown status. Expected one of: {', '.join(STATUSES)}."
         elif status not in CLIENT_SETTABLE_STATUSES:
-            # Otherwise the UI could mark something 'sent' that was never sent.
             errors["status"] = (
-                f"'{status}' is set by the Reminders Engine (PROJ-395), not the client. "
-                f"You can set: {', '.join(CLIENT_SETTABLE_STATUSES)}."
+                f"'{status}' is recorded by the Reminders Engine (PROJ-395), not the client. "
+                f"To stop a scheduled reminder, delete it."
             )
         else:
             clean["status"] = status
 
-    # ── notes ────────────────────────────────────────────────
-    if "notes" in payload:
-        notes = str(payload.get("notes") or "")
-        if len(notes) > NOTES_MAX:
-            errors["notes"] = f"Keep notes under {NOTES_MAX} characters ({len(notes)} given)."
-        else:
-            clean["notes"] = notes
-
-    # ── contact_id ───────────────────────────────────────────
-    # Accepted but NOT checked against a contact: the contacts store is
-    # PROJ-417 and there is nothing to check against. Pretending to validate
-    # would be worse than not validating.
-    if "contact_id" in payload:
-        contact = payload.get("contact_id")
-        clean["contact_id"] = str(contact).strip() or None if contact else None
-
-    # Reject unknown fields rather than dropping them silently — a typo'd field
-    # name should not look like it was saved.
-    allowed = {"title", "due_at", "channel", "status", "notes", "contact_id", "org_id"}
+    allowed = {"message", "send_at", "contact_id", "status"}
     unknown = set(payload) - allowed
     if unknown:
         errors["_"] = f"Unexpected field(s): {', '.join(sorted(unknown))}."
@@ -190,221 +154,116 @@ def validate(payload: dict[str, Any], *, creating: bool, existing: Reminder | No
     return clean
 
 
-# ── Store ─────────────────────────────────────────────────────
-class ReminderStore(ABC):
-    """
-    The seam PROJ-422 replaces. Keep this interface small.
-
-    Note the absence of an org parameter: there is no tenancy model until
-    PROJ-392, so every read here is unscoped. That is a known gap, not an
-    oversight — add org scoping to this interface when accounts land.
-    """
-
-    @abstractmethod
-    def list(self) -> list[Reminder]: ...
-
-    @abstractmethod
-    def get(self, reminder_id: str) -> Reminder | None: ...
-
-    @abstractmethod
-    def create(self, fields: dict[str, Any]) -> Reminder: ...
-
-    @abstractmethod
-    def update(self, reminder_id: str, fields: dict[str, Any]) -> Reminder | None: ...
-
-    @abstractmethod
-    def delete(self, reminder_id: str) -> bool: ...
+# ── CRUD ──────────────────────────────────────────────────────
+def list_reminders(org_id: int = DEFAULT_ORG_ID) -> list[dict[str, Any]]:
+    rows = reminders_table().all(org_id)
+    rows.sort(key=lambda r: r.get("send_at", ""))
+    return rows
 
 
-class JsonFileStore(ReminderStore):
-    """
-    Provisional local store — one JSON file under store/ (gitignored).
+def get_reminder(reminder_id: int, org_id: int = DEFAULT_ORG_ID) -> dict[str, Any] | None:
+    return reminders_table().get(reminder_id, org_id)
 
-    Not a database and not trying to be: PROJ-422 owns the real one. Writes are
-    atomic via a temp file and rename, because a half-written JSON file loses
-    every reminder rather than one.
-    """
 
-    def __init__(self, path: Path):
-        self.path = path
-        self._lock = threading.Lock()
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+def create_reminder(payload: dict[str, Any], org_id: int = DEFAULT_ORG_ID) -> dict[str, Any]:
+    clean = validate(payload, creating=True, org_id=org_id)
+    return reminders_table().insert(
+        {
+            "contact_id": clean["contact_id"],
+            "message": clean["message"],
+            "send_at": clean["send_at"],
+            "sent_at": None,
+            "status": clean.get("status", "scheduled"),
+            "created_at": _now().isoformat(),
+            "updated_at": _now().isoformat(),
+        },
+        org_id=org_id,
+    )
 
-    # ── disk ──────────────────────────────────────────────
-    def _read_all(self) -> list[dict[str, Any]]:
-        if not self.path.exists():
-            return []
-        try:
-            data = json.loads(self.path.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError) as exc:
-            # Surface it rather than silently starting from empty, which would
-            # look like "all your reminders vanished".
-            log.error("reminders store unreadable at %s: %s", self.path, exc)
-            raise RuntimeError(f"reminders store is unreadable: {exc}") from exc
-        return data if isinstance(data, list) else []
 
-    def _write_all(self, rows: Iterable[dict[str, Any]]) -> None:
-        tmp = self.path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(list(rows), indent=2), encoding="utf-8")
-        tmp.replace(self.path)
-
-    # ── interface ─────────────────────────────────────────
-    def list(self) -> list[Reminder]:
-        rows = self._read_all()
-        out = []
-        for row in rows:
-            try:
-                out.append(Reminder(**row))
-            except TypeError as exc:
-                # A row that does not match the current shape is skipped loudly
-                # — likely a leftover from before a contract change.
-                log.warning("skipping malformed reminder row: %s", exc)
-        # Soonest first, which is what both the dashboard and PROJ-438 want.
-        out.sort(key=lambda r: r.due_at)
-        return out
-
-    def get(self, reminder_id: str) -> Reminder | None:
-        return next((r for r in self.list() if r.id == reminder_id), None)
-
-    def create(self, fields: dict[str, Any]) -> Reminder:
-        now = _now().isoformat()
-        reminder = Reminder(
-            id=str(uuid.uuid4()),
-            title=fields["title"],
-            due_at=fields["due_at"],
-            channel=fields["channel"],
-            status=fields.get("status", "scheduled"),
-            notes=fields.get("notes", ""),
-            org_id=fields.get("org_id"),
-            contact_id=fields.get("contact_id"),
-            created_at=now,
-            updated_at=now,
-        )
-        with self._lock:
-            rows = self._read_all()
-            rows.append(reminder.to_dict())
-            self._write_all(rows)
-        return reminder
-
-    def update(self, reminder_id: str, fields: dict[str, Any]) -> Reminder | None:
-        with self._lock:
-            rows = self._read_all()
-            for i, row in enumerate(rows):
-                if row.get("id") == reminder_id:
-                    row.update({k: v for k, v in fields.items()})
-                    row["updated_at"] = _now().isoformat()
-                    rows[i] = row
-                    self._write_all(rows)
-                    return Reminder(**row)
+def update_reminder(reminder_id: int, payload: dict[str, Any],
+                    org_id: int = DEFAULT_ORG_ID) -> dict[str, Any] | None:
+    existing = get_reminder(reminder_id, org_id)
+    if existing is None:
         return None
-
-    def delete(self, reminder_id: str) -> bool:
-        with self._lock:
-            rows = self._read_all()
-            kept = [r for r in rows if r.get("id") != reminder_id]
-            if len(kept) == len(rows):
-                return False
-            self._write_all(kept)
-            return True
+    clean = validate(payload, creating=False, existing=existing, org_id=org_id)
+    clean["updated_at"] = _now().isoformat()
+    return reminders_table().update(reminder_id, clean, org_id=org_id)
 
 
-_store: ReminderStore | None = None
+def delete_reminder(reminder_id: int, org_id: int = DEFAULT_ORG_ID) -> bool:
+    return reminders_table().delete(reminder_id, org_id)
 
 
-def get_store() -> ReminderStore:
+# ── Engine transitions (PROJ-395 will drive these) ────────────
+def mark_sent(reminder_id: int, org_id: int = DEFAULT_ORG_ID) -> dict[str, Any] | None:
+    return reminders_table().update(
+        reminder_id,
+        {"status": "sent", "sent_at": _now().isoformat(), "updated_at": _now().isoformat()},
+        org_id=org_id,
+    )
+
+
+def mark_blocked(reminder_id: int, reason: str, org_id: int = DEFAULT_ORG_ID) -> dict[str, Any] | None:
+    """Consent or policy stopped this. The reason is kept — a bare 'blocked'
+    tells whoever looks later nothing about why."""
+    return reminders_table().update(
+        reminder_id,
+        {"status": "blocked", "blocked_reason": reason[:500], "updated_at": _now().isoformat()},
+        org_id=org_id,
+    )
+
+
+def dispatch_check(reminder_id: int, org_id: int = DEFAULT_ORG_ID) -> dict[str, Any]:
     """
-    The single place to swap in PROJ-422's store.
+    Would this reminder be allowed to send right now? (PROJ-441)
 
-    Path comes from settings.PROJECT_ROOT so it resolves the same regardless of
-    the process's working directory.
+    The engine calls this before sending. Exposed to the UI too, so someone can
+    see that a scheduled reminder will be blocked *before* its send time
+    arrives rather than discovering it afterwards.
     """
-    global _store
-    if _store is None:
-        from config.settings import PROJECT_ROOT
+    from app.web import consent
 
-        _store = JsonFileStore(Path(PROJECT_ROOT) / "store" / "reminders.json")
-    return _store
+    reminder = get_reminder(reminder_id, org_id)
+    if reminder is None:
+        return {"allowed": False, "code": "no_reminder", "reason": "Reminder does not exist."}
 
-
-def set_store(store: ReminderStore | None) -> None:
-    """Override the store. For tests, and for PROJ-422 to install its own."""
-    global _store
-    _store = store
+    decision = consent.check_send(reminder.get("contact_id"), org_id=org_id)
+    out = decision.to_dict()
+    out["reminder_id"] = int(reminder_id)
+    return out
 
 
 # ── Query (PROJ-438) ──────────────────────────────────────────
-# Filtering lives here rather than on ReminderStore, deliberately. The store
-# interface is what PROJ-422 has to implement, so it stays as small as
-# possible — a store only has to return rows. Once there is a real database
-# behind it, a store may optionally push these predicates down; until then
-# doing it in Python over a local list costs nothing at this scale.
-
-SORTS = ("due_asc", "due_desc", "created_desc", "title_asc")
-MAX_LIMIT = 500
-
-
-def query(
-    items: list[Reminder],
-    *,
-    q: str | None = None,
-    status: str | None = None,
-    channel: str | None = None,
-    sort: str = "due_asc",
-    limit: int | None = None,
-    offset: int = 0,
-) -> tuple[list[Reminder], int]:
+def query(items: list[dict[str, Any]], *, q: str | None = None, status: str | None = None,
+          contact_id: int | None = None, sort: str = "send_at_asc",
+          limit: int | None = None, offset: int = 0) -> tuple[list[dict[str, Any]], int]:
     """
-    Filter, search, sort, and page a list of reminders.
-
-    Returns (page, total_matching). `total` is the count BEFORE paging, so the
-    UI can say "showing 20 of 83" rather than just "20".
-
-    `status` and `channel` accept a comma-separated list. An unrecognised value
-    raises ValidationError rather than being ignored — silently returning
-    everything when someone mistypes ?status=schedulled looks like the filter
-    is broken.
+    Filter, search, sort and page. Above the store on purpose, so the storage
+    layer stays replaceable. Pure over its input — does not mutate `items`.
     """
     errors: dict[str, str] = {}
     rows = list(items)
 
-    # ── search ───────────────────────────────────────────────
     if q:
         needle = q.strip().lower()
         if needle:
-            rows = [
-                r for r in rows
-                if needle in r.title.lower() or needle in (r.notes or "").lower()
-            ]
+            rows = [r for r in rows if needle in (r.get("message") or "").lower()]
 
-    # ── status ───────────────────────────────────────────────
     if status:
         wanted = {s.strip().lower() for s in status.split(",") if s.strip()}
         unknown = wanted - set(STATUSES)
         if unknown:
-            errors["status"] = (
-                f"Unknown status: {', '.join(sorted(unknown))}. "
-                f"Expected one of: {', '.join(STATUSES)}."
-            )
+            errors["status"] = (f"Unknown status: {', '.join(sorted(unknown))}. "
+                                f"Expected one of: {', '.join(STATUSES)}.")
         else:
-            rows = [r for r in rows if r.status in wanted]
+            rows = [r for r in rows if r.get("status") in wanted]
 
-    # ── channel ──────────────────────────────────────────────
-    if channel:
-        wanted_ch = {c.strip().lower() for c in channel.split(",") if c.strip()}
-        unknown_ch = wanted_ch - set(CHANNELS)
-        if unknown_ch:
-            errors["channel"] = (
-                f"Unknown channel: {', '.join(sorted(unknown_ch))}. "
-                f"Expected one of: {', '.join(CHANNELS)}."
-            )
-        else:
-            rows = [r for r in rows if r.channel in wanted_ch]
+    if contact_id is not None:
+        rows = [r for r in rows if int(r.get("contact_id", 0)) == int(contact_id)]
 
-    # ── sort ─────────────────────────────────────────────────
     if sort not in SORTS:
         errors["sort"] = f"Unknown sort. Expected one of: {', '.join(SORTS)}."
-
-    # ── paging ───────────────────────────────────────────────
     if limit is not None and (limit < 1 or limit > MAX_LIMIT):
         errors["limit"] = f"limit must be between 1 and {MAX_LIMIT}."
     if offset < 0:
@@ -413,14 +272,14 @@ def query(
     if errors:
         raise ValidationError(errors)
 
-    if sort == "due_asc":
-        rows.sort(key=lambda r: r.due_at)
-    elif sort == "due_desc":
-        rows.sort(key=lambda r: r.due_at, reverse=True)
+    if sort == "send_at_asc":
+        rows.sort(key=lambda r: r.get("send_at", ""))
+    elif sort == "send_at_desc":
+        rows.sort(key=lambda r: r.get("send_at", ""), reverse=True)
     elif sort == "created_desc":
-        rows.sort(key=lambda r: r.created_at, reverse=True)
-    elif sort == "title_asc":
-        rows.sort(key=lambda r: r.title.lower())
+        rows.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+    elif sort == "message_asc":
+        rows.sort(key=lambda r: (r.get("message") or "").lower())
 
     total = len(rows)
     if offset:
@@ -430,38 +289,31 @@ def query(
     return rows, total
 
 
-def next_upcoming(count: int = 5) -> list[Reminder]:
-    """Soonest scheduled reminders still in the future — for the dashboard panel."""
+# ── Dashboard helpers ─────────────────────────────────────────
+def next_upcoming(count: int = 5, org_id: int = DEFAULT_ORG_ID) -> list[dict[str, Any]]:
     now = _now()
     rows = [
-        r for r in get_store().list()
-        if r.status == "scheduled" and r.due_datetime > now
+        r for r in list_reminders(org_id)
+        if r.get("status") == "scheduled" and parse_dt(r["send_at"]) > now
     ]
-    rows.sort(key=lambda r: r.due_at)
+    rows.sort(key=lambda r: r["send_at"])
     return rows[:count]
 
 
-def recent_history(count: int = 5) -> list[Reminder]:
-    """
-    Most recently updated reminders that are no longer pending.
-
-    'History' means something happened to it — sent, failed, or cancelled.
-    A scheduled reminder has no history yet.
-    """
-    rows = [r for r in get_store().list() if r.status in ("sent", "failed", "cancelled")]
-    rows.sort(key=lambda r: r.updated_at, reverse=True)
+def recent_history(count: int = 5, org_id: int = DEFAULT_ORG_ID) -> list[dict[str, Any]]:
+    """Reminders something actually happened to — sent, blocked, or failed."""
+    rows = [r for r in list_reminders(org_id) if r.get("status") in ("sent", "blocked", "failed")]
+    rows.sort(key=lambda r: r.get("updated_at", ""), reverse=True)
     return rows[:count]
 
 
-# ── Helpers used by the dashboard ─────────────────────────────
-def upcoming_count() -> int:
-    """Scheduled reminders still in the future."""
-    now = _now()
-    return sum(
-        1 for r in get_store().list()
-        if r.status == "scheduled" and r.due_datetime > now
-    )
+def upcoming_count(org_id: int = DEFAULT_ORG_ID) -> int:
+    return len(next_upcoming(10_000, org_id))
 
 
-def sent_count() -> int:
-    return sum(1 for r in get_store().list() if r.status == "sent")
+def sent_count(org_id: int = DEFAULT_ORG_ID) -> int:
+    return sum(1 for r in list_reminders(org_id) if r.get("status") == "sent")
+
+
+def blocked_count(org_id: int = DEFAULT_ORG_ID) -> int:
+    return sum(1 for r in list_reminders(org_id) if r.get("status") == "blocked")

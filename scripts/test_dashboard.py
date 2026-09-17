@@ -146,7 +146,13 @@ def main() -> int:
     # ── Form and a11y ─────────────────────────────────────────
     check("has a nav", "<nav>" in html)
     check("nav marks the current page", 'aria-current="page"' in html)
-    check("nav flags unbuilt sections with their tickets", "PROJ-417" in html and "PROJ-438" in html)
+    # Contacts (PROJ-417/418/419) and the reminders list (PROJ-438) are built,
+    # so the nav no longer tags anything as blocked. Assert that rather than
+    # the old expectation — a nav still advertising shipped work as pending
+    # would be the bug now.
+    check("nav no longer tags built sections as blocked", 'class="tag">PROJ-' not in html)
+    check("nav links to contacts", 'href="/contacts"' in html)
+    check("nav links to the reminders list", 'href="/reminders"' in html)
     check("has a KPI row container", 'id="kpis"' in html)
     check("has exactly one hero block", html.count('class="hero"') == 1, str(html.count('class="hero"')))
     check("hero value is >=48px", "font-size: 52px" in html)
