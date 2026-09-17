@@ -1,6 +1,7 @@
 # auth/consent.py
 # ──────────────────────────────────────────────────────────────
 # Consent state model per contact (PROJ-412)
+# Audit trail on every change (PROJ-413)
 #
 # States (from contracts.schemas.ConsentState):
 #   unknown   — never asked
@@ -15,6 +16,7 @@
 #     realistic way a bug re-subscribes people against their wishes.
 #   - Every read and write takes org_id, so consent state cannot
 #     be read or changed across tenants.
+#   - Every accepted change appends a row to consent_events.
 # ──────────────────────────────────────────────────────────────
 
 import sqlite3
@@ -102,14 +104,21 @@ def set_consent_state(
     org_id: int,
     new_state: ConsentState,
     source: str,
+    detail: str | None = None,
+    actor_user_id: int | None = None,
 ) -> ConsentState:
     """
     Change a contact's consent state after checking the transition
-    is allowed. Returns the resulting state.
+    is allowed, and append an audit event (PROJ-413).
 
     Raises ConsentTransitionError if the contact isn't in this org
     or the transition isn't permitted from this source.
     """
+    # Imported here rather than at module level: consent_audit reads
+    # the ConsentState enum and this module, so a top-level import
+    # would be circular.
+    from auth import consent_audit
+
     current = get_consent_state(contact_id, org_id)
     if current is None:
         raise ConsentTransitionError(
@@ -132,6 +141,16 @@ def set_consent_state(
             " WHERE id = ? AND org_id = ?",
             (new_state.value, contact_id, org_id),
         )
+
+    consent_audit.record_event(
+        contact_id=contact_id,
+        org_id=org_id,
+        new_state=new_state,
+        source=source,
+        old_state=current,
+        detail=detail,
+        actor_user_id=actor_user_id,
+    )
     return new_state
 
 

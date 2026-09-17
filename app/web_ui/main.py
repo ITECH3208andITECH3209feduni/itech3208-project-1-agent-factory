@@ -49,6 +49,8 @@ from auth.password_reset import init_reset_table
 init_reset_table()
 from auth.consent import init_consent
 init_consent()
+from auth.consent_audit import init_consent_audit
+init_consent_audit()
 
 # Include API routes
 app.include_router(router)
