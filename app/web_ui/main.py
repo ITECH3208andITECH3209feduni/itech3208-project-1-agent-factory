@@ -47,6 +47,8 @@ from auth.tenancy import init_tenancy
 init_tenancy()
 from auth.password_reset import init_reset_table
 init_reset_table()
+from auth.consent import init_consent
+init_consent()
 
 # Include API routes
 app.include_router(router)
