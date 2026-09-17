@@ -69,6 +69,8 @@ init_reset_table()
 # here. The pages below serve, but their submit buttons have nothing
 # to call yet. Same follow-up as PROJ-409: needs the auth-model
 # decision, not a merge-conflict guess.
+from auth.consent import init_consent
+init_consent()
 
 # Include API routes
 from auth.org_routes import router as org_router
