@@ -1,25 +1,34 @@
 # auth/org_routes.py
 # ──────────────────────────────────────────────────────────────
-# Organisation registration + profile (PROJ-406, PROJ-409)
+# Organisation registration (PROJ-406)
 #
 # Registration creates an organisation and its first user in a
 # single transaction. If either half fails, neither is written —
 # an orphaned org with no owner would be unreachable, and a user
 # with no org_id would break the scoping rule in PROJ-410.
+#
+# PROJ-409 (organisation profile — GET/PATCH /orgs/me) is NOT
+# included here. Both endpoints need a `current_user` dependency
+# that resolves the caller's own org_id from an auth token, but the
+# JWT login flow that would issue that token (PROJ-339, auth/routes.py)
+# was never wired into app/web_ui/main.py — it would collide with
+# Sprint 3's existing session-cookie /auth/login. Standardising the
+# whole app on one auth model is a real decision for the team, not
+# something to resolve unilaterally inside a merge conflict fix.
+# Building /orgs/me against a token flow that has no way to issue a
+# valid token would just 401 forever, so it's left for that decision
+# rather than merged half-working.
 # ──────────────────────────────────────────────────────────────
 
 import sqlite3
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 
-from auth import tenancy
 from auth.db import DB_PATH, get_user_by_email
-from auth.routes import current_user
 from auth.security import hash_password
 from contracts.schemas import (
     OrgOut,
     OrgRegistration,
-    OrgUpdate,
     RegistrationOut,
 )
 
@@ -79,36 +88,3 @@ def register_org(body: OrgRegistration):
         conn.close()
 
     return RegistrationOut(org=_row_to_org(org_row), user_id=user_id, role="owner")
-
-
-# ── Organisation profile (PROJ-409) ────────────────────────────
-@router.get("/me", response_model=OrgOut)
-def get_my_org(user: sqlite3.Row = Depends(current_user)):
-    """Return the caller's own organisation. No org_id is accepted
-    from the client — it comes from the token, so a user can't read
-    another org by changing a parameter."""
-    org_id = user["org_id"]
-    if org_id is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "User is not assigned to an organisation")
-    row = tenancy.get_org(org_id)
-    if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Organisation not found")
-    return _row_to_org(row)
-
-
-@router.patch("/me", response_model=OrgOut)
-def update_my_org(body: OrgUpdate, user: sqlite3.Row = Depends(current_user)):
-    """Update the caller's organisation. Owners only."""
-    org_id = user["org_id"]
-    if org_id is None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "User is not assigned to an organisation")
-    if user["role"] != "owner":
-        raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the organisation owner can change the profile")
-
-    tenancy.update_org(
-        org_id,
-        name=body.name,
-        contact_email=str(body.contact_email) if body.contact_email else None,
-        timezone=body.timezone,
-    )
-    return _row_to_org(tenancy.get_org(org_id))

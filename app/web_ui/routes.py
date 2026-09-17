@@ -241,7 +241,7 @@ async def get_history(username: str = Depends(get_current_username)):
 
 
 @router.post("/literature", response_model=LiteratureResponse)
-async def search_literature(body: LiteratureRequest, user: sqlite3.Row = Depends(current_user)):
+async def search_literature(body: LiteratureRequest):
     """
     Search academic literature by topic.
     Calls LiteratureSkill directly — no orchestrator routing needed.
@@ -318,7 +318,7 @@ async def search_amazon(body: AmazonRequest):
 
 
 @router.post("/integrity", response_model=IntegrityResponse)
-async def check_integrity(body: IntegrityRequest, user: sqlite3.Row = Depends(current_user)):
+async def check_integrity(body: IntegrityRequest):
     """
     Academic integrity check on submitted text.
 
@@ -360,7 +360,7 @@ async def check_integrity(body: IntegrityRequest, user: sqlite3.Row = Depends(cu
 
 
 @router.post("/seller", response_model=SellerResponse)
-async def seller_tools(body: SellerRequest, user: sqlite3.Row = Depends(current_user)):
+async def seller_tools(body: SellerRequest):
     """
     Amazon Seller Intelligence — four tools in one endpoint.
 
@@ -382,7 +382,7 @@ async def seller_tools(body: SellerRequest, user: sqlite3.Row = Depends(current_
 
 
 @router.post("/export", response_model=ExportResponse)
-async def export_results(body: ExportRequest, user: sqlite3.Row = Depends(current_user)):
+async def export_results(body: ExportRequest, username: str = Depends(get_current_username)):
     """
     Export any skill result to PDF or Excel (PROJ-191).
 
@@ -423,7 +423,7 @@ async def _download_export_unused(path: str):
 @router.get("/status", response_model=StatusResponse)
 
 @router.get("/export/download")
-async def download_export_secure(path: str, user: sqlite3.Row = Depends(current_user)):
+async def download_export_secure(path: str, username: str = Depends(get_current_username)):
     """
     Download a previously exported file.
 
