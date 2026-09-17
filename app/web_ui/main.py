@@ -53,6 +53,8 @@ from auth.consent_audit import init_consent_audit
 init_consent_audit()
 from auth.sms_routing import init_sms_routing
 init_sms_routing()
+from integrations.sms_sender import init_send_log
+init_send_log()
 
 # Include API routes
 app.include_router(router)
