@@ -332,6 +332,127 @@ def set_store(store: ReminderStore | None) -> None:
     _store = store
 
 
+# ── Query (PROJ-438) ──────────────────────────────────────────
+# Filtering lives here rather than on ReminderStore, deliberately. The store
+# interface is what PROJ-422 has to implement, so it stays as small as
+# possible — a store only has to return rows. Once there is a real database
+# behind it, a store may optionally push these predicates down; until then
+# doing it in Python over a local list costs nothing at this scale.
+
+SORTS = ("due_asc", "due_desc", "created_desc", "title_asc")
+MAX_LIMIT = 500
+
+
+def query(
+    items: list[Reminder],
+    *,
+    q: str | None = None,
+    status: str | None = None,
+    channel: str | None = None,
+    sort: str = "due_asc",
+    limit: int | None = None,
+    offset: int = 0,
+) -> tuple[list[Reminder], int]:
+    """
+    Filter, search, sort, and page a list of reminders.
+
+    Returns (page, total_matching). `total` is the count BEFORE paging, so the
+    UI can say "showing 20 of 83" rather than just "20".
+
+    `status` and `channel` accept a comma-separated list. An unrecognised value
+    raises ValidationError rather than being ignored — silently returning
+    everything when someone mistypes ?status=schedulled looks like the filter
+    is broken.
+    """
+    errors: dict[str, str] = {}
+    rows = list(items)
+
+    # ── search ───────────────────────────────────────────────
+    if q:
+        needle = q.strip().lower()
+        if needle:
+            rows = [
+                r for r in rows
+                if needle in r.title.lower() or needle in (r.notes or "").lower()
+            ]
+
+    # ── status ───────────────────────────────────────────────
+    if status:
+        wanted = {s.strip().lower() for s in status.split(",") if s.strip()}
+        unknown = wanted - set(STATUSES)
+        if unknown:
+            errors["status"] = (
+                f"Unknown status: {', '.join(sorted(unknown))}. "
+                f"Expected one of: {', '.join(STATUSES)}."
+            )
+        else:
+            rows = [r for r in rows if r.status in wanted]
+
+    # ── channel ──────────────────────────────────────────────
+    if channel:
+        wanted_ch = {c.strip().lower() for c in channel.split(",") if c.strip()}
+        unknown_ch = wanted_ch - set(CHANNELS)
+        if unknown_ch:
+            errors["channel"] = (
+                f"Unknown channel: {', '.join(sorted(unknown_ch))}. "
+                f"Expected one of: {', '.join(CHANNELS)}."
+            )
+        else:
+            rows = [r for r in rows if r.channel in wanted_ch]
+
+    # ── sort ─────────────────────────────────────────────────
+    if sort not in SORTS:
+        errors["sort"] = f"Unknown sort. Expected one of: {', '.join(SORTS)}."
+
+    # ── paging ───────────────────────────────────────────────
+    if limit is not None and (limit < 1 or limit > MAX_LIMIT):
+        errors["limit"] = f"limit must be between 1 and {MAX_LIMIT}."
+    if offset < 0:
+        errors["offset"] = "offset cannot be negative."
+
+    if errors:
+        raise ValidationError(errors)
+
+    if sort == "due_asc":
+        rows.sort(key=lambda r: r.due_at)
+    elif sort == "due_desc":
+        rows.sort(key=lambda r: r.due_at, reverse=True)
+    elif sort == "created_desc":
+        rows.sort(key=lambda r: r.created_at, reverse=True)
+    elif sort == "title_asc":
+        rows.sort(key=lambda r: r.title.lower())
+
+    total = len(rows)
+    if offset:
+        rows = rows[offset:]
+    if limit is not None:
+        rows = rows[:limit]
+    return rows, total
+
+
+def next_upcoming(count: int = 5) -> list[Reminder]:
+    """Soonest scheduled reminders still in the future — for the dashboard panel."""
+    now = _now()
+    rows = [
+        r for r in get_store().list()
+        if r.status == "scheduled" and r.due_datetime > now
+    ]
+    rows.sort(key=lambda r: r.due_at)
+    return rows[:count]
+
+
+def recent_history(count: int = 5) -> list[Reminder]:
+    """
+    Most recently updated reminders that are no longer pending.
+
+    'History' means something happened to it — sent, failed, or cancelled.
+    A scheduled reminder has no history yet.
+    """
+    rows = [r for r in get_store().list() if r.status in ("sent", "failed", "cancelled")]
+    rows.sort(key=lambda r: r.updated_at, reverse=True)
+    return rows[:count]
+
+
 # ── Helpers used by the dashboard ─────────────────────────────
 def upcoming_count() -> int:
     """Scheduled reminders still in the future."""

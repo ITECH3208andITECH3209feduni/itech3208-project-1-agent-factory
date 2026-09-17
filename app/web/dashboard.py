@@ -185,6 +185,29 @@ INDEX_HTML = """<!DOCTYPE html>
     color: var(--text-secondary); font-size: 13px;
   }
   .empty code { color: var(--text-secondary); }
+  .empty a, .panel a { color: var(--accent); }
+
+  /* Panel rows (PROJ-438) — status as a dot AND a word, never colour alone. */
+  .rows { border-top: 1px solid var(--hairline); }
+  .row {
+    display: flex; justify-content: space-between; align-items: baseline; gap: 10px;
+    padding: 9px 0; border-bottom: 1px solid var(--hairline); font-size: 13.5px;
+  }
+  .row:last-child { border-bottom: 0; }
+  .row .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .row .t a { text-decoration: none; }
+  .row .t a:hover { text-decoration: underline; }
+  .row .w {
+    color: var(--text-secondary); font-size: 12.5px; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .row .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px;
+                color: var(--text-secondary); white-space: nowrap; }
+  .row .badge .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .row .badge.sent .dot { background: var(--good); }
+  .row .badge.failed .dot { background: #d03b3b; }
+  .row .badge.cancelled .dot { background: var(--text-muted); }
+  .more { padding-top: 10px; font-size: 13px; }
 
   /* ── Table view — every value reachable without hover ── */
   details.tableview { margin-top: 24px; }
@@ -218,9 +241,7 @@ INDEX_HTML = """<!DOCTYPE html>
       Contacts <span class="tag">PROJ-417</span>
     </a>
     <a href="/reminders/new">New reminder</a>
-    <a class="pending" aria-disabled="true" title="Blocked by PROJ-438">
-      Reminders list <span class="tag">PROJ-438</span>
-    </a>
+    <a href="/reminders">Reminders</a>
     <a class="pending" aria-disabled="true" title="Blocked by PROJ-440">
       Preferences <span class="tag">PROJ-440</span>
     </a>
@@ -263,18 +284,12 @@ INDEX_HTML = """<!DOCTYPE html>
       <div class="panel">
         <h2>Upcoming reminders</h2>
         <div class="hint">Next scheduled sends, soonest first.</div>
-        <div class="empty">
-          The list view is <code>PROJ-438</code>. You can
-          <a href="/reminders/new">create a reminder</a> now — it saves to the
-          provisional local store until <code>PROJ-422</code> lands.
-        </div>
+        <div id="panel-upcoming"><div class="empty">Loading…</div></div>
       </div>
       <div class="panel">
         <h2>Recent history</h2>
-        <div class="hint">What was sent, and what happened.</div>
-        <div class="empty">
-          Waiting on send history — <code>PROJ-422</code>.
-        </div>
+        <div class="hint">Reminders that were sent, failed, or cancelled.</div>
+        <div id="panel-history"><div class="empty">Loading…</div></div>
       </div>
     </div>
 
@@ -378,7 +393,64 @@ async function load() {
   }
 }
 
+// ── Panels (PROJ-438) ───────────────────────────────────────
+const STATUS_LABEL = {
+  scheduled: "Scheduled", sent: "Sent", cancelled: "Cancelled", failed: "Failed",
+};
+
+function fmtDue(iso) {
+  const dt = new Date(iso);
+  if (isNaN(dt)) return String(iso || "—");
+  return dt.toLocaleString(undefined, {
+    month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit",
+  });
+}
+
+function panelRows(items, opts) {
+  return `<div class="rows">` + items.map(r => {
+    const edit = "/reminders/" + encodeURIComponent(r.id) + "/edit";
+    const right = opts.showStatus
+      ? `<span class="badge ${esc(r.status)}"><span class="dot" aria-hidden="true"></span>${
+           esc(STATUS_LABEL[r.status] || r.status)}</span>`
+      : `<span class="w">${esc(fmtDue(r.due_at))}</span>`;
+    return `<div class="row"><span class="t"><a href="${edit}">${esc(r.title)}</a></span>${right}</div>`;
+  }).join("") + `</div>`;
+}
+
+async function loadPanels() {
+  const up = document.getElementById("panel-upcoming");
+  const hist = document.getElementById("panel-history");
+
+  try {
+    // Soonest scheduled first.
+    const r1 = await fetch("/api/reminders?status=scheduled&sort=due_asc&limit=5");
+    if (!r1.ok) throw new Error("HTTP " + r1.status);
+    const d1 = await r1.json();
+    // The API cannot express "future only", so drop overdue ones here —
+    // a past scheduled reminder is not "upcoming", it is stuck.
+    const future = (d1.reminders || []).filter(r => new Date(r.due_at) >= new Date());
+    up.innerHTML = future.length
+      ? panelRows(future, {showStatus: false}) +
+        `<div class="more"><a href="/reminders?status=scheduled">View all</a></div>`
+      : `<div class="empty">Nothing scheduled. <a href="/reminders/new">Create a reminder</a>.</div>`;
+
+    // History = something actually happened to it.
+    const r2 = await fetch("/api/reminders?status=sent,failed,cancelled&sort=created_desc&limit=5");
+    if (!r2.ok) throw new Error("HTTP " + r2.status);
+    const d2 = await r2.json();
+    hist.innerHTML = (d2.reminders || []).length
+      ? panelRows(d2.reminders, {showStatus: true}) +
+        `<div class="more"><a href="/reminders?status=sent,failed,cancelled">View all</a></div>`
+      : `<div class="empty">Nothing has been sent or cancelled yet. Nothing sends until the engine lands (<code>PROJ-395</code>).</div>`;
+  } catch (err) {
+    const msg = `<div class="empty">Could not load reminders: ${esc(err.message)}</div>`;
+    up.innerHTML = msg;
+    hist.innerHTML = msg;
+  }
+}
+
 load();
+loadPanels();
 </script>
 </body>
 </html>

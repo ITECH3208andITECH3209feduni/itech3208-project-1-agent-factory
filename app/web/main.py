@@ -256,16 +256,56 @@ def reminder_edit(reminder_id: str) -> HTMLResponse:
     return HTMLResponse(content=render(reminder_id))
 
 
+@app.get("/reminders", response_class=HTMLResponse, include_in_schema=False)
+def reminders_list_page() -> HTMLResponse:
+    """Reminders list view — filter, search, status (PROJ-438)."""
+    from app.web.reminders_list import LIST_HTML
+
+    return HTMLResponse(content=LIST_HTML)
+
+
 @app.get("/api/reminders")
-def list_reminders() -> dict:
-    """All reminders, soonest first. Unscoped — there is no tenancy until PROJ-392."""
+def list_reminders(
+    q: str | None = None,
+    status: str | None = None,
+    channel: str | None = None,
+    sort: str = "due_asc",
+    limit: int | None = None,
+    offset: int = 0,
+) -> dict:
+    """
+    Reminders, filtered and searched (PROJ-438).
+
+    Unscoped — there is no tenancy until PROJ-392.
+
+    `total` is the count before paging, so the UI can say "20 of 83".
+    An unrecognised filter value is a 422 rather than being ignored: silently
+    returning everything when someone mistypes ?status=schedulled looks like
+    the filter is broken.
+    """
     from app.web import reminders
 
     try:
         items = reminders.get_store().list()
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
-    return {"count": len(items), "reminders": [r.to_dict() for r in items]}
+
+    try:
+        page, total = reminders.query(
+            items, q=q, status=status, channel=channel,
+            sort=sort, limit=limit, offset=offset,
+        )
+    except reminders.ValidationError as exc:
+        return JSONResponse(status_code=422, content={"errors": exc.errors})
+
+    return {
+        "count": len(page),
+        "total": total,
+        # Distinguishes "nothing matches your filters" from "nothing exists at
+        # all" — two very different empty states for the reader.
+        "unfiltered_total": len(items),
+        "reminders": [r.to_dict() for r in page],
+    }
 
 
 @app.get("/api/reminders/{reminder_id}")
