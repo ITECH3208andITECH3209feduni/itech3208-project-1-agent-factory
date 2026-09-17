@@ -73,6 +73,8 @@ from auth.consent import init_consent
 init_consent()
 from auth.consent_audit import init_consent_audit
 init_consent_audit()
+from auth.sms_routing import init_sms_routing
+init_sms_routing()
 
 # Include API routes
 from auth.org_routes import router as org_router
