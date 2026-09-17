@@ -71,6 +71,8 @@ init_reset_table()
 # decision, not a merge-conflict guess.
 from auth.consent import init_consent
 init_consent()
+from auth.consent_audit import init_consent_audit
+init_consent_audit()
 
 # Include API routes
 from auth.org_routes import router as org_router
