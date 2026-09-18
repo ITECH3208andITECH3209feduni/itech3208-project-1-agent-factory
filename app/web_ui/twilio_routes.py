@@ -22,15 +22,20 @@ from fastapi.responses import Response
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.twiml.voice_response import Gather, VoiceResponse
 
-from agent.orchestrator import Orchestrator
+from agent.receptionist import Receptionist
 from app.web_ui.activity_db import log_activity, log_delivery_event, update_delivery_status
 from app.web_ui.dashboard_routes import log_escalation
 from integrations.sms_consent import handle_inbound
 
 router = APIRouter()
 
-# One shared orchestrator — the memory module handles per-session context via session_id
-_orchestrator = Orchestrator()
+# One shared receptionist — the memory module handles per-session context
+# via session_id. Was Orchestrator (generic query routing) until now;
+# Receptionist adds FAQ lookup, human escalation, and appointment
+# booking — including the PROJ-445/446 booking -> reminder tie-in,
+# which only fires when a caller/contact address is known, so real
+# phone/SMS traffic is exactly the case it was built for.
+_receptionist = Receptionist()
 
 POLLY_VOICE = "Polly.Joanna"
 POLLY_LANG = "en-AU"
@@ -84,14 +89,17 @@ async def sms_webhook(
         twiml.message(consent_reply)
         return Response(content=str(twiml), media_type="application/xml")
 
-    rendered, result = _orchestrator.run(Body or "Hello")
-    reply = _strip_markdown(rendered)[:1600]  # Twilio SMS limit
+    result = _receptionist.handle(
+        Body or "Hello", session_id=From,
+        contact_channel="sms", contact_address=From,
+    )
+    reply = _strip_markdown(result["answer"])[:1600]  # Twilio SMS limit
 
     log_activity(
         channel="sms",
         caller=From or "unknown",
-        intent=result.skill_name if result else "",
-        summary=(result.summary if result else reply)[:200],
+        intent=result.get("intent", ""),
+        summary=reply[:200],
     )
 
     twiml = MessagingResponse()
@@ -137,12 +145,16 @@ async def voice_reply(
     request: Request,
     SpeechResult: str = Form(default=""),
     CallSid: str = Form(default=""),
+    From: str = Form(default=""),
 ) -> Response:
     """
     Receive Twilio's SpeechResult, query the AI Receptionist, and speak
     the answer back with Polly TTS. Loops for multi-turn dialogue.
     Detects goodbye keywords to hang up cleanly.
     PROJ-384
+
+    Twilio resends the call's From on every webhook for that call, so
+    it's available here even though the call started at /twilio/voice.
     """
     query = SpeechResult.strip()
     resp = VoiceResponse()
@@ -175,14 +187,17 @@ async def voice_reply(
         resp.hangup()
         return Response(content=str(resp), media_type="application/xml")
 
-    rendered, result = _orchestrator.run(query)
-    reply = _strip_markdown(rendered)
+    result = _receptionist.handle(
+        query, session_id=CallSid,
+        contact_channel="voice", contact_address=From,
+    )
+    reply = _strip_markdown(result["answer"])
 
     log_activity(
         channel="voice",
         caller=CallSid or "unknown",
-        intent=result.skill_name if result else "",
-        summary=(result.summary if result else reply[:200]),
+        intent=result.get("intent", ""),
+        summary=reply[:200],
     )
 
     # Trim to ~250 words for voice suitability
