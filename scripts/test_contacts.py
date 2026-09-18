@@ -50,9 +50,17 @@ def main() -> int:
     from contracts.schemas import ConsentState, normalise_phone
     from app.web import consent, contacts, reminders, store
     from app.web.main import app
+    from auth import db as auth_db, tenancy
 
     tmp = Path(tempfile.mkdtemp(prefix="af-contacts-"))
-    for name in ("contacts", "reminders", "consent_events"):
+    # Contacts now live in auth.tenancy's real SQLite table (PROJ-392),
+    # not app/web/store.py's JSON files — isolate that instead of
+    # swapping a JSON table for "contacts". reminders/consent_events
+    # are unaffected, still JSON-backed.
+    auth_db.DB_PATH = str(tmp / "auth_users.db")
+    auth_db.init_db()
+    tenancy.init_tenancy()
+    for name in ("reminders", "consent_events"):
         store.set_table(name, store.JsonTable(tmp / f"{name}.json", name))
 
     client = TestClient(app)
@@ -305,7 +313,8 @@ def main() -> int:
         check("re-import skips the existing ones", d2["skipped_count"] == 4, str(d2["skipped_count"]))
 
         # Imported contacts are NOT consented.
-        alpha = contacts.contacts_table().find(phone_number="+61400000001")
+        alpha_row = tenancy.get_contact_by_phone(1, "+61400000001")
+        alpha = dict(alpha_row)
         check("imported contact is not opted in",
               alpha["consent_state"] == ConsentState.UNKNOWN.value, str(alpha["consent_state"]))
         check("import is recorded in the audit trail",
@@ -378,19 +387,20 @@ def main() -> int:
         check("ids are never reused", new["id"] != bob["id"], f"{new['id']} vs {bob['id']}")
 
         # Cross-org reads must not leak.
-        other = contacts.contacts_table().insert({"phone_number": "+61999999999",
-                                                  "name": "Other org"}, org_id=999)
+        other_id = tenancy.create_contact(999, "+61999999999", "Other org")
         check("other org's row is invisible",
-              contacts.get_contact(other["id"]) is None)
+              contacts.get_contact(other_id) is None)
         check("other org's row is not listed",
-              all(c["id"] != other["id"] for c in contacts.list_contacts()))
+              all(c["id"] != other_id for c in contacts.list_contacts()))
 
-        # Corrupt file must surface, not read as empty.
-        (tmp / "contacts.json").write_text("{ broken", encoding="utf-8")
-        store.set_table("contacts", store.JsonTable(tmp / "contacts.json", "contacts"))
+        # A broken store must surface, not read as empty — same design
+        # property as before, now against the real SQLite file instead
+        # of a JSON one: point at a path sqlite cannot open at all.
+        auth_db.DB_PATH = str(tmp / "no" / "such" / "dir" / "auth_users.db")
         check("corrupt store is a 500", client.get("/api/contacts").status_code == 500)
+        auth_db.DB_PATH = str(tmp / "auth_users.db")
     finally:
-        for name in ("contacts", "reminders", "consent_events"):
+        for name in ("reminders", "consent_events"):
             store.set_table(name, None)
 
     print(f"\n{PASS} passed, {FAIL} failed")

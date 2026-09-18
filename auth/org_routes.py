@@ -1,34 +1,39 @@
 # auth/org_routes.py
 # ──────────────────────────────────────────────────────────────
-# Organisation registration (PROJ-406)
+# Organisation registration (PROJ-406) + profile (PROJ-409)
 #
 # Registration creates an organisation and its first user in a
 # single transaction. If either half fails, neither is written —
 # an orphaned org with no owner would be unreachable, and a user
 # with no org_id would break the scoping rule in PROJ-410.
 #
-# PROJ-409 (organisation profile — GET/PATCH /orgs/me) is NOT
-# included here. Both endpoints need a `current_user` dependency
-# that resolves the caller's own org_id from an auth token, but the
-# JWT login flow that would issue that token (PROJ-339, auth/routes.py)
-# was never wired into app/web_ui/main.py — it would collide with
-# Sprint 3's existing session-cookie /auth/login. Standardising the
-# whole app on one auth model is a real decision for the team, not
-# something to resolve unilaterally inside a merge conflict fix.
-# Building /orgs/me against a token flow that has no way to issue a
-# valid token would just 401 forever, so it's left for that decision
-# rather than merged half-working.
+# Auth model resolution: PROJ-409's GET/PATCH /orgs/me originally
+# needed a `current_user` dependency resolving org_id from a JWT
+# (auth/routes.py, PROJ-339) that was never wired into
+# app/web_ui/main.py — it would have collided with Sprint 3's
+# existing, working session-cookie /auth/login. Rather than build
+# against a token flow with no way to issue a token, /orgs/me below
+# is built on get_current_username (app/web_ui/auth_routes.py) — the
+# auth that's actually live — plus a lightweight org_id column added
+# to agent/auth.py's own users table (agent.auth.get_user_org_id /
+# set_user_org_id). A Sprint-3-authenticated user claims an org via
+# /orgs/claim, the same way /orgs/register creates one for a fresh
+# JWT-style signup.
 # ──────────────────────────────────────────────────────────────
 
 import sqlite3
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
+from agent.auth import get_user_org_id, set_user_org_id
+from app.web_ui.auth_routes import get_current_username
+from auth import tenancy
 from auth.db import DB_PATH, get_user_by_email
 from auth.security import hash_password
 from contracts.schemas import (
     OrgOut,
     OrgRegistration,
+    OrgUpdate,
     RegistrationOut,
 )
 
@@ -88,3 +93,57 @@ def register_org(body: OrgRegistration):
         conn.close()
 
     return RegistrationOut(org=_row_to_org(org_row), user_id=user_id, role="owner")
+
+
+def _require_org(username: str) -> int:
+    org_id = get_user_org_id(username)
+    if org_id is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "You're not part of an organisation yet — create one with POST /orgs/claim.",
+        )
+    return org_id
+
+
+@router.post("/claim", response_model=OrgOut, status_code=201)
+def claim_org(body: OrgRegistration, username: str = Depends(get_current_username)):
+    """
+    Create an organisation owned by the logged-in Sprint 3 user.
+
+    Same shape as /orgs/register, but for a caller who already has a
+    session-cookie login (agent/auth.py) rather than signing up fresh —
+    password/email on the body are accepted for org contact details
+    but a new login identity is not created, this one is just linked
+    to the new org.
+    """
+    if get_user_org_id(username) is not None:
+        raise HTTPException(status.HTTP_409_CONFLICT, "You already belong to an organisation.")
+
+    org_id = tenancy.create_org(body.org_name, str(body.email), body.timezone)
+    set_user_org_id(username, org_id)
+    return _row_to_org(tenancy.get_org(org_id))
+
+
+@router.get("/me", response_model=OrgOut)
+def get_my_org(username: str = Depends(get_current_username)):
+    """Return the caller's own organisation. org_id comes from the
+    logged-in session, not a client-supplied parameter, so a user
+    can't read another org by changing one (PROJ-409)."""
+    org_id = _require_org(username)
+    row = tenancy.get_org(org_id)
+    if row is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Organisation not found")
+    return _row_to_org(row)
+
+
+@router.patch("/me", response_model=OrgOut)
+def update_my_org(body: OrgUpdate, username: str = Depends(get_current_username)):
+    """Update the caller's organisation."""
+    org_id = _require_org(username)
+    tenancy.update_org(
+        org_id,
+        name=body.name,
+        contact_email=str(body.contact_email) if body.contact_email else None,
+        timezone=body.timezone,
+    )
+    return _row_to_org(tenancy.get_org(org_id))

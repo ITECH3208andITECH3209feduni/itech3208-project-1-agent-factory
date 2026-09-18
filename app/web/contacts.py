@@ -25,12 +25,14 @@ import csv
 import io
 import logging
 import re
+import sqlite3
 from datetime import datetime, time
 from typing import Any
 
 from contracts.schemas import ConsentState, normalise_phone
 
-from app.web.store import DEFAULT_ORG_ID, table
+from auth import tenancy
+from app.web.store import DEFAULT_ORG_ID
 
 log = logging.getLogger("agent_factory.contacts")
 
@@ -57,7 +59,16 @@ def _now_iso() -> str:
 
 
 def contacts_table():
-    return table("contacts")
+    """Deprecated shim — the CRUD functions below now call auth.tenancy
+    directly (PROJ-392's real, org-scoped SQLite table). Kept only so
+    any external caller still importing this name doesn't hard-fail;
+    real reads/writes no longer go through app/web/store.py's JSON
+    table."""
+    raise RuntimeError(
+        "contacts_table() is retired — contacts are stored in auth.tenancy "
+        "now, not the JSON store. Call the tenancy-backed functions in "
+        "this module instead."
+    )
 
 
 # ── Validation ────────────────────────────────────────────────
@@ -86,7 +97,8 @@ def validate(payload: dict[str, Any], *, creating: bool,
             else:
                 # Normalising first is what makes this check work: 0412345678
                 # and +61412345678 are the same person and must not both exist.
-                dupe = contacts_table().find(org_id=org_id, phone_number=phone)
+                dupe_row = tenancy.get_contact_by_phone(org_id, phone)
+                dupe = dict(dupe_row) if dupe_row else None
                 if dupe and (not existing or int(dupe["id"]) != int(existing["id"])):
                     errors["phone_number"] = (
                         f"A contact with this number already exists "
@@ -166,7 +178,13 @@ def validate(payload: dict[str, Any], *, creating: bool,
 # ── CRUD (PROJ-418) ───────────────────────────────────────────
 def list_contacts(org_id: int = DEFAULT_ORG_ID, *, q: str | None = None,
                   consent_state: str | None = None) -> list[dict[str, Any]]:
-    rows = contacts_table().all(org_id)
+    try:
+        rows = [dict(r) for r in tenancy.list_contacts(org_id)]
+    except sqlite3.Error as exc:
+        # Matches app/web/store.py's JsonTable contract that main.py's
+        # routes already handle: a broken store surfaces loudly as a
+        # 500, never silently as an empty list.
+        raise RuntimeError(f"contacts store is unreadable: {exc}") from exc
 
     if q:
         needle = q.strip().lower()
@@ -193,32 +211,32 @@ def list_contacts(org_id: int = DEFAULT_ORG_ID, *, q: str | None = None,
 
 
 def get_contact(contact_id: int, org_id: int = DEFAULT_ORG_ID) -> dict[str, Any] | None:
-    return contacts_table().get(contact_id, org_id)
+    row = tenancy.get_contact(contact_id, org_id)
+    return dict(row) if row else None
 
 
 def create_contact(payload: dict[str, Any], org_id: int = DEFAULT_ORG_ID,
                    *, source: str = "manual") -> dict[str, Any]:
     clean = validate(payload, creating=True, org_id=org_id)
-    row = contacts_table().insert(
-        {
-            "phone_number": clean["phone_number"],
-            "name": clean.get("name"),
-            "email": clean.get("email"),
-            # A new contact has not been asked yet — never assume opted in.
-            "consent_state": clean.get("consent_state", ConsentState.UNKNOWN.value),
-            "preferred_channel": clean.get("preferred_channel", "sms"),
-            "quiet_hours_start": clean.get("quiet_hours_start"),
-            "quiet_hours_end": clean.get("quiet_hours_end"),
-            "created_at": _now_iso(),
-        },
-        org_id=org_id,
+    # A new contact has not been asked yet — never assume opted in.
+    consent_state = clean.get("consent_state", ConsentState.UNKNOWN.value)
+    new_id = tenancy.create_contact(
+        org_id,
+        clean["phone_number"],
+        clean.get("name"),
+        email=clean.get("email"),
+        consent_state=consent_state,
+        preferred_channel=clean.get("preferred_channel", "sms"),
+        quiet_hours_start=clean.get("quiet_hours_start"),
+        quiet_hours_end=clean.get("quiet_hours_end"),
     )
+    row = get_contact(new_id, org_id)
 
     from app.web import consent
 
     consent.record(
-        contact_id=int(row["id"]), org_id=org_id,
-        old_state=None, new_state=row["consent_state"],
+        contact_id=new_id, org_id=org_id,
+        old_state=None, new_state=consent_state,
         source=source, detail="contact created",
     )
     return row
@@ -231,7 +249,8 @@ def update_contact(contact_id: int, payload: dict[str, Any],
         return None
 
     clean = validate(payload, creating=False, existing=existing, org_id=org_id)
-    updated = contacts_table().update(contact_id, clean, org_id=org_id)
+    row = tenancy.update_contact_fields(contact_id, org_id, clean)
+    updated = dict(row) if row else None
 
     # A consent change is an auditable event, not just a field edit (PROJ-413).
     if updated and "consent_state" in clean and clean["consent_state"] != existing.get("consent_state"):
@@ -246,7 +265,7 @@ def update_contact(contact_id: int, payload: dict[str, Any],
 
 
 def delete_contact(contact_id: int, org_id: int = DEFAULT_ORG_ID) -> bool:
-    return contacts_table().delete(contact_id, org_id)
+    return tenancy.delete_contact(contact_id, org_id)
 
 
 # ── Quiet hours (PROJ-440) ────────────────────────────────────
@@ -366,7 +385,7 @@ def import_csv(raw: bytes | str, org_id: int = DEFAULT_ORG_ID,
         seen_in_file[canonical] = index
 
         if dry_run:
-            dupe = contacts_table().find(org_id=org_id, phone_number=canonical)
+            dupe = tenancy.get_contact_by_phone(org_id, canonical)
             if dupe:
                 skipped.append({"line": index, "phone_number": canonical,
                                 "reason": f"Already exists as #{dupe['id']}."})

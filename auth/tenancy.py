@@ -33,11 +33,16 @@ CREATE TABLE IF NOT EXISTS organisations (
 
 -- Contacts are SMS recipients owned by an org, not login users.
 CREATE TABLE IF NOT EXISTS contacts (
-    id           INTEGER PRIMARY KEY AUTOINCREMENT,
-    org_id       INTEGER NOT NULL,
-    phone_number TEXT    NOT NULL,
-    name         TEXT,
-    created_at   TEXT    NOT NULL DEFAULT (datetime('now')),
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    org_id             INTEGER NOT NULL,
+    phone_number       TEXT    NOT NULL,
+    name               TEXT,
+    email              TEXT,
+    consent_state      TEXT    NOT NULL DEFAULT 'unknown',
+    preferred_channel  TEXT    NOT NULL DEFAULT 'sms',
+    quiet_hours_start  TEXT,
+    quiet_hours_end    TEXT,
+    created_at         TEXT    NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (org_id) REFERENCES organisations(id),
     UNIQUE (org_id, phone_number)
 );
@@ -55,6 +60,26 @@ def init_tenancy() -> None:
         _add_org_id_to_users(conn)
         conn.executescript(TENANCY_SCHEMA)
         _backfill_default_org(conn)
+        _add_contact_profile_fields(conn)
+
+
+def _add_contact_profile_fields(conn: sqlite3.Connection) -> None:
+    """
+    Add email/consent_state/preferred_channel/quiet_hours_* to contacts
+    for databases created before app/web/contacts.py (PROJ-417-421,
+    440-441) was pointed at this table instead of its own JSON store.
+    """
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(contacts)")}
+    additions = {
+        "email": "TEXT",
+        "consent_state": "TEXT NOT NULL DEFAULT 'unknown'",
+        "preferred_channel": "TEXT NOT NULL DEFAULT 'sms'",
+        "quiet_hours_start": "TEXT",
+        "quiet_hours_end": "TEXT",
+    }
+    for col, decl in additions.items():
+        if col not in cols:
+            conn.execute(f"ALTER TABLE contacts ADD COLUMN {col} {decl}")
 
 
 def _add_org_id_to_users(conn: sqlite3.Connection) -> None:
@@ -144,13 +169,64 @@ def get_user_org_id(user_id: int) -> int | None:
 
 
 # ── Contacts (org-scoped) ──────────────────────────────────────
-def create_contact(org_id: int, phone_number: str, name: str | None = None) -> int:
+def create_contact(
+    org_id: int,
+    phone_number: str,
+    name: str | None = None,
+    *,
+    email: str | None = None,
+    consent_state: str = "unknown",
+    preferred_channel: str = "sms",
+    quiet_hours_start: str | None = None,
+    quiet_hours_end: str | None = None,
+) -> int:
+    """The keyword-only fields are additive (PROJ-417/440/441) — the two
+    existing callers (PROJ-406 org registration, PROJ-414 STOP-handler
+    auto-created contacts) only ever pass the first three and are
+    unaffected."""
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO contacts (org_id, phone_number, name) VALUES (?, ?, ?)",
-            (org_id, phone_number.strip(), name),
+            "INSERT INTO contacts (org_id, phone_number, name, email,"
+            " consent_state, preferred_channel, quiet_hours_start, quiet_hours_end)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                org_id, phone_number.strip(), name, email,
+                consent_state, preferred_channel, quiet_hours_start, quiet_hours_end,
+            ),
         )
         return cur.lastrowid
+
+
+def update_contact_fields(contact_id: int, org_id: int, fields: dict) -> sqlite3.Row | None:
+    """Patch-style update — only columns present in `fields` are touched.
+    org_id is required so a contact can't be edited across tenants."""
+    if not fields:
+        return get_contact(contact_id, org_id)
+    allowed = {
+        "phone_number", "name", "email", "consent_state",
+        "preferred_channel", "quiet_hours_start", "quiet_hours_end",
+    }
+    updates = {k: v for k, v in fields.items() if k in allowed}
+    if not updates:
+        return get_contact(contact_id, org_id)
+
+    set_clause = ", ".join(f"{col} = ?" for col in updates)
+    with get_conn() as conn:
+        conn.execute(
+            f"UPDATE contacts SET {set_clause} WHERE id = ? AND org_id = ?",
+            (*updates.values(), contact_id, org_id),
+        )
+        return conn.execute(
+            "SELECT * FROM contacts WHERE id = ? AND org_id = ?", (contact_id, org_id)
+        ).fetchone()
+
+
+def delete_contact(contact_id: int, org_id: int) -> bool:
+    with get_conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM contacts WHERE id = ? AND org_id = ?", (contact_id, org_id)
+        )
+        return cur.rowcount > 0
 
 
 def get_contact(contact_id: int, org_id: int) -> sqlite3.Row | None:

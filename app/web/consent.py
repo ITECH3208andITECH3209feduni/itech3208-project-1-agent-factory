@@ -99,9 +99,10 @@ def set_state(contact_id: int, new_state: str, *, source: str,
                source=source, detail=(detail or "no change"), org_id=org_id)
         return contact
 
-    updated = contacts.contacts_table().update(
-        contact_id, {"consent_state": new_state}, org_id=org_id
-    )
+    from auth import tenancy
+
+    row = tenancy.update_contact_fields(contact_id, org_id, {"consent_state": new_state})
+    updated = dict(row) if row else None
     record(contact_id=contact_id, old_state=old, new_state=new_state,
            source=source, detail=detail, org_id=org_id)
     return updated
