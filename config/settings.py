@@ -12,6 +12,7 @@ load_dotenv()
 
 # ── Resolve base directory so all paths work regardless of cwd ─
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PROJECT_ROOT = _BASE_DIR  # public alias — app/web/store.py (PROJ-394) imports this name
 
 # ── Claude / Anthropic ─────────────────────────────────────────
 ANTHROPIC_API_KEY  = os.environ.get("ANTHROPIC_API_KEY", "YOUR_API_KEY_HERE")
