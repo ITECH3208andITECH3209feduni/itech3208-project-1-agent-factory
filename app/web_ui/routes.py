@@ -46,6 +46,14 @@ from app.web_ui.auth_routes import get_current_username
 router = APIRouter()
 
 # ── Shared skill instances (one per process) ───────────────────
+# PROJ-410 note: org-scoped memory (agent/memory.py's org_id column)
+# is in place, but wiring /query and /history to it needs the
+# current_user dependency from auth/routes.py — that module's JWT
+# session foundation (PROJ-339/344) is on the same source branch as
+# this ticket set but predates it and was NOT part of this cherry-pick
+# (it's not merged into main either). Left on get_current_username
+# (PROJ-349) below rather than silently deciding that scope expansion
+# inside a merge conflict resolution.
 _orchestrator  = Orchestrator()
 _lit_skill     = LiteratureSkill()
 _integrity     = AcademicIntegritySkill()
@@ -374,7 +382,7 @@ async def seller_tools(body: SellerRequest):
 
 
 @router.post("/export", response_model=ExportResponse)
-async def export_results(body: ExportRequest):
+async def export_results(body: ExportRequest, username: str = Depends(get_current_username)):
     """
     Export any skill result to PDF or Excel (PROJ-191).
 
@@ -401,8 +409,8 @@ async def export_results(body: ExportRequest):
         )
 
 
-@router.get("/export/download")
-async def download_export(path: str):
+# superseded by download_export_secure below (PROJ-407 path traversal fix)
+async def _download_export_unused(path: str):
     """
     Download a previously exported file by its path.
     GET /export/download?path=exports/result_20260515_123456.pdf
@@ -413,6 +421,25 @@ async def download_export(path: str):
 
 
 @router.get("/status", response_model=StatusResponse)
-async def get_status():
-    """Health check — confirms API is running and agent is ready."""
-    return StatusResponse(status="ok", agent="ready")
+
+@router.get("/export/download")
+async def download_export_secure(path: str, username: str = Depends(get_current_username)):
+    """
+    Download a previously exported file.
+
+    PROJ-407 security fix: path was previously passed straight to
+    FileResponse with no auth, so any readable file was retrievable,
+    including .env and auth_users.db. Only the basename is used now,
+    resolved inside the exports directory, and auth is required.
+    """
+    from fastapi import HTTPException
+
+    exports_root = os.path.realpath("exports")
+    candidate = os.path.realpath(os.path.join(exports_root, os.path.basename(path)))
+
+    if not candidate.startswith(exports_root + os.sep):
+        raise HTTPException(status_code=400, detail="Invalid path")
+    if not os.path.isfile(candidate):
+        raise HTTPException(status_code=404, detail="File not found")
+
+    return FileResponse(candidate, filename=os.path.basename(candidate))

@@ -29,7 +29,7 @@ _PROJECT = os.path.abspath(os.path.join(_HERE, "../.."))
 if _PROJECT not in sys.path:
     sys.path.insert(0, _PROJECT)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
@@ -40,6 +40,9 @@ from app.web_ui.calendar_routes import router as calendar_router
 from app.web_ui.kb_routes import router as kb_router
 from app.web_ui.twilio_routes import router as twilio_router
 from app.web_ui.dashboard_routes import router as dashboard_router
+from app.web_ui.delivery_routes import router as delivery_router
+from app.web_ui.analytics_routes import router as analytics_router
+from app.web_ui.settings_routes import router as settings_router
 
 # ── App setup ──────────────────────────────────────────────────
 app = FastAPI(
@@ -53,14 +56,67 @@ _STATIC_DIR = os.path.join(_PROJECT, "static")
 if os.path.isdir(_STATIC_DIR):
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
 
+_SITE_DIR = os.path.join(_PROJECT, "site")
+if os.path.isdir(_SITE_DIR):
+    app.mount("/site-assets", StaticFiles(directory=_SITE_DIR), name="site-assets")
+
+# Create the org/user tenancy tables if they don't exist yet (PROJ-405).
+# auth/db.py's users table (PROJ-406's org registration writes to it)
+# is a separate SQLite file from Sprint 3's own auth — the two auth
+# systems aren't unified yet, see auth/org_routes.py's header comment.
+from auth.db import init_db
+from auth.tenancy import init_tenancy
+init_db()
+init_tenancy()
+from auth.password_reset import init_reset_table
+init_reset_table()
+# NOTE: the /auth/forgot-password and /auth/reset-password HTTP
+# endpoints that call into this token store live in auth/routes.py's
+# JWT router (PROJ-408), which — like PROJ-409 above — isn't wired in
+# here. The pages below serve, but their submit buttons have nothing
+# to call yet. Same follow-up as PROJ-409: needs the auth-model
+# decision, not a merge-conflict guess.
+from auth.consent import init_consent
+init_consent()
+from auth.consent_audit import init_consent_audit
+init_consent_audit()
+from auth.sms_routing import init_sms_routing
+init_sms_routing()
+from integrations.sms_sender import init_send_log
+init_send_log()
+
 # Include API routes
+from auth.org_routes import router as org_router
+
 app.include_router(auth_router)          # /auth/register, /auth/login, /auth/logout, /auth/me
+app.include_router(org_router)           # /orgs — PROJ-406 organisation registration
 app.include_router(router)               # /query, /literature, /amazon, /integrity, /seller, /export, /history, /status
 app.include_router(receptionist_router)  # /receptionist (POST)
 app.include_router(calendar_router)      # /calendar/ics
 app.include_router(kb_router)            # /kb/upload, /kb/list, /kb/{id}, /kb/search
-app.include_router(twilio_router)        # /twilio/sms, /twilio/voice, /twilio/voice/reply
+app.include_router(twilio_router)        # /twilio/sms, /twilio/voice, /twilio/voice/reply, /twilio/status-callback
 app.include_router(dashboard_router)     # /activity, /activity/stats, /escalations, /calendar/appointments
+app.include_router(delivery_router)      # /delivery/history, /delivery/retry, /delivery/email/bounce
+app.include_router(analytics_router)     # /analytics/summary, /analytics/trends, /analytics/channels
+app.include_router(settings_router)      # /api/user/settings (PROJ-444)
+
+# Contacts CRM, Dashboard, Notification Preferences (PROJ-394, 399,
+# 400 — Prabhjot Singh) — mounted, not merged into this app's own
+# routing. It's a genuinely separate FastAPI app (app/web/main.py)
+# with its own /query, /dashboard, /contacts, /reminders, /api/* and
+# its own JSON-file persistence (app/web/store.py). That store.py is
+# explicit that it's a placeholder for exactly the account/contact
+# system PROJ-392/405/406 would bring — those are merged now (see
+# agent/reminders/ and auth/tenancy.py) but wiring this app onto them
+# is real integration work (unifying three independently-designed
+# contact/reminder data models), not a merge-conflict decision.
+# Mounting keeps every one of Prabhjot's routes and its own tests
+# (scripts/test_contacts.py etc.) working exactly as built, reachable
+# in the real running app at /crm/*, without guessing at that
+# unification. Follow-up: point app/web/store.py at the real DB.
+from app.web.main import app as crm_app
+
+app.mount("/crm", crm_app)
 
 
 # ── Root — serve the chat UI ───────────────────────────────────
@@ -74,6 +130,24 @@ async def serve_index():
 
 
 # ── /literature — serve the dedicated literature search page ────
+@app.get("/forgot-password", include_in_schema=False)
+async def serve_forgot():
+    return FileResponse(os.path.join(_STATIC_DIR, "forgot-password.html"))
+
+
+@app.get("/reset-password", include_in_schema=False)
+async def serve_reset():
+    return FileResponse(os.path.join(_STATIC_DIR, "reset-password.html"))
+
+
+@app.get("/login", include_in_schema=False)
+async def serve_login():
+    return FileResponse(os.path.join(_STATIC_DIR, "login.html"))
+
+@app.get("/register", include_in_schema=False)
+async def serve_register():
+    return FileResponse(os.path.join(_STATIC_DIR, "register.html"))
+
 @app.get("/literature", include_in_schema=False)
 async def serve_literature():
     """Serve the standalone literature search interface."""
@@ -81,6 +155,29 @@ async def serve_literature():
     if os.path.exists(page):
         return FileResponse(page, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
     return {"message": "literature.html not found."}
+
+
+# ── /showcase & /site — serve the information website (PROJ-403) ───
+@app.get("/showcase", include_in_schema=False)
+@app.get("/site", include_in_schema=False)
+async def serve_showcase():
+    """Serve the static information website home page."""
+    site_index = os.path.join(_SITE_DIR, "index.html")
+    if os.path.exists(site_index):
+        return FileResponse(site_index, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
+    return {"message": "Showcase site not found."}
+
+
+@app.get("/site/{page_name}", include_in_schema=False)
+async def serve_site_page(page_name: str):
+    """Serve subpages of the information website (features, pricing, about, faq)."""
+    if not page_name.endswith(".html"):
+        page_name += ".html"
+    page_path = os.path.join(_SITE_DIR, page_name)
+    if os.path.exists(page_path):
+        return FileResponse(page_path, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
+    raise HTTPException(status_code=404, detail=f"Page '{page_name}' not found.")
+
 
 
 # ── Dev server ─────────────────────────────────────────────────

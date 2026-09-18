@@ -1,10 +1,64 @@
-# Core code - maintainer only
-/src/ @gavrielc @gabi-simons
-/container/ @gavrielc @gabi-simons
-/groups/ @gavrielc @gabi-simons
-/launchd/ @gavrielc @gabi-simons
-/package.json @gavrielc @gabi-simons
-/package-lock.json @gavrielc @gabi-simons
+# CODEOWNERS — ITECH3208 Agent Factory (PROJ-452)
+#
+# ──────────────────────────────────────────────────────────────
+# ACTION REQUIRED before enabling "Require review from Code Owners"
+# ──────────────────────────────────────────────────────────────
+# The handles below marked TODO are placeholders. GitHub silently ignores
+# rules that reference an unknown user or someone without repo access, so a
+# CODEOWNERS file with wrong handles is worse than none: the branch
+# protection rule appears active but enforces nothing.
+#
+# Until every TODO is replaced with a real GitHub username:
+#   - enable "Require approvals: 1"              <- works regardless
+#   - leave "Require review from Code Owners" OFF
+#
+# This file previously contained upstream NanoClaw's maintainers
+# (@gavrielc, @gabi-simons) on /src/, /container/, /groups/, /launchd/ and
+# package.json. Those are not on this project. Had code-owner review been
+# switched on, every PR touching those paths would have required approval
+# from two people outside the team — locking us out of our own repo.
+# ──────────────────────────────────────────────────────────────
 
-# Skills - open to contributors
-/.claude/skills/
+# Default: anything not matched below needs a review from the project lead.
+*                               @Prabh9914
+
+# ── Python application ───────────────────────────────────────
+/agent/                         @Prabh9914
+/app/                           @Prabh9914
+/config/                        @Prabh9914
+/skills/                        @Prabh9914
+/main.py                        @Prabh9914
+/requirements.txt               @Prabh9914
+
+# ── Infrastructure and deployment (Sprint 3, PROJ-199) ───────
+/Dockerfile                     @Prabh9914
+/docker-compose.yml             @Prabh9914
+/.dockerignore                  @Prabh9914
+/launchd/                       @Prabh9914
+/scripts/                       @Prabh9914
+/run.sh                         @Prabh9914
+
+# ── CI and repo process ─────────────────────────────────────
+/.github/                       @Prabh9914
+
+# ── Sprint 4 ownership ──────────────────────────────────────
+# Fill these in as the Sprint 4 code lands. Owners follow the Jira epics:
+#   Accounts & Multi-tenancy (PROJ-392), Consent & Privacy (PROJ-393),
+#   data contracts (PROJ-404)            -> Dhiman Roy   TODO: @handle
+#   Reminders Engine (PROJ-395),
+#   Booking Tie-in (PROJ-402)            -> Dilraj Singh TODO: @handle
+#   Contacts CRM (PROJ-394), Dashboard (PROJ-399),
+#   Notification Preferences (PROJ-400)  -> @Prabh9914
+#
+# Example, once handles are known:
+#   /app/accounts/                @dhiman-handle
+#   /app/reminders/               @dilraj-handle
+#   /app/contacts/                @Prabh9914
+
+# ── Secrets require the lead's eyes, whoever touches them ────
+# A change here can expose credentials or disable the audit that catches it.
+/.env.example                   @Prabh9914
+/.gitignore                     @Prabh9914
+/scripts/audit_secrets.sh       @Prabh9914
+/scripts/secure-secrets.sh      @Prabh9914
+/.husky/                        @Prabh9914

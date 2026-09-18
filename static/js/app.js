@@ -387,7 +387,7 @@ async function checkStatus() {
 ══════════════════════════════════════════════════════════ */
 async function loadHistory() {
   try {
-    const res = await fetch(`${API_BASE}/history`);
+    const res = await authFetch(`${API_BASE}/history`);
     if (!res.ok) return;
     const history = await res.json();
     if (!history || history.length === 0) return;
@@ -426,7 +426,7 @@ async function sendShoppingQuery() {
   const typingId = showTyping(shoppingArea);
 
   try {
-    const res = await fetch(`${API_BASE}/query`, {
+    const res = await authFetch(`${API_BASE}/query`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query: fullQuery }),
@@ -526,7 +526,7 @@ async function sendIntegrityCheck() {
   const typingId = showTyping(integrityArea);
 
   try {
-    const res = await fetch(`${API_BASE}/integrity`, {
+    const res = await authFetch(`${API_BASE}/integrity`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
@@ -916,6 +916,8 @@ function switchReceptTab(tabName) {
   const panel = document.getElementById(`rtab-${tabName}`);
   if (panel) panel.style.display = "flex";
   if (tabName === "activity")    loadReceptActivity();
+  if (tabName === "analytics")   loadAnalyticsDashboard();
+  if (tabName === "delivery")    loadDeliveryHistory();
   if (tabName === "escalations") loadReceptEscalations();
   if (tabName === "calendar")    loadReceptCalendar();
 }
@@ -1033,7 +1035,7 @@ function escapeHtml(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
-/* Wire up receptionist input on Enter */
+/* Wire up receptionist input on Enter & initialize Personalisation */
 document.addEventListener("DOMContentLoaded", () => {
   const inp = document.getElementById("receptionist-input");
   if (inp) {
@@ -1042,4 +1044,420 @@ document.addEventListener("DOMContentLoaded", () => {
   /* Poll stats every 30s when receptionist tab is visible */
   loadReceptStats();
   setInterval(loadReceptStats, 30_000);
+
+  /* Initialize User Personalisation (PROJ-401, PROJ-444) */
+  initPersonalisation();
 });
+
+/* ══ ANALYTICS & REPORTING (PROJ-398, PROJ-435, PROJ-436) ══ */
+
+async function loadAnalyticsDashboard() {
+  try {
+    const res = await fetch("/analytics/summary");
+    if (!res.ok) return;
+    const data = await res.json();
+    const sum = data.summary || {};
+
+    const elDeliveryRate = document.getElementById("kpi-delivery-rate");
+    const elResponseRate = document.getElementById("kpi-response-rate");
+    const elTotalSent = document.getElementById("kpi-total-sent");
+    const elTotalFailed = document.getElementById("kpi-total-failed");
+    const elInflight = document.getElementById("kpi-inflight");
+    const elSuppressed = document.getElementById("kpi-suppressed-count");
+
+    if (elDeliveryRate) elDeliveryRate.textContent = `${sum.delivery_rate_pct ?? 100}%`;
+    if (elResponseRate) elResponseRate.textContent = `${sum.response_rate_pct ?? 0}%`;
+    if (elTotalSent) elTotalSent.textContent = sum.total_sent ?? 0;
+    if (elTotalFailed) elTotalFailed.textContent = (sum.failed ?? 0) + (sum.bounced ?? 0);
+    if (elInflight) elInflight.textContent = `In-flight: ${sum.in_flight ?? 0}`;
+    if (elSuppressed) elSuppressed.textContent = `Suppressed emails: ${sum.suppressed_emails_count ?? 0}`;
+
+    // Render Charts
+    renderTrendChart(data.daily_trends || []);
+    renderChannelChart(data.channels || {});
+  } catch (err) {
+    console.error("Failed to load analytics:", err);
+  }
+}
+
+function renderTrendChart(trends) {
+  const svg = document.getElementById("trend-chart-svg");
+  if (!svg) return;
+  if (!trends || trends.length === 0) {
+    svg.innerHTML = `<text x="300" y="100" fill="var(--text2)" font-size="13" text-anchor="middle">No delivery data yet. Click "Seed Demo Data" above to view trends.</text>`;
+    return;
+  }
+
+  const maxVal = Math.max(...trends.map(t => Math.max(t.sent || 0, t.delivered || 0)), 5);
+  const width = 600;
+  const height = 200;
+  const padLeft = 40;
+  const padBottom = 30;
+  const chartW = width - padLeft - 20;
+  const chartH = height - padBottom - 20;
+
+  const stepX = chartW / Math.max(trends.length - 1, 1);
+
+  let sentPoints = "";
+  let delPoints = "";
+  let labelsHtml = "";
+  let barsHtml = "";
+
+  trends.forEach((t, i) => {
+    const x = padLeft + i * stepX;
+    const ySent = height - padBottom - ((t.sent || 0) / maxVal) * chartH;
+    const yDel = height - padBottom - ((t.delivered || 0) / maxVal) * chartH;
+    sentPoints += `${x},${ySent} `;
+    delPoints += `${x},${yDel} `;
+
+    const dateStr = (t.date || "").slice(5);
+    labelsHtml += `<text x="${x}" y="${height - 10}" fill="var(--text2)" font-size="10" text-anchor="middle">${escapeHtml(dateStr)}</text>`;
+
+    // Mini bar for failures
+    if (t.failed) {
+      const barH = (t.failed / maxVal) * chartH;
+      barsHtml += `<rect x="${x - 6}" y="${height - padBottom - barH}" width="12" height="${barH}" fill="#f43f5e" opacity="0.6" rx="2" />`;
+    }
+  });
+
+  svg.innerHTML = `
+    <!-- Grid line -->
+    <line x1="${padLeft}" y1="${height - padBottom}" x2="${width - 20}" y2="${height - padBottom}" stroke="var(--border)" stroke-width="1" />
+    <line x1="${padLeft}" y1="20" x2="${width - 20}" y2="20" stroke="var(--border)" stroke-dasharray="3,3" />
+
+    <!-- Failure Bars -->
+    ${barsHtml}
+
+    <!-- Trend lines -->
+    <polyline fill="none" stroke="#6366f1" stroke-width="3" stroke-linecap="round" points="${sentPoints.trim()}" />
+    <polyline fill="none" stroke="#10b981" stroke-width="2.5" stroke-linecap="round" points="${delPoints.trim()}" />
+
+    <!-- Labels -->
+    ${labelsHtml}
+
+    <!-- Legend -->
+    <circle cx="450" cy="15" r="4" fill="#6366f1" />
+    <text x="460" y="18" fill="var(--text2)" font-size="11">Sent</text>
+    <circle cx="510" cy="15" r="4" fill="#10b981" />
+    <text x="520" y="18" fill="var(--text2)" font-size="11">Delivered</text>
+    <rect x="565" y="11" width="8" height="8" fill="#f43f5e" rx="1" />
+    <text x="578" y="18" fill="var(--text2)" font-size="11">Failed</text>
+  `;
+}
+
+function renderChannelChart(channels) {
+  const svg = document.getElementById("channel-chart-svg");
+  if (!svg) return;
+
+  const sms = channels.sms?.total || 0;
+  const email = channels.email?.total || 0;
+  const voice = channels.voice?.total || 0;
+  const total = sms + email + voice;
+
+  if (total === 0) {
+    svg.innerHTML = `<text x="125" y="100" fill="var(--text2)" font-size="12" text-anchor="middle">No channel volume</text>`;
+    return;
+  }
+
+  const cx = 85;
+  const cy = 100;
+  const r = 60;
+  const innerR = 40;
+
+  // Simple clean SVG donut breakdown representation
+  const pSms = (sms / total) * 100;
+  const pEmail = (email / total) * 100;
+  const pVoice = (voice / total) * 100;
+
+  svg.innerHTML = `
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--surface3)" stroke-width="20" />
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#22c55e" stroke-width="20"
+      stroke-dasharray="${(pSms / 100) * 377} 377" transform="rotate(-90 ${cx} ${cy})" />
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#3b82f6" stroke-width="20"
+      stroke-dasharray="${(pEmail / 100) * 377} 377" stroke-dashoffset="${-((pSms / 100) * 377)}" transform="rotate(-90 ${cx} ${cy})" />
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#a78bfa" stroke-width="20"
+      stroke-dasharray="${(pVoice / 100) * 377} 377" stroke-dashoffset="${-(((pSms + pEmail) / 100) * 377)}" transform="rotate(-90 ${cx} ${cy})" />
+
+    <text x="${cx}" y="${cy + 5}" fill="var(--text)" font-size="14" font-weight="700" text-anchor="middle">${total}</text>
+    <text x="${cx}" y="${cy + 20}" fill="var(--text2)" font-size="10" text-anchor="middle">Total</text>
+
+    <!-- Legend -->
+    <circle cx="165" cy="70" r="5" fill="#22c55e" />
+    <text x="178" y="74" fill="var(--text)" font-size="11">SMS (${Math.round(pSms)}%)</text>
+    <circle cx="165" cy="100" r="5" fill="#3b82f6" />
+    <text x="178" y="104" fill="var(--text)" font-size="11">Email (${Math.round(pEmail)}%)</text>
+    <circle cx="165" cy="130" r="5" fill="#a78bfa" />
+    <text x="178" y="134" fill="var(--text)" font-size="11">Voice (${Math.round(pVoice)}%)</text>
+  `;
+}
+
+async function seedSampleAnalyticsData() {
+  try {
+    const res = await fetch("/analytics/seed-demo-data?count=25", { method: "POST" });
+    if (res.ok) {
+      loadAnalyticsDashboard();
+      if (document.querySelector('.recept-tab[data-rtab="delivery"]')?.classList.contains("active")) {
+        loadDeliveryHistory();
+      }
+    }
+  } catch (e) {
+    console.error("Failed to seed demo data:", e);
+  }
+}
+
+/* ══ DELIVERY HISTORY & RETRY (PROJ-397, PROJ-434) ══ */
+
+let deliverySearchTimeout = null;
+function debounceDeliverySearch() {
+  clearTimeout(deliverySearchTimeout);
+  deliverySearchTimeout = setTimeout(loadDeliveryHistory, 300);
+}
+
+async function loadDeliveryHistory() {
+  const tbody = document.getElementById("delivery-table-body");
+  if (!tbody) return;
+
+  const searchVal = document.getElementById("delivery-search-input")?.value.trim() || "";
+  const channelVal = document.getElementById("delivery-channel-filter")?.value || "all";
+  const statusVal = document.getElementById("delivery-status-filter")?.value || "all";
+
+  const params = new URLSearchParams();
+  params.set("limit", "50");
+  if (searchVal) params.set("search", searchVal);
+  if (channelVal !== "all") params.set("channel", channelVal);
+  if (statusVal !== "all") params.set("status", statusVal);
+
+  try {
+    const res = await fetch(`/delivery/history?${params.toString()}`);
+    if (!res.ok) throw new Error("Failed to fetch delivery logs");
+    const data = await res.json();
+    const items = data.items || [];
+
+    if (items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:var(--text2);padding:24px;">No delivery records match filter criteria.</td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = items.map(item => {
+      const badgeClass = `badge-${item.status || "queued"}`;
+      const channelIcon = item.channel === "email" ? "✉️" : (item.channel === "voice" ? "📞" : "💬");
+      const errorText = item.error_message || item.error_code || "—";
+      const canRetry = ["failed", "undelivered", "bounced"].includes((item.status || "").toLowerCase());
+
+      return `
+        <tr>
+          <td style="color:var(--text2);font-size:11px;">${escapeHtml(item.time_ago || item.sent_at?.slice(11, 16) || "—")}</td>
+          <td>${channelIcon} ${escapeHtml(item.channel?.toUpperCase() || "SMS")}</td>
+          <td style="font-weight:500;">${escapeHtml(item.recipient || "—")}</td>
+          <td><span style="font-size:11px;color:var(--text2);">${escapeHtml(item.reminder_type || "general")}</span></td>
+          <td><span class="delivery-badge ${badgeClass}">${escapeHtml(item.status || "queued")}</span></td>
+          <td style="color:${canRetry ? '#f43f5e' : 'var(--text2)'};max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(errorText)}">${escapeHtml(errorText)}</td>
+          <td>
+            ${canRetry ? `<button class="retry-action-btn" onclick="retryDeliveryRecord('${escapeHtml(item.message_id)}')">↻ Retry</button>` : `<span style="color:var(--text3);font-size:11px;">✓ Done</span>`}
+          </td>
+        </tr>
+      `;
+    }).join("");
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#f43f5e;padding:20px;">Error: ${escapeHtml(err.message)}</td></tr>`;
+  }
+}
+
+async function retryDeliveryRecord(messageId) {
+  try {
+    const res = await fetch(`/delivery/retry/${encodeURIComponent(messageId)}`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.detail || "Failed to retry delivery.");
+      return;
+    }
+    loadDeliveryHistory();
+    loadAnalyticsDashboard();
+  } catch (err) {
+    alert("Retry failed: " + err.message);
+  }
+}
+
+/* ── Send Reminder Modal ── */
+function openSendReminderModal() {
+  const modal = document.getElementById("send-reminder-modal");
+  if (modal) modal.style.display = "flex";
+}
+
+function closeSendReminderModal() {
+  const modal = document.getElementById("send-reminder-modal");
+  if (modal) modal.style.display = "none";
+}
+
+async function submitSendReminder() {
+  const recipient = document.getElementById("rem-recipient")?.value.trim();
+  const channel = document.getElementById("rem-channel")?.value || "sms";
+  const reminder_type = document.getElementById("rem-type")?.value || "appointment";
+  const message = document.getElementById("rem-message")?.value.trim() || "";
+
+  if (!recipient) {
+    alert("Please provide a recipient phone number or email address.");
+    return;
+  }
+
+  try {
+    const res = await fetch("/delivery/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipient, channel, reminder_type, message }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data.detail || "Failed to send reminder.");
+      return;
+    }
+    closeSendReminderModal();
+    loadDeliveryHistory();
+    loadAnalyticsDashboard();
+  } catch (err) {
+    alert("Failed to send reminder: " + err.message);
+  }
+}
+
+/* ══ INTERFACE PERSONALISATION (PROJ-401, PROJ-442, PROJ-443, PROJ-444) ══ */
+
+let userPreferences = {
+  theme: "dark",
+  accent_color: "indigo",
+  widget_order: ["stats", "analytics", "activity", "delivery", "escalations", "calendar"],
+  widget_visibility: {
+    stats: true,
+    analytics: true,
+    activity: true,
+    delivery: true,
+    escalations: true,
+    calendar: true,
+  },
+};
+
+async function initPersonalisation() {
+  // Load from local storage first for fast render
+  const cached = localStorage.getItem("user_settings");
+  if (cached) {
+    try {
+      userPreferences = Object.assign(userPreferences, JSON.parse(cached));
+      applySettingsToDOM(userPreferences);
+    } catch (_) {}
+  }
+
+  // Sync with backend API (PROJ-444)
+  try {
+    const res = await fetch("/api/user/settings");
+    if (res.ok) {
+      const serverSettings = await res.json();
+      userPreferences = Object.assign(userPreferences, serverSettings);
+      localStorage.setItem("user_settings", JSON.stringify(userPreferences));
+      applySettingsToDOM(userPreferences);
+    }
+  } catch (e) {
+    console.warn("Could not sync preferences with server:", e);
+  }
+}
+
+function applySettingsToDOM(prefs) {
+  document.documentElement.setAttribute("data-theme", prefs.theme || "dark");
+  document.documentElement.setAttribute("data-accent", prefs.accent_color || "indigo");
+
+  // Widget visibility (PROJ-443)
+  const vis = prefs.widget_visibility || {};
+  const kpiEl = document.querySelector(".analytics-kpis");
+  const trendEl = document.querySelector(".analytics-charts-grid");
+  const actEl = document.getElementById("activity-feed");
+
+  if (kpiEl) kpiEl.style.display = vis.analytics === false ? "none" : "grid";
+  if (trendEl) trendEl.style.display = vis.analytics === false ? "none" : "grid";
+}
+
+function openPersonalisationModal() {
+  const modal = document.getElementById("personalisation-modal");
+  if (!modal) return;
+
+  // Sync modal state with current preferences
+  document.querySelectorAll(".theme-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-theme-val") === userPreferences.theme);
+  });
+  document.querySelectorAll(".accent-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-accent-val") === userPreferences.accent_color);
+  });
+
+  const vis = userPreferences.widget_visibility || {};
+  const chkAnalytics = document.getElementById("pref-vis-analytics");
+  const chkDelivery = document.getElementById("pref-vis-delivery");
+  const chkActivity = document.getElementById("pref-vis-activity");
+  const chkEscalations = document.getElementById("pref-vis-escalations");
+
+  if (chkAnalytics) chkAnalytics.checked = vis.analytics !== false;
+  if (chkDelivery) chkDelivery.checked = vis.delivery !== false;
+  if (chkActivity) chkActivity.checked = vis.activity !== false;
+  if (chkEscalations) chkEscalations.checked = vis.escalations !== false;
+
+  modal.style.display = "flex";
+}
+
+function closePersonalisationModal() {
+  const modal = document.getElementById("personalisation-modal");
+  if (modal) modal.style.display = "none";
+}
+
+function selectTheme(theme) {
+  userPreferences.theme = theme;
+  document.querySelectorAll(".theme-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-theme-val") === theme);
+  });
+  document.documentElement.setAttribute("data-theme", theme);
+}
+
+function selectAccent(accent) {
+  userPreferences.accent_color = accent;
+  document.querySelectorAll(".accent-btn").forEach(btn => {
+    btn.classList.toggle("active", btn.getAttribute("data-accent-val") === accent);
+  });
+  document.documentElement.setAttribute("data-accent", accent);
+}
+
+async function saveUserSettingsFromModal() {
+  const vis = {
+    analytics: document.getElementById("pref-vis-analytics")?.checked ?? true,
+    delivery: document.getElementById("pref-vis-delivery")?.checked ?? true,
+    activity: document.getElementById("pref-vis-activity")?.checked ?? true,
+    escalations: document.getElementById("pref-vis-escalations")?.checked ?? true,
+    calendar: true,
+  };
+  userPreferences.widget_visibility = vis;
+
+  localStorage.setItem("user_settings", JSON.stringify(userPreferences));
+  applySettingsToDOM(userPreferences);
+  closePersonalisationModal();
+
+  try {
+    await fetch("/api/user/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(userPreferences),
+    });
+  } catch (e) {
+    console.error("Failed to persist settings to server:", e);
+  }
+}
+
+async function resetUserSettingsToDefault() {
+  if (!confirm("Reset all interface preferences and themes back to factory defaults?")) return;
+  try {
+    const res = await fetch("/api/user/settings/reset", { method: "POST" });
+    if (res.ok) {
+      const data = await res.json();
+      userPreferences = data.settings;
+      localStorage.setItem("user_settings", JSON.stringify(userPreferences));
+      applySettingsToDOM(userPreferences);
+      closePersonalisationModal();
+    }
+  } catch (e) {
+    console.error("Failed to reset settings:", e);
+  }
+}
+
