@@ -124,3 +124,33 @@ DEFAULT_FORMAT    = "markdown"   # "markdown" | "json"
 # -- RapidAPI (Amazon fallback) ----------------------------------
 RAPIDAPI_KEY        = os.environ.get("RAPIDAPI_KEY", "")
 RAPIDAPI_AMAZON_HOST = "real-time-amazon-data.p.rapidapi.com"
+
+# ── Delivery Channels (PROJ-396) ────────────────────────────────
+# Twilio — reuses the same account already wired up for the AI
+# Receptionist's inbound SMS/voice webhooks (app/web_ui/twilio_routes.py),
+# just used here for outbound sends instead.
+TWILIO_ACCOUNT_SID  = os.environ.get("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN   = os.environ.get("TWILIO_AUTH_TOKEN", "")
+TWILIO_FROM_NUMBER  = os.environ.get("TWILIO_FROM_NUMBER", "")
+
+# SMTP — free-tier email delivery per the client brief ("smtp is free
+# we can prefer it"). Any standard SMTP provider works (Gmail app
+# password, SendGrid free tier, etc.) — nothing Twilio-specific here.
+SMTP_HOST       = os.environ.get("SMTP_HOST", "")
+SMTP_PORT       = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USERNAME   = os.environ.get("SMTP_USERNAME", "")
+SMTP_PASSWORD   = os.environ.get("SMTP_PASSWORD", "")
+SMTP_FROM_EMAIL = os.environ.get("SMTP_FROM_EMAIL", "")
+SMTP_USE_TLS    = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
+
+# ── Reminders Engine (PROJ-395) ─────────────────────────────────
+# NOTE: Dhiman's contacts/accounts data contract (PROJ-404) isn't
+# merged into this branch yet, so the reminders store below defines
+# its own minimal schema (contact_channel + contact_address as plain
+# strings) rather than a foreign key into a contacts table. Swap in a
+# real contact_id FK once PROJ-404 lands — noted here rather than
+# blocking on it, since the scheduler/timezone/recurrence logic is
+# independent of where the contact address comes from.
+REMINDERS_DB = os.environ.get("REMINDERS_DB") or os.path.join(_BASE_DIR, "outputs", "reminders.db")
+REMINDER_POLL_INTERVAL_SECONDS = int(os.environ.get("REMINDER_POLL_INTERVAL_SECONDS", "30"))
+REMINDER_DEFAULT_LEAD_HOURS = int(os.environ.get("REMINDER_DEFAULT_LEAD_HOURS", "24"))
