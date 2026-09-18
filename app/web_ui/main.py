@@ -29,7 +29,7 @@ _PROJECT = os.path.abspath(os.path.join(_HERE, "../.."))
 if _PROJECT not in sys.path:
     sys.path.insert(0, _PROJECT)
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
@@ -40,6 +40,9 @@ from app.web_ui.calendar_routes import router as calendar_router
 from app.web_ui.kb_routes import router as kb_router
 from app.web_ui.twilio_routes import router as twilio_router
 from app.web_ui.dashboard_routes import router as dashboard_router
+from app.web_ui.delivery_routes import router as delivery_router
+from app.web_ui.analytics_routes import router as analytics_router
+from app.web_ui.settings_routes import router as settings_router
 
 # ── App setup ──────────────────────────────────────────────────
 app = FastAPI(
@@ -52,6 +55,10 @@ app = FastAPI(
 _STATIC_DIR = os.path.join(_PROJECT, "static")
 if os.path.isdir(_STATIC_DIR):
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+
+_SITE_DIR = os.path.join(_PROJECT, "site")
+if os.path.isdir(_SITE_DIR):
+    app.mount("/site-assets", StaticFiles(directory=_SITE_DIR), name="site-assets")
 
 # Create the org/user tenancy tables if they don't exist yet (PROJ-405).
 # auth/db.py's users table (PROJ-406's org registration writes to it)
@@ -87,8 +94,11 @@ app.include_router(router)               # /query, /literature, /amazon, /integr
 app.include_router(receptionist_router)  # /receptionist (POST)
 app.include_router(calendar_router)      # /calendar/ics
 app.include_router(kb_router)            # /kb/upload, /kb/list, /kb/{id}, /kb/search
-app.include_router(twilio_router)        # /twilio/sms, /twilio/voice, /twilio/voice/reply
+app.include_router(twilio_router)        # /twilio/sms, /twilio/voice, /twilio/voice/reply, /twilio/status-callback
 app.include_router(dashboard_router)     # /activity, /activity/stats, /escalations, /calendar/appointments
+app.include_router(delivery_router)      # /delivery/history, /delivery/retry, /delivery/email/bounce
+app.include_router(analytics_router)     # /analytics/summary, /analytics/trends, /analytics/channels
+app.include_router(settings_router)      # /api/user/settings (PROJ-444)
 
 # Contacts CRM, Dashboard, Notification Preferences (PROJ-394, 399,
 # 400 — Prabhjot Singh) — mounted, not merged into this app's own
@@ -145,6 +155,29 @@ async def serve_literature():
     if os.path.exists(page):
         return FileResponse(page, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
     return {"message": "literature.html not found."}
+
+
+# ── /showcase & /site — serve the information website (PROJ-403) ───
+@app.get("/showcase", include_in_schema=False)
+@app.get("/site", include_in_schema=False)
+async def serve_showcase():
+    """Serve the static information website home page."""
+    site_index = os.path.join(_SITE_DIR, "index.html")
+    if os.path.exists(site_index):
+        return FileResponse(site_index, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
+    return {"message": "Showcase site not found."}
+
+
+@app.get("/site/{page_name}", include_in_schema=False)
+async def serve_site_page(page_name: str):
+    """Serve subpages of the information website (features, pricing, about, faq)."""
+    if not page_name.endswith(".html"):
+        page_name += ".html"
+    page_path = os.path.join(_SITE_DIR, page_name)
+    if os.path.exists(page_path):
+        return FileResponse(page_path, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
+    raise HTTPException(status_code=404, detail=f"Page '{page_name}' not found.")
+
 
 
 # ── Dev server ─────────────────────────────────────────────────
