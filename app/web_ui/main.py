@@ -62,6 +62,24 @@ app.include_router(kb_router)            # /kb/upload, /kb/list, /kb/{id}, /kb/s
 app.include_router(twilio_router)        # /twilio/sms, /twilio/voice, /twilio/voice/reply
 app.include_router(dashboard_router)     # /activity, /activity/stats, /escalations, /calendar/appointments
 
+# Contacts CRM, Dashboard, Notification Preferences (PROJ-394, 399,
+# 400 — Prabhjot Singh) — mounted, not merged into this app's own
+# routing. It's a genuinely separate FastAPI app (app/web/main.py)
+# with its own /query, /dashboard, /contacts, /reminders, /api/* and
+# its own JSON-file persistence (app/web/store.py). That store.py is
+# explicit that it's a placeholder for exactly the account/contact
+# system PROJ-392/405/406 would bring — those are merged now (see
+# agent/reminders/ and auth/tenancy.py) but wiring this app onto them
+# is real integration work (unifying three independently-designed
+# contact/reminder data models), not a merge-conflict decision.
+# Mounting keeps every one of Prabhjot's routes and its own tests
+# (scripts/test_contacts.py etc.) working exactly as built, reachable
+# in the real running app at /crm/*, without guessing at that
+# unification. Follow-up: point app/web/store.py at the real DB.
+from app.web.main import app as crm_app
+
+app.mount("/crm", crm_app)
+
 
 # ── Root — serve the chat UI ───────────────────────────────────
 @app.get("/", include_in_schema=False)
