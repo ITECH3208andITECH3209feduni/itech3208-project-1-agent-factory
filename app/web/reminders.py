@@ -214,6 +214,17 @@ def mark_blocked(reminder_id: int, reason: str, org_id: int = DEFAULT_ORG_ID) ->
     )
 
 
+def mark_failed(reminder_id: int, reason: str, org_id: int = DEFAULT_ORG_ID) -> dict[str, Any] | None:
+    """The send was attempted and allowed (consent/quiet-hours passed) but
+    the delivery itself failed — a Twilio/SMTP error, not a policy block.
+    Distinct from mark_blocked: 'blocked' means it was never attempted."""
+    return reminders_table().update(
+        reminder_id,
+        {"status": "failed", "failed_reason": reason[:500], "updated_at": _now().isoformat()},
+        org_id=org_id,
+    )
+
+
 def dispatch_check(reminder_id: int, org_id: int = DEFAULT_ORG_ID) -> dict[str, Any]:
     """
     Would this reminder be allowed to send right now? (PROJ-441)
