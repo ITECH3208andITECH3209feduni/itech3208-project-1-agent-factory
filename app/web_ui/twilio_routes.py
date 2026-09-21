@@ -1,13 +1,16 @@
 # app/web_ui/twilio_routes.py
 # ──────────────────────────────────────────────────────────────
 # Twilio SMS and Voice webhook endpoints — AI Receptionist
-# PROJ-391 (SMS)  — Dilraj Singh
+# PROJ-391 (SMS)   — Dilraj Singh
 # PROJ-384 (Voice) — Dilraj Singh
+# PROJ-470 (Multi-language voice — Part D optional)
 #
 # Endpoints:
-#   POST /twilio/sms           — receive SMS, reply via MessagingResponse
-#   POST /twilio/voice         — answer call with Polly TTS greeting + Gather
-#   POST /twilio/voice/reply   — process SpeechResult, reply via Polly TTS, loop
+#   POST /twilio/sms              — receive SMS, reply via MessagingResponse
+#   POST /twilio/voice            — answer call with Polly TTS greeting + Gather
+#   POST /twilio/voice/reply      — process SpeechResult, reply via Polly TTS, loop
+#   GET  /twilio/voice/languages  — list supported languages (PROJ-470)
+#   POST /twilio/voice/language   — set operator default language (PROJ-470)
 # ──────────────────────────────────────────────────────────────
 
 import os
@@ -22,9 +25,14 @@ from fastapi.responses import Response
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.twiml.voice_response import Gather, VoiceResponse
 
+from fastapi.responses import JSONResponse
+
 from agent.receptionist import Receptionist
 from app.web_ui.activity_db import log_activity, log_delivery_event, update_delivery_status
 from app.web_ui.dashboard_routes import log_escalation
+from app.web_ui.voice_languages import (
+    DEFAULT_LANG, detect_language, list_supported_languages, resolve_voice,
+)
 from integrations.sms_consent import handle_inbound
 
 router = APIRouter()
@@ -37,8 +45,13 @@ router = APIRouter()
 # phone/SMS traffic is exactly the case it was built for.
 _receptionist = Receptionist()
 
-POLLY_VOICE = "Polly.Joanna"
-POLLY_LANG = "en-AU"
+# PROJ-470: per-call language preference  {CallSid: lang_code}
+_call_lang: dict[str, str] = {}
+# Operator default (set via POST /twilio/voice/language)
+_operator_default_lang: str = DEFAULT_LANG
+
+POLLY_VOICE = "Polly.Joanna"  # kept for SMS/status-callback references
+POLLY_LANG = DEFAULT_LANG      # kept for non-voice paths
 GOODBYE_WORDS = {"goodbye", "bye", "hang up", "end call", "that's all", "no thanks"}
 
 
@@ -107,42 +120,88 @@ async def sms_webhook(
     return Response(content=str(twiml), media_type="application/xml")
 
 
+# ── Voice language helpers (PROJ-470) ──────────────────────────
+
+@router.get("/twilio/voice/languages")
+async def list_voice_languages():
+    """Return supported voice languages for the language selector (PROJ-470)."""
+    return {
+        "languages": list_supported_languages(),
+        "default": _operator_default_lang,
+    }
+
+
+@router.post("/twilio/voice/language")
+async def set_voice_language(request: Request):
+    """Operator sets the default voice language for new calls (PROJ-470)."""
+    global _operator_default_lang
+    try:
+        body = await request.json()
+        from app.web_ui.voice_languages import VOICE_MAP
+        lang = body.get("language", "").strip()
+        if lang not in VOICE_MAP:
+            return JSONResponse({"error": f"Unsupported language: {lang}"}, status_code=422)
+        _operator_default_lang = lang
+        return {"ok": True, "language": _operator_default_lang}
+    except Exception as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+
+
 # ── Voice ──────────────────────────────────────────────────────
 
 @router.post("/twilio/voice")
 async def voice_greeting(request: Request) -> Response:
     """
-    Initial call handler. Greet the caller with Polly.Joanna TTS and open
-    a Gather element to capture speech input.
+    Initial call handler. Greet the caller with Polly TTS and open
+    a Gather element to capture speech input. Language auto-detected from
+    query param ?lang= or falls back to operator default (PROJ-470).
     PROJ-384
     """
+    lang_param = request.query_params.get("lang", "").strip() or _operator_default_lang
+    voice, lang = resolve_voice(lang_param)
+    # Note CallSid isn't available at greeting-time on inbound, so we use
+    # a synthetic key derived from the form body if needed.
+    form = await request.form()
+    call_sid = form.get("CallSid", "")
+    if call_sid:
+        _call_lang[call_sid] = lang_param
+
+    greetings = {
+        "en-AU": "Hello! Thank you for calling Agent Factory. How can I help you today?",
+        "en-US": "Hello! Thank you for calling Agent Factory. How can I help you today?",
+        "es-US": "¡Hola! Gracias por llamar a Agent Factory. ¿En qué puedo ayudarle?",
+        "hi-IN": "नमस्ते! Agent Factory में कॉल करने के लिए धन्यवाद। मैं आपकी कैसे मदद कर सकता हूँ?",
+        "cmn-CN": "您好！感谢致电 Agent Factory。我今天可以怎么帮助您？",
+        "fr-FR": "Bonjour ! Merci d'appeler Agent Factory. Comment puis-je vous aider aujourd'hui ?",
+        "de-DE": "Hallo! Vielen Dank für Ihren Anruf bei Agent Factory. Wie kann ich Ihnen helfen?",
+    }
+    fallbacks = {
+        "en-AU": "Sorry, I didn't hear anything. Please call back when you're ready.",
+        "en-US": "Sorry, I didn't hear anything. Please call back when you're ready.",
+        "es-US": "Lo siento, no le escuché. Por favor, llame de nuevo cuando esté listo.",
+        "hi-IN": "क्षमा करें, मैंने कुछ नहीं सुना। कृपया वापस कॉल करें।",
+        "cmn-CN": "对不起，我没有听到任何声音。请稍后再打来。",
+        "fr-FR": "Désolé, je n'ai rien entendu. Veuillez rappeler quand vous serez prêt.",
+        "de-DE": "Entschuldigung, ich habe nichts gehört. Bitte rufen Sie zurück.",
+    }
     resp = VoiceResponse()
     gather = Gather(
         input="speech",
         action="/twilio/voice/reply",
         method="POST",
         speech_timeout="auto",
-        language=POLLY_LANG,
+        language=lang,
     )
-    gather.say(
-        "Hello! Thank you for calling Agent Factory. How can I help you today?",
-        voice=POLLY_VOICE,
-        language=POLLY_LANG,
-    )
+    gather.say(greetings.get(lang_param, greetings["en-AU"]), voice=voice, language=lang)
     resp.append(gather)
-    # Fallback if no speech detected
-    resp.say(
-        "Sorry, I didn't hear anything. Please call back when you're ready.",
-        voice=POLLY_VOICE,
-        language=POLLY_LANG,
-    )
+    resp.say(fallbacks.get(lang_param, fallbacks["en-AU"]), voice=voice, language=lang)
     resp.hangup()
     return Response(content=str(resp), media_type="application/xml")
 
 
 @router.post("/twilio/voice/reply")
 async def voice_reply(
-    request: Request,
+    request: Request,  # noqa: ARG001
     SpeechResult: str = Form(default=""),
     CallSid: str = Form(default=""),
     From: str = Form(default=""),
@@ -151,37 +210,67 @@ async def voice_reply(
     Receive Twilio's SpeechResult, query the AI Receptionist, and speak
     the answer back with Polly TTS. Loops for multi-turn dialogue.
     Detects goodbye keywords to hang up cleanly.
-    PROJ-384
+    PROJ-384 / PROJ-470 (dynamic Polly voice per language)
 
     Twilio resends the call's From on every webhook for that call, so
     it's available here even though the call started at /twilio/voice.
     """
     query = SpeechResult.strip()
+
+    # PROJ-470: Detect language from speech or fall back to stored/operator default
+    detected = detect_language(query)
+    lang_code = detected or _call_lang.get(CallSid, _operator_default_lang)
+    if CallSid:
+        _call_lang[CallSid] = lang_code   # remember for subsequent turns
+    voice, lang = resolve_voice(lang_code)
+
+    goodbye_phrases = {
+        "en-AU": "Thank you for calling Agent Factory. Have a wonderful day. Goodbye!",
+        "en-US": "Thank you for calling Agent Factory. Have a wonderful day. Goodbye!",
+        "es-US": "Gracias por llamar a Agent Factory. ¡Que tenga un buen día!",
+        "hi-IN": "Agent Factory में कॉल करने के लिए धन्यवाद। आपका दिन शुभ हो!",
+        "cmn-CN": "感谢致电 Agent Factory。祝您有美好的一天，再见！",
+        "fr-FR": "Merci d'avoir appelé Agent Factory. Bonne journée. Au revoir !",
+        "de-DE": "Danke für Ihren Anruf bei Agent Factory. Einen schönen Tag noch. Auf Wiederhören!",
+    }
+    retry_phrases = {
+        "en-AU": "I'm sorry, I didn't catch that. Could you please repeat your question?",
+        "en-US": "I'm sorry, I didn't catch that. Could you please repeat your question?",
+        "es-US": "Lo siento, no le entendí. ¿Podría repetir su pregunta?",
+        "hi-IN": "मुझे माफ़ करें, मैं समझ नहीं पाया। क्या आप अपना प्रश्न दोहरा सकते हैं?",
+        "cmn-CN": "对不起，我没听清楚。您能重复一下您的问题吗？",
+        "fr-FR": "Désolé, je n'ai pas compris. Pourriez-vous répéter votre question ?",
+        "de-DE": "Entschuldigung, ich habe das nicht verstanden. Könnten Sie Ihre Frage wiederholen?",
+    }
+    followup_phrases = {
+        "en-AU": "Is there anything else I can help you with?",
+        "en-US": "Is there anything else I can help you with?",
+        "es-US": "¿Hay algo más en lo que pueda ayudarle?",
+        "hi-IN": "क्या मैं आपकी और कोई सहायता कर सकता हूँ?",
+        "cmn-CN": "还有什么我可以帮助您的吗？",
+        "fr-FR": "Y a-t-il autre chose avec laquelle je peux vous aider ?",
+        "de-DE": "Gibt es noch etwas, womit ich Ihnen helfen kann?",
+    }
+
     resp = VoiceResponse()
 
     # Goodbye detection
     if any(kw in query.lower() for kw in GOODBYE_WORDS):
-        resp.say(
-            "Thank you for calling Agent Factory. Have a wonderful day. Goodbye!",
-            voice=POLLY_VOICE,
-            language=POLLY_LANG,
-        )
+        if CallSid in _call_lang:
+            del _call_lang[CallSid]
+        resp.say(goodbye_phrases.get(lang_code, goodbye_phrases["en-AU"]), voice=voice, language=lang)
         resp.hangup()
         return Response(content=str(resp), media_type="application/xml")
 
     # Empty transcript fallback
     if not query:
-        resp.say(
-            "I'm sorry, I didn't catch that. Could you please repeat your question?",
-            voice=POLLY_VOICE,
-            language=POLLY_LANG,
-        )
+        resp.say(retry_phrases.get(lang_code, retry_phrases["en-AU"]), voice=voice, language=lang)
         gather = Gather(
             input="speech",
             action="/twilio/voice/reply",
             method="POST",
             speech_timeout="auto",
-            language=POLLY_LANG,
+            language=lang,
         )
         resp.append(gather)
         resp.hangup()
@@ -205,27 +294,19 @@ async def voice_reply(
     if len(words) > 250:
         reply = " ".join(words[:250]) + "."
 
-    resp.say(reply, voice=POLLY_VOICE, language=POLLY_LANG)
+    resp.say(reply, voice=voice, language=lang)
 
-    # Loop back for a follow-up question
+    # Loop back for a follow-up question (PROJ-470: translated prompt)
     gather = Gather(
         input="speech",
         action="/twilio/voice/reply",
         method="POST",
         speech_timeout="auto",
-        language=POLLY_LANG,
+        language=lang,
     )
-    gather.say(
-        "Is there anything else I can help you with?",
-        voice=POLLY_VOICE,
-        language=POLLY_LANG,
-    )
+    gather.say(followup_phrases.get(lang_code, followup_phrases["en-AU"]), voice=voice, language=lang)
     resp.append(gather)
-    resp.say(
-        "Thank you for calling. Goodbye!",
-        voice=POLLY_VOICE,
-        language=POLLY_LANG,
-    )
+    resp.say(goodbye_phrases.get(lang_code, goodbye_phrases["en-AU"]), voice=voice, language=lang)
     resp.hangup()
     return Response(content=str(resp), media_type="application/xml")
 

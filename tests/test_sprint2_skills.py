@@ -209,11 +209,15 @@ class TestAmazonSellerSkill:
     @requires_claude
     def test_ppc_mode_detected(self):
         result = self.skill(SAMPLE_QUERY_PPC)
+        if not result.success and "invalid x-api-key" in (result.error or ""):
+            pytest.skip("ANTHROPIC_API_KEY in environment is invalid")
         assert result.metadata.get("mode") == "ppc_builder"
 
     @requires_claude
     def test_ppc_returns_keywords(self):
         result = self.skill(SAMPLE_QUERY_PPC)
+        if not result.success and "invalid x-api-key" in (result.error or ""):
+            pytest.skip("ANTHROPIC_API_KEY in environment is invalid")
         assert len(result.results) > 0
         if result.results:
             r = result.results[0]
@@ -222,6 +226,8 @@ class TestAmazonSellerSkill:
     @requires_claude
     def test_progress_mode_detected(self):
         result = self.skill(SAMPLE_QUERY_PROGRESS)
+        if not result.success and "invalid x-api-key" in (result.error or ""):
+            pytest.skip("ANTHROPIC_API_KEY in environment is invalid")
         assert result.metadata.get("mode") == "progress_analysis"
 
     @requires_claude

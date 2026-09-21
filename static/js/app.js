@@ -1035,15 +1035,131 @@ function escapeHtml(s) {
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
+/* ══ WEBSOCKET LIVE DASHBOARD (PROJ-469) ══ */
+
+let _ws = null;
+let _wsReconnectDelay = 1000;
+const _wsMaxDelay = 30_000;
+
+function _wsSetLive(online) {
+  const dot   = document.getElementById("ws-live-dot");
+  const label = document.getElementById("ws-live-label");
+  if (!dot || !label) return;
+  if (online) {
+    dot.style.background = "#22c55e";
+    label.textContent = "🟢 Live";
+    label.style.color = "#22c55e";
+  } else {
+    dot.style.background = "#f59e0b";
+    label.textContent = "Connecting…";
+    label.style.color = "#94a3b8";
+  }
+}
+
+function initDashboardWebSocket() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const url   = `${proto}://${location.host}/ws/dashboard`;
+
+  if (_ws && (_ws.readyState === WebSocket.OPEN || _ws.readyState === WebSocket.CONNECTING)) return;
+
+  try { _ws = new WebSocket(url); } catch { return; }
+
+  _ws.onopen = () => {
+    _wsSetLive(true);
+    _wsReconnectDelay = 1000;
+    // Keepalive ping every 25 s
+    clearInterval(_ws._ping);
+    _ws._ping = setInterval(() => { try { _ws.send("ping"); } catch { } }, 25_000);
+  };
+
+  _ws.onmessage = ({ data }) => {
+    let msg;
+    try { msg = JSON.parse(data); } catch { return; }
+
+    switch (msg.type) {
+      case "initial_state":
+      case "stats_update": {
+        const s = msg.stats || (msg.data && msg.data.stats);
+        if (s) {
+          const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val ?? "—"; };
+          set("stat-calls",       s.calls ?? s.voice ?? 0);
+          set("stat-sms",         s.sms ?? 0);
+          set("stat-booked",      s.appointments ?? s.booked ?? 0);
+          set("stat-escalations", s.escalations ?? 0);
+        }
+        break;
+      }
+      case "activity_update": {
+        const d = msg.data || {};
+        const feed = document.getElementById("activity-feed");
+        if (feed && d.channel) {
+          const row = document.createElement("div");
+          row.className = "recept-row recept-row--new";
+          row.innerHTML = `
+            <div class="recept-row-header">
+              <span class="recept-row-badge badge-${(d.channel||"web").toLowerCase()}">${d.channel||"web"}</span>
+              <span class="recept-row-time">${d.time || "just now"}</span>
+            </div>
+            <div class="recept-row-body">${escapeHtml(d.summary || "")}</div>`;
+          feed.prepend(row);
+          setTimeout(() => row.classList.remove("recept-row--new"), 2000);
+        }
+        break;
+      }
+      case "delivery_update":
+        // Silently refresh delivery panel if visible
+        if (document.getElementById("rtab-delivery") &&
+            document.getElementById("rtab-delivery").style.display !== "none") {
+          loadDeliveryHistory && loadDeliveryHistory();
+        }
+        break;
+    }
+  };
+
+  _ws.onclose = () => {
+    _wsSetLive(false);
+    clearInterval(_ws && _ws._ping);
+    setTimeout(initDashboardWebSocket, _wsReconnectDelay);
+    _wsReconnectDelay = Math.min(_wsReconnectDelay * 2, _wsMaxDelay);
+  };
+
+  _ws.onerror = () => { try { _ws.close(); } catch { } };
+}
+
+/* ══ MULTI-LANGUAGE VOICE SUPPORT (PROJ-470) ══ */
+const _VOICE_LANG_KEY = "af_voice_lang";
+
+function setVoiceLanguage(lang) {
+  localStorage.setItem(_VOICE_LANG_KEY, lang);
+  const sel = document.getElementById("voice-lang-select");
+  if (sel) sel.value = lang;
+  // Persist to server — best-effort, ignore failures
+  fetch("/twilio/voice/language", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ language: lang }),
+  }).catch(() => {});
+}
+
+function _restoreVoiceLang() {
+  const saved = localStorage.getItem(_VOICE_LANG_KEY);
+  if (!saved) return;
+  const sel = document.getElementById("voice-lang-select");
+  if (sel) sel.value = saved;
+}
+
 /* Wire up receptionist input on Enter & initialize Personalisation */
 document.addEventListener("DOMContentLoaded", () => {
   const inp = document.getElementById("receptionist-input");
   if (inp) {
     inp.addEventListener("keydown", e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendReceptionistQuery(); } });
   }
-  /* Poll stats every 30s when receptionist tab is visible */
+  /* PROJ-469: Live WebSocket replaces 30s polling */
   loadReceptStats();
-  setInterval(loadReceptStats, 30_000);
+  initDashboardWebSocket();
+
+  /* PROJ-470: Restore saved language preference */
+  _restoreVoiceLang();
 
   /* Initialize User Personalisation (PROJ-401, PROJ-444) */
   initPersonalisation();

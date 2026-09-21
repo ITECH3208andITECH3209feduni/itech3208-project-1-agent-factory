@@ -91,6 +91,21 @@ def log_activity(channel: str, caller: str, intent: str = "", summary: str = "")
         ),
     )
     db.commit()
+    _notify_ws("activity_update", {
+        "channel": channel,
+        "caller": caller,
+        "intent": intent,
+        "summary": summary,
+        "time": "just now",
+    })
+
+
+def _notify_ws(event_type: str, data: dict):
+    try:
+        from app.web_ui.ws_routes import broadcast_dashboard_event
+        broadcast_dashboard_event(event_type, data)
+    except Exception:
+        pass
 
 
 def get_recent(limit: int = 50) -> list[dict]:
@@ -172,7 +187,10 @@ def log_delivery_event(
     )
     db.commit()
     row = db.execute("SELECT * FROM delivery_history WHERE message_id = ?", (message_id,)).fetchone()
-    return _format_delivery_row(dict(row)) if row else {}
+    res = _format_delivery_row(dict(row)) if row else {}
+    if res:
+        _notify_ws("delivery_update", res)
+    return res
 
 
 def update_delivery_status(
@@ -221,7 +239,10 @@ def update_delivery_status(
     )
     db.commit()
     row = db.execute("SELECT * FROM delivery_history WHERE message_id = ?", (message_id,)).fetchone()
-    return _format_delivery_row(dict(row)) if row else None
+    res = _format_delivery_row(dict(row)) if row else None
+    if res:
+        _notify_ws("delivery_update", res)
+    return res
 
 
 def get_delivery_history(

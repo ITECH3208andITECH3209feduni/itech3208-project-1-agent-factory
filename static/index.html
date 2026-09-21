@@ -275,6 +275,21 @@
           <div class="source-chip active"><span class="source-chip-dot" style="background:#22c55e"></span> SMS</div>
           <div class="source-chip active"><span class="source-chip-dot" style="background:#3b82f6"></span> Voice</div>
           <div class="source-chip active"><span class="source-chip-dot" style="background:#a78bfa"></span> Web Chat</div>
+          <!-- PROJ-470: Language selector -->
+          <select id="voice-lang-select" title="Voice language" style="margin-left:8px;background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:6px;padding:2px 6px;font-size:0.75rem;" onchange="setVoiceLanguage(this.value)">
+            <option value="en-AU">🇦🇺 English (AU)</option>
+            <option value="en-US">🇺🇸 English (US)</option>
+            <option value="es-US">🇪🇸 Español</option>
+            <option value="hi-IN">🇮🇳 हिन्दी</option>
+            <option value="cmn-CN">🇨🇳 普通话</option>
+            <option value="fr-FR">🇫🇷 Français</option>
+            <option value="de-DE">🇩🇪 Deutsch</option>
+          </select>
+          <!-- PROJ-469: WebSocket live indicator -->
+          <div id="ws-live-badge" style="margin-left:8px;display:flex;align-items:center;gap:4px;font-size:0.75rem;color:#94a3b8;" title="Connecting…">
+            <span id="ws-live-dot" style="width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block;"></span>
+            <span id="ws-live-label">Connecting</span>
+          </div>
         </div>
       </div>
 

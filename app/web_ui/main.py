@@ -43,6 +43,7 @@ from app.web_ui.dashboard_routes import router as dashboard_router
 from app.web_ui.delivery_routes import router as delivery_router
 from app.web_ui.analytics_routes import router as analytics_router
 from app.web_ui.settings_routes import router as settings_router
+from app.web_ui.ws_routes import router as ws_router
 
 # ── App setup ──────────────────────────────────────────────────
 app = FastAPI(
@@ -99,6 +100,7 @@ app.include_router(dashboard_router)     # /activity, /activity/stats, /escalati
 app.include_router(delivery_router)      # /delivery/history, /delivery/retry, /delivery/email/bounce
 app.include_router(analytics_router)     # /analytics/summary, /analytics/trends, /analytics/channels
 app.include_router(settings_router)      # /api/user/settings (PROJ-444)
+app.include_router(ws_router)            # /ws/dashboard, /ws/status (PROJ-469)
 
 # Contacts CRM, Dashboard, Notification Preferences (PROJ-394, 399,
 # 400 — Prabhjot Singh) — mounted, not merged into this app's own
