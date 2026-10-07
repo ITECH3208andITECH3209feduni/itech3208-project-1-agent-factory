@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Features & Capabilities — Agent Factory</title>
+  <meta name="description" content="Explore the deep technical features of Agent Factory: Academic literature search, Amazon commercial intelligence, 24/7 AI Receptionist, and delivery analytics.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+  <div class="bg-ambient"></div>
+
+  <!-- Navigation -->
+  <header class="site-nav">
+    <div class="nav-container">
+      <a href="index.html" class="nav-brand">
+        <span class="brand-icon">⚡</span>
+        <span>Agent Factory</span>
+      </a>
+
+      <button class="mobile-nav-toggle" id="mobile-nav-toggle" aria-label="Toggle Navigation">☰</button>
+
+      <ul class="nav-links" id="nav-links">
+        <li><a href="index.html" class="nav-link">Home</a></li>
+        <li><a href="features.html" class="nav-link active">Features</a></li>
+        <li><a href="pricing.html" class="nav-link">Architecture & Tiers</a></li>
+        <li><a href="about.html" class="nav-link">About Project</a></li>
+        <li><a href="faq.html" class="nav-link">FAQ</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle Dark/Light Mode">
+          <span id="theme-icon">☀️</span>
+        </button>
+        <a href="/" class="btn btn-primary">Open Web UI →</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="site-main">
+    <section class="section">
+      <div class="section-header">
+        <div class="badge">Deep Dive</div>
+        <h1>Platform Capabilities</h1>
+        <p>A comprehensive overview of the specialized agents, backend pipelines, and analytical tracking engines built into Agent Factory.</p>
+      </div>
+
+      <!-- Feature 1: Literature Review -->
+      <div class="card" id="literature" style="margin-bottom: 2.5rem;">
+        <div class="card-icon">📚</div>
+        <span class="card-tag">Research Intelligence</span>
+        <h2>Academic Literature Review Agent</h2>
+        <p>
+          Automates the literature search process across major scientific and medical repositories, delivering synthesized findings and exportable citations in seconds.
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>Multi-Repository Aggregation</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Simultaneous parallel queries to Semantic Scholar (computer science/general), arXiv (physics, math, CS preprints), and PubMed (biomedical literature).</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>Claude AI Synthesis</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Generates a coherent synthesis paragraph connecting key insights, methodological patterns, and consensus points across retrieved papers.</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>BibTeX Citation Export</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">One-click generation of formatted BibTeX citations ready for immediate inclusion in LaTeX and academic reference managers.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature 2: Amazon Scraper & Scorer -->
+      <div class="card" id="amazon" style="margin-bottom: 2.5rem;">
+        <div class="card-icon">🛒</div>
+        <span class="card-tag">Commercial Intelligence</span>
+        <h2>Amazon Product Intelligence & Scoring Engine</h2>
+        <p>
+          Extracts live product listings, customer sentiment signals, and pricing dynamics with automated anti-detection resilience.
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>Stealth Playwright Scraper</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Headless Chromium automation configured with playwright-stealth to bypass aggressive anti-bot captchas and rate limits.</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>0–100 Quality Scoring</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Algorithmic evaluation scoring products on review density, star rating calibration, price competitiveness, and prime badge verification.</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>RapidAPI Automatic Fallback</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Fail-soft architecture that automatically falls back to secondary RapidAPI endpoints if direct scraping meets network anomalies.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature 3: AI Receptionist -->
+      <div class="card" id="receptionist" style="margin-bottom: 2.5rem;">
+        <div class="card-icon">📞</div>
+        <span class="card-tag">Communications</span>
+        <h2>24/7 AI Receptionist with Twilio Integration</h2>
+        <p>
+          Operates across inbound SMS and voice calls, providing immediate answers, appointment bookings, and intelligent human escalation.
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>Polly.Joanna Voice Synthesis</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Australian English voice synthesis with automated markdown stripping and phrase pacing optimized for phone conversations.</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>Google Calendar & iCal Booking</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Direct appointment booking via Google Calendar service-account credentials with automatic fallback to standard `.ics` calendar files.</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>ChromaDB Vector Store RAG</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Semantic search across crawled university pages and PDF documents to answer campus and organizational questions factually.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Feature 4: Delivery Tracking & Analytics -->
+      <div class="card" id="delivery-analytics">
+        <div class="card-icon">📊</div>
+        <span class="card-tag">Operations & Analytics</span>
+        <h2>Delivery Status & Analytics Engine</h2>
+        <p>
+          Comprehensive tracking for all outbound messages, confirmations, callbacks, and bounces.
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>Twilio Status Callback Webhook</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Real-time callback receiver logging message statuses (queued, sent, delivered, undelivered, failed) with carrier error codes.</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>Email Bounce & Suppression</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Hard bounce detection that automatically adds bad addresses to a suppression list to protect domain reputation and prevent spam triggers.</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>Interactive KPI Gauges & Trends</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Live delivery rate %, response rate %, channel breakdown donuts, and daily volume time-series charts on the operator dashboard.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <a href="index.html" class="nav-brand">
+          <span class="brand-icon">⚡</span>
+          <span>Agent Factory</span>
+        </a>
+        <p>An autonomous research and operational AI system developed for Federation University Australia (ITECH3208 / 3209).</p>
+      </div>
+
+      <div class="footer-links">
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="pricing.html">Architecture & Tiers</a></li>
+          <li><a href="about.html">About Project</a></li>
+          <li><a href="faq.html">FAQ</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>System</h4>
+        <ul>
+          <li><a href="/">Live Web UI</a></li>
+          <li><a href="/docs">API Documentation</a></li>
+          <li><a href="https://github.com/ITECH3208andITECH3209feduni/itech3208-project-1-agent-factory" target="_blank" rel="noopener">GitHub Repository</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>© 2026 Federation University Australia — ITECH3208/3209 Team. All rights reserved.</span>
+      <span>Information Website • No trial or signup required</span>
+    </div>
+  </footer>
+
+  <script src="js/site.js"></script>
+</body>
+</html>

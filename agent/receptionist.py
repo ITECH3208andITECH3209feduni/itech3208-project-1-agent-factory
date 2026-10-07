@@ -27,6 +27,7 @@ import anthropic
 from agent.calendar_client import book_appointment, is_configured as calendar_configured
 from agent.faq import find_answer
 from agent.memory import SessionMemory
+from agent.reminders.booking_hooks import create_reminder_for_booking
 from config.settings import ANTHROPIC_API_KEY, CLAUDE_MODEL, TIMEZONE, ESCALATION_LOG
 
 RECEPTIONIST_SYSTEM_PROMPT = """You are the front-desk AI receptionist for Agent Factory.
@@ -69,8 +70,19 @@ class Receptionist:
         self.memory = SessionMemory()
 
     # ── Main entry point ─────────────────────────────────────────
-    def handle(self, message: str, session_id: str | None = None) -> dict:
-        """Returns {"answer": str, "intent": str, ...extra fields}."""
+    def handle(
+        self,
+        message: str,
+        session_id: str | None = None,
+        contact_channel: str | None = None,
+        contact_address: str | None = None,
+    ) -> dict:
+        """Returns {"answer": str, "intent": str, ...extra fields}.
+        contact_channel/contact_address (e.g. "sms"/"+15551234567") are
+        optional — when the caller can supply them (Twilio always
+        knows the caller's number), a successful appointment booking
+        also schedules a reminder ahead of it (PROJ-445/446). Omit them
+        and booking still works, just without the auto-reminder."""
         message = (message or "").strip()
         if not message:
             return {"answer": "Sorry, I didn't catch that — could you say that again?", "intent": "general"}
@@ -94,7 +106,7 @@ class Receptionist:
 
         # 3. Appointment booking
         if self._wants_appointment(message):
-            result = self._handle_appointment(message, session_id)
+            result = self._handle_appointment(message, session_id, contact_channel, contact_address)
             return result
 
         # 4. General conversation fallback
@@ -128,7 +140,13 @@ class Receptionist:
             pass  # don't fail the user-facing reply just because logging failed
 
     # ── Appointment booking ──────────────────────────────────────
-    def _handle_appointment(self, message: str, session_id: str | None) -> dict:
+    def _handle_appointment(
+        self,
+        message: str,
+        session_id: str | None,
+        contact_channel: str | None = None,
+        contact_address: str | None = None,
+    ) -> dict:
         if not calendar_configured():
             answer = (
                 "I'd love to book that for you, but calendar booking isn't set "
@@ -157,6 +175,20 @@ class Receptionist:
             if result.get("event_url"):
                 answer += f" [View event]({result['event_url']})"
             answer += f" · [Add to your own calendar]({ics_link})"
+
+            # PROJ-445/446: auto-schedule a reminder ahead of the
+            # appointment when we know how to reach the caller back.
+            # A failure here never undoes the booking — it's already
+            # confirmed on the calendar either way.
+            if contact_channel and contact_address:
+                reminder_result = create_reminder_for_booking(
+                    summary=extracted["summary"],
+                    start_iso=extracted["start"],
+                    contact_channel=contact_channel,
+                    contact_address=contact_address,
+                )
+                if reminder_result["ok"]:
+                    answer += " We'll send you a reminder before it starts."
         else:
             # Calendar booking failed (or isn't configured) — the .ics
             # download still lets the user add it to their own

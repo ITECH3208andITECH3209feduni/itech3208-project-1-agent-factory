@@ -87,7 +87,9 @@
 
 </div>
 
-<script>
+<script src="/static/js/auth.js"></script>
+  <script>requireAuth();</script>
+  <script>
   /* ── state ────────────────────────────────────────────────── */
   let _papers = [];
 
@@ -147,7 +149,7 @@
     hideAll();
 
     try {
-      const res = await fetch("/literature", {
+      const res = await authFetch("/literature", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ topic }),

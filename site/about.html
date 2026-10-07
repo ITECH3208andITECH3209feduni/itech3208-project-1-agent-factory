@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>About the Project — Agent Factory</title>
+  <meta name="description" content="Learn about Agent Factory, an autonomous multi-agent platform engineered for Federation University Australia course units ITECH3208 & ITECH3209.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+  <div class="bg-ambient"></div>
+
+  <!-- Navigation -->
+  <header class="site-nav">
+    <div class="nav-container">
+      <a href="index.html" class="nav-brand">
+        <span class="brand-icon">⚡</span>
+        <span>Agent Factory</span>
+      </a>
+
+      <button class="mobile-nav-toggle" id="mobile-nav-toggle" aria-label="Toggle Navigation">☰</button>
+
+      <ul class="nav-links" id="nav-links">
+        <li><a href="index.html" class="nav-link">Home</a></li>
+        <li><a href="features.html" class="nav-link">Features</a></li>
+        <li><a href="pricing.html" class="nav-link">Architecture & Tiers</a></li>
+        <li><a href="about.html" class="nav-link active">About Project</a></li>
+        <li><a href="faq.html" class="nav-link">FAQ</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle Dark/Light Mode">
+          <span id="theme-icon">☀️</span>
+        </button>
+        <a href="/" class="btn btn-primary">Open Web UI →</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="site-main">
+    <section class="section">
+      <div class="section-header">
+        <div class="badge">Origin & Mission</div>
+        <h1>About Agent Factory</h1>
+        <p>
+          Agent Factory was engineered as a capstone research and development project at <strong>Federation University Australia</strong> to explore real-world autonomous multi-agent systems.
+        </p>
+      </div>
+
+      <!-- Overview Box -->
+      <div class="card" style="margin-bottom: 3rem;">
+        <h3>Project Philosophy</h3>
+        <p style="margin-top: 0.75rem;">
+          Modern AI systems are often locked behind proprietary silos or designed solely as single-turn chat interfaces. Agent Factory tests an alternative paradigm: an <em>agent factory</em> where specialized, purpose-built autonomous agents collaborate across diverse modalities—from synthesizing scientific literature to answering live telephone inquiries and checking academic integrity.
+        </p>
+        <p style="margin-top: 0.75rem;">
+          Every agent is grounded in verifiable external knowledge: literature is backed by peer-reviewed DOI identifiers; receptionist queries are grounded in vector embeddings; and commercial intelligence uses multi-factor quality scoring to eliminate hallucination.
+        </p>
+      </div>
+
+      <!-- Core Pillars -->
+      <div class="cards-grid" style="margin-bottom: 3.5rem;">
+        <div class="card">
+          <div class="card-icon">🛡️</div>
+          <h3>Verifiability & Grounding</h3>
+          <p>Strict grounding in real scientific repositories and crawled institutional documents. LLMs never invent citations or university policies.</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">⚡</div>
+          <h3>Fail-Soft Engineering</h3>
+          <p>Every critical external dependency—from Playwright scraping to Google Calendar booking—features an automatic local fallback (RapidAPI, iCal format, mock modes).</p>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🔒</div>
+          <h3>Privacy & Session Isolation</h3>
+          <p>Session-scoped memory prevents cross-tenant data leakage. Outbound message recipients can be suppressed upon hard bounce to protect reputation.</p>
+        </div>
+      </div>
+
+      <!-- Engineering Team / Contributors -->
+      <div class="section-header" style="margin-top: 4rem; margin-bottom: 2rem;">
+        <div class="badge">Team & Contributors</div>
+        <h2>Engineering Contributors</h2>
+        <p>Developed collaboratively across Sprints 1, 2, 3, and 4.</p>
+      </div>
+
+      <div class="cards-grid">
+        <div class="card">
+          <h4>Saifur Rahman Bhuiyan</h4>
+          <span class="card-tag">Lead Engineer • PROJ-390 / PROJ-197</span>
+          <p style="font-size: 0.92rem; margin-top: 0.5rem;">Core Knowledge Base engine, ChromaDB integration, SQLite activity schema, Delivery status tracking, Analytics aggregation, and Personalisation system.</p>
+        </div>
+
+        <div class="card">
+          <h4>Dilraj Singh</h4>
+          <span class="card-tag">Full Stack & AI • PROJ-384 / PROJ-391</span>
+          <p style="font-size: 0.92rem; margin-top: 0.5rem;">AI Receptionist voice/SMS routing, Twilio webhook integration, operator dashboard, multi-turn dialogue memory, and FedAI RAG system.</p>
+        </div>
+
+        <div class="card">
+          <h4>Prabhjot Singh</h4>
+          <span class="card-tag">Systems & Data • PROJ-387 / PROJ-113</span>
+          <p style="font-size: 0.92rem; margin-top: 0.5rem;">Activity feed logging, API key security middleware, Literature review synthesis, and Amazon product quality scoring modules.</p>
+        </div>
+      </div>
+
+      <!-- Academic Disclosure -->
+      <div style="margin-top: 4rem; text-align: center; color: var(--text-muted); font-size: 0.88rem;">
+        <p>Federation University Australia • Course Codes: ITECH3208 / ITECH3209 Professional Practice</p>
+        <p>This prototype demonstrates student research and is not an official Federation University service.</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <a href="index.html" class="nav-brand">
+          <span class="brand-icon">⚡</span>
+          <span>Agent Factory</span>
+        </a>
+        <p>An autonomous research and operational AI system developed for Federation University Australia (ITECH3208 / 3209).</p>
+      </div>
+
+      <div class="footer-links">
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="pricing.html">Architecture & Tiers</a></li>
+          <li><a href="about.html">About Project</a></li>
+          <li><a href="faq.html">FAQ</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>System</h4>
+        <ul>
+          <li><a href="/">Live Web UI</a></li>
+          <li><a href="/docs">API Documentation</a></li>
+          <li><a href="https://github.com/ITECH3208andITECH3209feduni/itech3208-project-1-agent-factory" target="_blank" rel="noopener">GitHub Repository</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>© 2026 Federation University Australia — ITECH3208/3209 Team. All rights reserved.</span>
+      <span>Information Website • No trial or signup required</span>
+    </div>
+  </footer>
+
+  <script src="js/site.js"></script>
+</body>
+</html>

@@ -40,6 +40,14 @@ CREATE TABLE IF NOT EXISTS users (
 );
 """
 
+# PROJ-392/409: which organisation (auth/tenancy.py's organisations.id)
+# this logged-in user belongs to. That table lives in a different
+# SQLite file (auth_users.db, not this module's AUTH_DB) — same
+# cross-database situation agent/memory.py already documents for
+# org_id: no DB-level foreign key is possible, so it's just an
+# application-scoped integer here, resolved through auth.tenancy
+# whenever the actual org row is needed.
+
 
 class AuthError(Exception):
     """Raised for registration/login failures with a user-facing message."""
@@ -51,7 +59,35 @@ def _get_conn() -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.executescript(_SCHEMA)
+    cols = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+    if "org_id" not in cols:
+        conn.execute("ALTER TABLE users ADD COLUMN org_id INTEGER")
     return conn
+
+
+# ── Organisation membership (PROJ-392/409) ────────────────────────
+
+
+def get_user_org_id(username: str) -> int | None:
+    conn = _get_conn()
+    try:
+        row = conn.execute(
+            "SELECT org_id FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        return row["org_id"] if row else None
+    finally:
+        conn.close()
+
+
+def set_user_org_id(username: str, org_id: int) -> None:
+    conn = _get_conn()
+    try:
+        conn.execute(
+            "UPDATE users SET org_id = ? WHERE username = ?", (org_id, username)
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def _hash_password(password: str, salt: bytes) -> str:
