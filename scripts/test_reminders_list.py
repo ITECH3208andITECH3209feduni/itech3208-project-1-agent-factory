@@ -54,6 +54,13 @@ def main() -> int:
     for name in ("contacts", "reminders", "consent_events"):
         store.set_table(name, store.JsonTable(tmp / f"{name}.json", name))
 
+    # Contacts live in the org-scoped SQLite table now; give this run its own DB.
+    from auth import db as auth_db, tenancy
+
+    auth_db.DB_PATH = str(tmp / "auth_users.db")
+    auth_db.init_db()
+    tenancy.init_tenancy()
+
     client = TestClient(app)
 
     try:
