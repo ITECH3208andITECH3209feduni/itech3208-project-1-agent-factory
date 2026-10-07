@@ -154,3 +154,22 @@ SMTP_USE_TLS    = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
 REMINDERS_DB = os.environ.get("REMINDERS_DB") or os.path.join(_BASE_DIR, "outputs", "reminders.db")
 REMINDER_POLL_INTERVAL_SECONDS = int(os.environ.get("REMINDER_POLL_INTERVAL_SECONDS", "30"))
 REMINDER_DEFAULT_LEAD_HOURS = int(os.environ.get("REMINDER_DEFAULT_LEAD_HOURS", "24"))
+
+
+# ── Environment validation (PROJ-381) ──────────────────────────
+def validate_env(strict: bool = False) -> list[str]:
+    """Return human-readable config problems. Everything is feature-gated, so
+    a missing value disables one capability rather than breaking startup.
+    strict=True raises RuntimeError instead, for deployment health checks."""
+    problems: list[str] = []
+
+    if not ANTHROPIC_API_KEY or ANTHROPIC_API_KEY == "YOUR_API_KEY_HERE":
+        problems.append("ANTHROPIC_API_KEY is not set — Claude features are disabled.")
+    if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER):
+        problems.append("TWILIO_* is incomplete — SMS and voice delivery are disabled.")
+    if not (SMTP_HOST and SMTP_FROM_EMAIL):
+        problems.append("SMTP_HOST / SMTP_FROM_EMAIL not set — email delivery is disabled.")
+
+    if strict and problems:
+        raise RuntimeError("Environment validation failed:\n  - " + "\n  - ".join(problems))
+    return problems

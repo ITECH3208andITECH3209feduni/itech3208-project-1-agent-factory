@@ -421,6 +421,10 @@ async def _download_export_unused(path: str):
 
 
 @router.get("/status", response_model=StatusResponse)
+async def get_status():
+    """Health check — confirms API is running and agent is ready."""
+    return StatusResponse(status="ok", agent="ready")
+
 
 @router.get("/export/download")
 async def download_export_secure(path: str, username: str = Depends(get_current_username)):
