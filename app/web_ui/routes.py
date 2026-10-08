@@ -9,8 +9,9 @@
 #   POST /integrity    — academic integrity check (PROJ-184–186)
 #   POST /seller       — Amazon seller tools (PROJ-187–190)
 #   POST /export       — export results to PDF/Excel (PROJ-191)
+#   GET  /export/download — fetch an exported file (PROJ-407)
 #   GET  /history      — last 20 messages from memory
-#   GET  /status       — health check
+#   GET  /status       — health check (unauthenticated)
 # ──────────────────────────────────────────────────────────────
 
 import sys
@@ -29,6 +30,7 @@ from components.amazon_cards import ProductCard
 from components.literature_cards import PaperCard
 from components.integrity_cards import IntegrityCard
 from components.seller_cards import SupplierCard, CampaignCard
+from skills.amazon import AmazonSkill
 from skills.literature import LiteratureSkill
 from skills.academic_integrity import AcademicIntegritySkill
 from skills.amazon_seller import AmazonSellerSkill
@@ -45,11 +47,17 @@ _lit_skill     = LiteratureSkill()
 _integrity     = AcademicIntegritySkill()
 _seller        = AmazonSellerSkill()
 _export        = ExportSkill()
+_amazon_skill  = AmazonSkill()   # PROJ-462: plain product search
 
 
 # ── Pydantic models ────────────────────────────────────────────
 class QueryRequest(BaseModel):
     query: str
+    # PROJ-462: the retired /api/amazon endpoint called
+    # AmazonSkill._run_normal_search() directly to skip the
+    # orchestrator's mode guessing. mode="product" preserves that
+    # plain-search behaviour on the surviving auth model.
+    mode: str | None = None
 
 
 class QueryResponse(BaseModel):
@@ -147,8 +155,17 @@ async def query_agent(body: QueryRequest, user: sqlite3.Row = Depends(current_us
         response  — human-readable agent answer
         cards     — list of ProductCard or PaperCard dicts
         type      — "amazon" | "literature" | "unknown"
+
+    mode="product" bypasses orchestrator routing and runs a plain
+    Amazon product search (PROJ-462, replaces retired /api/amazon).
+    Note: this path does not write to session memory, matching the
+    old endpoint's behaviour.
     """
-    rendered, result = _orchestrator_for(user).run(body.query)
+    if body.mode == "product":
+        result = _amazon_skill._run_normal_search(body.query)
+        rendered = result.summary or ""
+    else:
+        rendered, result = _orchestrator_for(user).run(body.query)
 
     if result is None:
         return QueryResponse(response=rendered, cards=[], type="unknown")
@@ -343,20 +360,6 @@ async def export_results(body: ExportRequest, user: sqlite3.Row = Depends(curren
         )
 
 
-# superseded by download_export_secure below (PROJ-407 path traversal fix)
-async def _download_export_unused(path: str):
-    """
-    Download a previously exported file by its path.
-    GET /export/download?path=exports/result_20260515_123456.pdf
-    """
-    if not os.path.exists(path):
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="File not found")
-    return FileResponse(path, filename=os.path.basename(path))
-
-
-@router.get("/status", response_model=StatusResponse)
-
 @router.get("/export/download")
 async def download_export_secure(path: str, user: sqlite3.Row = Depends(current_user)):
     """
@@ -378,3 +381,14 @@ async def download_export_secure(path: str, user: sqlite3.Row = Depends(current_
         raise HTTPException(status_code=404, detail="File not found")
 
     return FileResponse(candidate, filename=os.path.basename(candidate))
+
+
+@router.get("/status", response_model=StatusResponse)
+async def get_status():
+    """
+    Health check — confirms the API is running.
+
+    Deliberately unauthenticated so monitoring can reach it.
+    Returns no data about users, orgs or memory.
+    """
+    return StatusResponse(status="ok", agent="ready")
