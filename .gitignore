@@ -69,3 +69,5 @@ outputs/
 .pytest_cache/
 .coverage
 htmlcov/
+
+exports/
