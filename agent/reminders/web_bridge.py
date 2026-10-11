@@ -23,6 +23,7 @@ import time
 
 from agent.delivery import EmailChannel, SMSChannel
 from app.web.store import DEFAULT_ORG_ID
+from agent.reminders.heartbeat import beat
 from config.settings import REMINDER_POLL_INTERVAL_SECONDS
 
 logger = logging.getLogger(__name__)
@@ -92,6 +93,7 @@ class WebReminderBridge:
         interval = poll_interval or REMINDER_POLL_INTERVAL_SECONDS
         logger.info("Web reminder bridge starting, polling every %ss", interval)
         while True:
+            beat()
             try:
                 results = self.tick(org_id)
                 sent = sum(1 for r in results if r.get("ok"))

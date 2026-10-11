@@ -1,0 +1,47 @@
+# Fly.io config (PROJ-465). App name is a placeholder; `fly launch --no-deploy
+# --copy-config` will prompt for a unique one. See docs/DEPLOY.md.
+app = "agent-factory"
+primary_region = "syd"
+
+[build]
+  dockerfile = "app/web_ui/Dockerfile"
+
+[env]
+  PORT = "8000"
+  # Every SQLite file lives on the mounted volume so deploys keep data.
+  AUTH_DB_PATH = "/data/auth_users.db"
+  AUTH_DB = "/data/auth.db"
+  MEMORY_DB = "/data/memory.db"
+  REMINDERS_DB = "/data/reminders.db"
+  KB_DB = "/data/kb.db"
+  ESCALATION_LOG = "/data/escalations.jsonl"
+  SCHEDULER_HEARTBEAT = "/data/scheduler.heartbeat"
+  TWILIO_VALIDATE_SIGNATURE = "true"
+
+[mounts]
+  source = "agent_factory_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "off"   # the reminder loops must never be stopped
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/status"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "20s"
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/status/scheduler"
+    interval = "60s"
+    timeout = "5s"
+    grace_period = "90s"
+
+[experimental]
+  cmd = ["sh", "deploy/start.sh"]
