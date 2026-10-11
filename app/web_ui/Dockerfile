@@ -36,6 +36,7 @@ COPY components/ ./components/
 COPY auth/ ./auth/
 COPY contracts/ ./contracts/
 COPY integrations/ ./integrations/
+COPY deploy/ ./deploy/
 
 # Runtime data directory (SQLite DBs — see config/settings.py) lives
 # under outputs/, created on first write; declared here so it's

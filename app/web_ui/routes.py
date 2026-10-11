@@ -426,6 +426,22 @@ async def get_status():
     return StatusResponse(status="ok", agent="ready")
 
 
+@router.get("/status/scheduler")
+async def get_scheduler_status():
+    """Uptime-monitor target (PROJ-468): 200 while the reminder loops are
+    ticking, 503 if they have stopped or never started."""
+    from agent.reminders import heartbeat
+
+    age = heartbeat.age_seconds()
+    limit = heartbeat.max_age_seconds()
+    if age is None or age > limit:
+        raise HTTPException(
+            status_code=503,
+            detail={"status": "stale", "age_seconds": age, "max_age_seconds": limit},
+        )
+    return {"status": "ok", "age_seconds": round(age, 1), "max_age_seconds": limit}
+
+
 @router.get("/export/download")
 async def download_export_secure(path: str, username: str = Depends(get_current_username)):
     """
