@@ -48,7 +48,7 @@ echo $! > "$PIDFILE"
 
 URL=""
 for _ in $(seq 1 30); do
-  URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOGFILE" | head -1 || true)
+  URL=$(grep -aoE 'https://[a-z0-9-]+\.trycloudflare\.com' "$LOGFILE" | head -1 || true)
   [ -n "$URL" ] && break
   sleep 1
 done
