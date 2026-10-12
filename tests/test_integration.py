@@ -62,6 +62,7 @@ def test_register_then_me_roundtrip(client):
 
 
 def test_me_without_session_is_401(client):
+    client.cookies.clear()  # conftest logs every client in by default
     resp = client.get("/auth/me")
     assert resp.status_code == 401
 
@@ -97,6 +98,7 @@ def test_kb_upload_list_search_delete_full_cycle(auth_client):
 
 
 def test_kb_upload_requires_login(client):
+    client.cookies.clear()  # conftest logs every client in by default
     resp = client.post(
         "/kb/upload",
         files={"file": ("x.txt", b"content", "text/plain")},
@@ -139,6 +141,7 @@ def test_kb_documents_are_isolated_between_users(client):
 
 
 def test_calendar_ics_download_requires_login(client):
+    client.cookies.clear()  # conftest logs every client in by default
     resp = client.get(
         "/calendar/ics",
         params={"summary": "Test", "start": "2026-08-10T14:00:00", "end": "2026-08-10T14:30:00"},
@@ -177,6 +180,7 @@ def test_calendar_ics_rejects_invalid_datetime(auth_client):
 
 
 def test_receptionist_requires_login(client):
+    client.cookies.clear()  # conftest logs every client in by default
     resp = client.post("/receptionist", json={"message": "hello"})
     assert resp.status_code == 401
 
