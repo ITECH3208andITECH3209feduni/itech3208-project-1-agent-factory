@@ -87,8 +87,8 @@ def test_normalise_keyword_collapses_whitespace():
 
 # ── Phone normalisation ────────────────────────────────────────
 @pytest.mark.parametrize("raw", [
-    "0400123456", "+61400123456", "0400 123 456",
-    "(04) 0012 3456", "04-0012-3456", " 0400123456 ",
+    "0491570156", "+61491570156", "0491 570 156",
+    "(04) 9157 0156", "04-9157-0156", " 0491570156 ",
 ])
 def test_phone_formats_normalise_to_one_value(raw):
     """
@@ -96,7 +96,7 @@ def test_phone_formats_normalise_to_one_value(raw):
     number can be stored two ways, an opt-out lands on one record
     and the send-block checks the other.
     """
-    assert normalise_phone(raw) == "+61400123456"
+    assert normalise_phone(raw) == "+61491570156"
 
 
 def test_unparseable_phone_raises():
@@ -126,7 +126,7 @@ def org(monkeypatch):
     sms_sender.init_send_log()
 
     org_id = tenancy.create_org("Test Org")
-    contact_id = tenancy.create_contact(org_id, "+61400123456", "Test Contact")
+    contact_id = tenancy.create_contact(org_id, "+61491570156", "Test Contact")
 
     yield {
         "consent": consent, "audit": consent_audit,

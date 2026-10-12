@@ -22,7 +22,8 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-DEMO_USERNAME = "poster.demo"
+DEMO_EMAIL = "poster.demo@example.com"
+DEMO_ORG = "Demo Dental Clinic"
 DEMO_PASSWORD = "AgentFactory-Demo-2026"
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
@@ -65,12 +66,12 @@ def call(method, path, body=None):
 
 
 def main():
-    s, _ = call("POST", "/auth/register", {"username": DEMO_USERNAME, "password": DEMO_PASSWORD})
+    # An organisation owner who signs in with an email, like a real visitor would.
+    call("POST", "/orgs/register", {"org_name": DEMO_ORG, "email": DEMO_EMAIL, "password": DEMO_PASSWORD})
+    s, body = call("POST", "/auth/login", {"email": DEMO_EMAIL, "password": DEMO_PASSWORD})
     if s != 200:
-        s, body = call("POST", "/auth/login", {"username": DEMO_USERNAME, "password": DEMO_PASSWORD})
-        if s != 200:
-            sys.exit(f"Could not register or log in the demo user ({s}): {body}")
-    print(f"logged in as {DEMO_USERNAME}")
+        sys.exit(f"Could not log in the demo user ({s}): {body}")
+    print(f"logged in as {DEMO_EMAIL}")
 
     s, existing = call("GET", "/crm/api/contacts")
     if s != 200:
@@ -106,7 +107,7 @@ def main():
 
     s, r = call("POST", "/analytics/seed-demo-data?count=40")
     print(f"analytics demo data: {'loaded' if s == 200 else f'skipped ({s})'}")
-    print(f"\nOpen {BASE}/login and sign in as {DEMO_USERNAME}")
+    print(f"\nOpen {BASE}/login and sign in as {DEMO_EMAIL}")
 
 
 if __name__ == "__main__":
