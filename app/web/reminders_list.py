@@ -31,11 +31,9 @@ LIST_HTML = """<!DOCTYPE html>
   </div>
 
   <div class="banner">
-    <span class="ico" aria-hidden="true">!</span>
-    <div><b>Nothing sends yet.</b> The Reminders Engine is <b>PROJ-395</b>, so
-    no reminder will reach <i>sent</i>. Consent is still enforced at send time
-    (<b>PROJ-441</b>) — a reminder can already be seen as blocked before its
-    send time arrives.</div>
+    <span class="ico" aria-hidden="true">i</span>
+    <div><b>Consent is enforced at send time.</b> Contacts who have not opted in, or
+    who have opted out, are blocked automatically and the reminder shows as blocked.</div>
   </div>
 
   <div class="filters" role="search">

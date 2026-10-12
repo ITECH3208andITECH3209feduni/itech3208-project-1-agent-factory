@@ -19,6 +19,7 @@ Endpoints:
 
 import logging
 import os
+import re
 import time
 from typing import Any
 
@@ -62,6 +63,28 @@ def get_orchestrator():
 
         _orchestrator = Orchestrator()
     return _orchestrator
+
+
+# ── Mounted-prefix rewrite ───────────────────────────────────
+# The page modules write absolute URLs ("/api/stats", "/contacts", ...) as if
+# this app lived at the site root. Mounted at /crm (app/web_ui/main.py) those
+# all 404, so when Starlette reports a root_path, prefix them. Standalone
+# (root_path == "") this does nothing.
+_MOUNT_URL = re.compile(
+    r"""(["'`])/(api|dashboard|contacts|reminders|ui|skills|docs|health|query|openapi\.json)\b"""
+)
+
+
+@app.middleware("http")
+async def prefix_mounted_urls(request: Request, call_next):
+    response = await call_next(request)
+    root = request.scope.get("root_path", "").rstrip("/")
+    if not root or "text/html" not in response.headers.get("content-type", ""):
+        return response
+    body = b"".join([chunk async for chunk in response.body_iterator]).decode("utf-8")
+    body = _MOUNT_URL.sub(lambda m: f"{m.group(1)}{root}/{m.group(2)}", body)
+    headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
+    return Response(content=body, status_code=response.status_code, headers=headers)
 
 
 # ── Models ────────────────────────────────────────────────────
@@ -210,20 +233,20 @@ def ui() -> HTMLResponse:
 
 
 # ── Dashboard (PROJ-437) ──────────────────────────────────────
-def current_user() -> dict | None:
+def current_user(request: Request | None = None) -> dict | None:
     """
-    Auth seam for the dashboard.
-
-    PROJ-399 calls for an *authenticated* landing page, but accounts and
-    sessions are PROJ-392 (Accounts & Multi-tenancy), which has not landed.
-    Rather than fake a login — which would be worse than none, because it
-    would look like access control — this returns None and the dashboard
-    renders a visible "not authenticated" banner.
-
-    When PROJ-392 lands, enforce it here: this is the single place the
-    dashboard and /api/stats consult.
+    Auth seam for the dashboard: the logged-in user from the session cookie,
+    or None. Accounts and sessions have landed (agent/auth.py), and when this
+    app is mounted at /crm the parent app's login check runs first. Standalone,
+    with no cookie, it stays None and the dashboard shows its sign-in banner.
     """
-    return None
+    if request is None:
+        return None
+    from agent.auth import verify_session_token
+
+    token = request.cookies.get("af_session")
+    username = verify_session_token(token) if token else None
+    return {"username": username} if username else None
 
 
 @app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
@@ -501,7 +524,7 @@ def reminder_dispatch_check(reminder_id: int) -> dict:
 
 
 @app.get("/api/stats")
-def api_stats() -> dict:
+def api_stats(request: Request) -> dict:
     """
     Metrics behind the dashboard's KPI row.
 
@@ -512,7 +535,7 @@ def api_stats() -> dict:
     from app.web import stats
 
     payload = stats.summary()
-    payload["authenticated"] = current_user() is not None
+    payload["authenticated"] = current_user(request) is not None
     return payload
 
 

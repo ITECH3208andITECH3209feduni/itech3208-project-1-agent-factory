@@ -134,6 +134,7 @@ INDEX_HTML = """<!DOCTYPE html>
     border-radius: 8px; padding: 11px 14px; margin: 18px 0 22px;
     font-size: 13.5px; color: var(--text-secondary);
   }
+  .banner[hidden] { display: none; }
   .banner .ico { flex: none; font-weight: 700; color: var(--text-primary); }
   .banner b { color: var(--text-primary); font-weight: 600; }
 
@@ -231,7 +232,7 @@ INDEX_HTML = """<!DOCTYPE html>
 <div class="layout">
 
   <nav>
-    <div class="brand">Agent Factory<span class="sub">Sprint 4</span></div>
+    <div class="brand">Agent Factory<span class="sub">Reminder &amp; Communication Service</span></div>
 
     <div class="navsec">Overview</div>
     <a href="/dashboard" aria-current="page">Dashboard</a>
@@ -261,10 +262,7 @@ INDEX_HTML = """<!DOCTYPE html>
     <div class="banner" id="authbanner" hidden>
       <span class="ico" aria-hidden="true">!</span>
       <div>
-        <b>Not authenticated.</b> This page is served without access control.
-        Accounts and sign-in are <b>PROJ-392</b> (Accounts &amp; Multi-tenancy),
-        which has not landed — so there is no org scoping and no session check yet.
-        Do not expose this on a public URL.
+        <b>Not authenticated.</b> Sign in to see your organisation's contacts and reminders.
       </div>
     </div>
 
@@ -438,7 +436,7 @@ async function loadPanels() {
     hist.innerHTML = (d2.reminders || []).length
       ? panelRows(d2.reminders, {showStatus: true}) +
         `<div class="more"><a href="/reminders?status=sent,failed,blocked">View all</a></div>`
-      : `<div class="empty">Nothing has been sent or blocked yet. Nothing sends until the engine lands (<code>PROJ-395</code>).</div>`;
+      : `<div class="empty">Nothing has been sent or blocked yet. Scheduled reminders appear here once they are delivered.</div>`;
   } catch (err) {
     const msg = `<div class="empty">Could not load reminders: ${esc(err.message)}</div>`;
     up.innerHTML = msg;

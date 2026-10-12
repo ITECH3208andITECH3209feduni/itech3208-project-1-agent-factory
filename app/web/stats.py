@@ -156,7 +156,7 @@ def reminders_upcoming() -> Metric:
             key="reminders_upcoming",
             label="Upcoming reminders",
             value=upcoming_count(),
-            note="provisional local store (PROJ-422 pending)",
+            note="scheduled and waiting to send",
         )
     except Exception as exc:  # noqa: BLE001
         log.warning("reminders_upcoming failed: %s", exc)
@@ -182,7 +182,7 @@ def reminders_sent() -> Metric:
             key="reminders_sent",
             label="Reminders sent",
             value=sent_count(),
-            note="nothing sends yet — the engine is PROJ-395",
+            note="delivered by the reminders engine",
         )
     except Exception as exc:  # noqa: BLE001
         log.warning("reminders_sent failed: %s", exc)

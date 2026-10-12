@@ -32,10 +32,9 @@ FORM_HTML = """<!DOCTYPE html>
   <div class="sub" style="margin-bottom:18px">__SUBTITLE__</div>
 
   <div class="banner">
-    <span class="ico" aria-hidden="true">!</span>
-    <div><b>Nothing sends yet.</b> The Reminders Engine is <b>PROJ-395</b>, so a
-    scheduled reminder is a record of intent — it will not be delivered until
-    that lands. Consent is still enforced at send time (<b>PROJ-441</b>).</div>
+    <span class="ico" aria-hidden="true">i</span>
+    <div><b>Consent is enforced at send time.</b> Contacts who have not opted in, or
+    who have opted out, are blocked automatically and the reminder shows as blocked.</div>
   </div>
 
   <form id="f" class="card pad" novalidate>

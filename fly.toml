@@ -16,6 +16,7 @@ primary_region = "syd"
   KB_DB = "/data/kb.db"
   ESCALATION_LOG = "/data/escalations.jsonl"
   SCHEDULER_HEARTBEAT = "/data/scheduler.heartbeat"
+  CRM_STORE_DIR = "/data/store"
   TWILIO_VALIDATE_SIGNATURE = "true"
   # Reminders are scheduled in local time, so the container must not fall back
   # to UTC. Matches config/settings.py's default; same offset as the syd region.

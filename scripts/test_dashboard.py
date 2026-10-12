@@ -38,6 +38,7 @@ def main() -> int:
     from app.web.main import app
 
     client = TestClient(app)
+    client.cookies.clear()  # under pytest, conftest logs clients in; this suite checks the anonymous view
 
     # ── Routes ────────────────────────────────────────────────
     r = client.get("/dashboard")
@@ -141,13 +142,14 @@ def main() -> int:
         stats.PROVIDERS[:] = original
 
     # ── Auth honesty ──────────────────────────────────────────
-    # PROJ-399 wants an authenticated page; accounts are PROJ-392 and unbuilt.
+    # PROJ-399: an authenticated page. Without a session cookie the API reports
+    # authenticated=false and the page shows a sign-in banner.
     # Faking a session would be worse than none, so the flag must read false
     # and the page must say so.
     check("stats reports authenticated", "authenticated" in d)
-    check("authenticated is false (PROJ-392 not landed)", d.get("authenticated") is False)
+    check("authenticated is false without a session cookie", d.get("authenticated") is False)
     check("dashboard renders an auth warning banner", 'id="authbanner"' in html)
-    check("banner names the blocking ticket", "PROJ-392" in html)
+    check("banner tells the visitor to sign in", "Sign in" in html)
     check(
         "banner carries an icon and text, not colour alone",
         'class="ico"' in html and "Not authenticated" in html,
