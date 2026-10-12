@@ -52,11 +52,20 @@ Fill in a local `.env` (never commit it), then:
 
 Only these names are sent: `ANTHROPIC_API_KEY`, `AUTH_SECRET_KEY`,
 `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`, `SMTP_*`,
-`GOOGLE_CALENDAR_*`. Set `AUTH_SECRET_KEY` explicitly: without it a key is
-generated on first boot and sessions are lost if the volume is recreated.
+`GOOGLE_CALENDAR_*`, `RAPIDAPI_KEY`. The script now refuses to run if any of
+`ANTHROPIC_API_KEY`, `AUTH_SECRET_KEY` or the three `TWILIO_*` values are
+missing, because each one fails at the first real request rather than at deploy
+time (`ALLOW_INCOMPLETE=1` overrides). Set `AUTH_SECRET_KEY` explicitly:
+without it a key is generated on first boot and sessions are lost if the volume
+is recreated.
+
 Google Calendar needs the service-account JSON on the volume, e.g.
 `fly ssh sftp shell` then upload to `/data/calendar-key.json` and set
 `GOOGLE_CALENDAR_KEY_PATH=/data/calendar-key.json`.
+
+Non-secret production settings live in `fly.toml` under `[env]`. **Update
+`APP_BASE_URL` there** to whatever app name `fly launch` gave you — it is what
+password-reset emails put in their links, and its default points at localhost.
 
 ## 3. Deploy and verify
 
@@ -81,8 +90,25 @@ passes `--proxy-headers` so the app sees the public `https://` URL Twilio
 signed. Then stop ngrok, text the number, and restart the machine
 (`fly machine restart`) to confirm replies still arrive.
 
-Known gap: only `/twilio/sms` checks the signature today; the voice and
-status-callback routes do not.
+All four webhook routes verify `X-Twilio-Signature` — `/twilio/sms`,
+`/twilio/voice`, `/twilio/voice/reply` and `/twilio/status-callback`. (Until
+PROJ-466 only `/twilio/sms` did, so a forged status callback could rewrite
+delivery records and a forged `/twilio/voice` could spend Claude tokens.)
+Verification fails closed: if `TWILIO_VALIDATE_SIGNATURE=true` but
+`TWILIO_AUTH_TOKEN` is unset, every request is rejected rather than waved
+through.
+
+If every webhook starts returning 403, check in this order:
+
+1. `TWILIO_AUTH_TOKEN` matches the token for *this* Twilio account
+   (`fly secrets list` shows names and digests, not values).
+2. The app is seeing `https://`, not `http://` — signature covers the exact
+   URL, so losing `--proxy-headers` breaks all of them at once.
+3. The console URL matches the route exactly, including any trailing path.
+
+The status-callback route also accepts JSON for our own tooling. Twilio signs
+form-encoded parameters only, so that JSON path cannot pass verification and
+works only with validation off.
 
 ## 5. Monitoring (PROJ-468)
 

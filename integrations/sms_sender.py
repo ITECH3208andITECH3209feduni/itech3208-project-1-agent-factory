@@ -32,7 +32,12 @@ log = logging.getLogger("sms_sender")
 
 ACCOUNT_SID = os.getenv("TWILIO_ACCOUNT_SID", "")
 AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN", "")
-FROM_NUMBER = os.getenv("TWILIO_PHONE_NUMBER", "")
+# PROJ-467: the rest of the project configures the sending number as
+# TWILIO_FROM_NUMBER (.env.example, config/settings.py, scripts/fly_set_secrets.sh).
+# Only this module and auth/sms_routing.py ever read TWILIO_PHONE_NUMBER, which
+# is set nowhere — so in production this was always "" and every send failed.
+# Prefer the canonical name, keep the old one working for existing local .envs.
+FROM_NUMBER = os.getenv("TWILIO_FROM_NUMBER") or os.getenv("TWILIO_PHONE_NUMBER", "")
 
 SEND_LOG_SCHEMA = """
 CREATE TABLE IF NOT EXISTS sms_send_log (

@@ -8,8 +8,16 @@
 #   POST /twilio/sms           — receive SMS, reply via MessagingResponse
 #   POST /twilio/voice         — answer call with Polly TTS greeting + Gather
 #   POST /twilio/voice/reply   — process SpeechResult, reply via Polly TTS, loop
+#   POST /twilio/status-callback — delivery status updates
+#
+# PROJ-466: every route above verifies the X-Twilio-Signature header once the
+# app is on a public URL. It used to be only /twilio/sms, which left the voice
+# and status-callback routes open to anyone who knew the hostname — forged
+# status callbacks corrupt delivery records, and forged /twilio/voice posts
+# spend Claude tokens on demand.
 # ──────────────────────────────────────────────────────────────
 
+import logging
 import os
 import re
 import sys
@@ -40,6 +48,47 @@ _receptionist = Receptionist()
 POLLY_VOICE = "Polly.Joanna"
 POLLY_LANG = "en-AU"
 GOODBYE_WORDS = {"goodbye", "bye", "hang up", "end call", "that's all", "no thanks"}
+
+log = logging.getLogger("agent_factory.twilio")
+
+FORBIDDEN = Response(content="Forbidden", status_code=403)
+
+
+async def reject_unsigned(request: Request) -> Response | None:
+    """
+    Verify Twilio's X-Twilio-Signature. Returns a 403 Response to return to the
+    caller, or None when the request may proceed (PROJ-466).
+
+    Off by default so local development and the test suite keep working; set
+    TWILIO_VALIDATE_SIGNATURE=true in any environment reachable from the
+    internet. fly.toml sets it.
+
+    Validation hashes the exact URL Twilio signed, so the app must see the
+    public https:// URL rather than the proxy's internal http:// one — hence
+    --proxy-headers in deploy/start.sh. A mismatch here looks like every
+    request being rejected.
+    """
+    if os.getenv("TWILIO_VALIDATE_SIGNATURE", "false").lower() != "true":
+        return None
+
+    token = os.getenv("TWILIO_AUTH_TOKEN", "")
+    if not token:
+        # Fail closed. Validation was explicitly asked for and cannot be done,
+        # which is a misconfiguration, not a reason to accept the request.
+        log.error("TWILIO_VALIDATE_SIGNATURE is on but TWILIO_AUTH_TOKEN is unset; rejecting.")
+        return FORBIDDEN
+
+    from twilio.request_validator import RequestValidator
+
+    # Starlette caches the parsed form, so reading it here does not consume the
+    # body the route's own Form(...) parameters depend on.
+    form = await request.form()
+    signature = request.headers.get("X-Twilio-Signature", "")
+    if not RequestValidator(token).validate(str(request.url), dict(form), signature):
+        log.warning("Rejected unsigned/invalid Twilio request to %s", request.url.path)
+        return FORBIDDEN
+
+    return None
 
 
 def _strip_markdown(text: str) -> str:
@@ -72,16 +121,9 @@ async def sms_webhook(
     orchestrator ever sees the message — a STOP must never be treated
     as a query, cost an API call, or reach a skill.
     """
-    validate = os.getenv("TWILIO_VALIDATE_SIGNATURE", "false").lower() == "true"
-    if validate:
-        from twilio.request_validator import RequestValidator
-        token = os.getenv("TWILIO_AUTH_TOKEN", "")
-        validator = RequestValidator(token)
-        url = str(request.url)
-        form = await request.form()
-        sig = request.headers.get("X-Twilio-Signature", "")
-        if not validator.validate(url, dict(form), sig):
-            return Response(content="Forbidden", status_code=403)
+    denied = await reject_unsigned(request)
+    if denied:
+        return denied
 
     consent_reply = handle_inbound(Body, From, To)
     if consent_reply is not None:
@@ -116,6 +158,10 @@ async def voice_greeting(request: Request) -> Response:
     a Gather element to capture speech input.
     PROJ-384
     """
+    denied = await reject_unsigned(request)
+    if denied:
+        return denied
+
     resp = VoiceResponse()
     gather = Gather(
         input="speech",
@@ -156,6 +202,10 @@ async def voice_reply(
     Twilio resends the call's From on every webhook for that call, so
     it's available here even though the call started at /twilio/voice.
     """
+    denied = await reject_unsigned(request)
+    if denied:
+        return denied
+
     query = SpeechResult.strip()
     resp = VoiceResponse()
 
@@ -251,7 +301,16 @@ async def twilio_status_callback(
     Handle Twilio status callbacks for SMS and Voice messages.
     Updates delivery tracking record, records errors, and logs status transitions.
     PROJ-432
+
+    PROJ-466: this route writes to the delivery log from an unauthenticated
+    public URL, so it is signature-checked like the others. Note that Twilio
+    signs form-encoded parameters; the JSON branch below is for our own tooling
+    and cannot satisfy validation, so it only works with validation off.
     """
+    denied = await reject_unsigned(request)
+    if denied:
+        return denied
+
     # Fallback to JSON payload if Content-Type is application/json
     content_type = request.headers.get("content-type", "")
     if "application/json" in content_type:
