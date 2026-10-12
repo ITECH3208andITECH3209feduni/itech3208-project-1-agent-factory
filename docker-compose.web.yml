@@ -20,6 +20,7 @@ services:
       KB_DB: /data/kb.db
       ESCALATION_LOG: /data/escalations.jsonl
       SCHEDULER_HEARTBEAT: /data/scheduler.heartbeat
+      CRM_STORE_DIR: /data/store
       # Only meaningful once TWILIO_AUTH_TOKEN is set; enabled by demo_up.sh.
       TWILIO_VALIDATE_SIGNATURE: ${TWILIO_VALIDATE_SIGNATURE:-false}
     volumes:

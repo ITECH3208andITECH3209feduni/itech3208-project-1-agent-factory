@@ -1,7 +1,8 @@
 # Deploying Agent Factory
 
-Two ways to run it. Option A is free and needs no account or card. Option B
-(Fly.io) is always-on but needs a card.
+Three ways to run it. **Always-on machine (Mac mini, free, permanent URL): see
+`docs/MAC_MINI.md`.** Option A below is a free laptop run with a temporary URL;
+Option B (Fly.io) is a paid cloud host.
 
 ## Option A: free local run + public tunnel (open source)
 
