@@ -1,4 +1,27 @@
-# Deploying Agent Factory (Fly.io)
+# Deploying Agent Factory
+
+Two ways to run it. Option A is free and needs no account or card. Option B
+(Fly.io) is always-on but needs a card.
+
+## Option A: free local run + public tunnel (open source)
+
+Needs Docker and `cloudflared` (`brew install cloudflared`).
+
+```bash
+./scripts/demo_up.sh            # uses ./.env; or pass a path to an env file
+```
+
+This builds the image, starts the web app and the reminder loops in one
+container with all SQLite data on a Docker volume, opens a Cloudflare quick
+tunnel, and prints the public URL plus the three Twilio webhook URLs. If
+`TWILIO_AUTH_TOKEN` is set, signature validation is switched on. Check
+`<url>/status` and `<url>/status/scheduler`. Stop with
+`./scripts/demo_up.sh --down`.
+
+Limits: it only runs while your machine is on, and the tunnel URL changes
+each start, so re-paste the Twilio webhook URLs after a restart.
+
+## Option B: Fly.io
 
 Covers PROJ-465 (hosting), PROJ-466 (Twilio webhooks), PROJ-467 (secrets) and
 PROJ-468 (scheduler monitoring). The repo side is ready; the steps below need
