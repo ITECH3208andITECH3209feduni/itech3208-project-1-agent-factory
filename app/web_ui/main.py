@@ -29,9 +29,9 @@ _PROJECT = os.path.abspath(os.path.join(_HERE, "../.."))
 if _PROJECT not in sys.path:
     sys.path.insert(0, _PROJECT)
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from app.web_ui.routes import router
 from app.web_ui.auth_routes import router as auth_router
@@ -117,6 +117,38 @@ app.include_router(settings_router)      # /api/user/settings (PROJ-444)
 from app.web.main import app as crm_app
 
 app.mount("/crm", crm_app)
+
+
+# ── Default-deny login check ───────────────────────────────────
+# Everything needs a session cookie except this explicit public list. The
+# /crm mount, /delivery/send, /activity and friends previously answered
+# anonymous requests, so a public URL exposed contacts and could send SMS.
+_PUBLIC_EXACT = {
+    "/", "/status", "/status/scheduler", "/login", "/register",
+    "/forgot-password", "/reset-password", "/favicon.ico",
+    "/site", "/showcase", "/orgs/register",
+    "/integrity",  # deliberately public (tests/test_integrity.py)
+}
+_PUBLIC_PREFIXES = (
+    "/static/", "/site-assets/", "/site/",
+    "/auth/",     # login, register, logout, me
+    "/twilio/",   # Twilio webhooks verify their own X-Twilio-Signature
+)
+
+
+@app.middleware("http")
+async def require_login(request: Request, call_next):
+    path = request.url.path
+    if request.method == "OPTIONS" or path in _PUBLIC_EXACT or path.startswith(_PUBLIC_PREFIXES):
+        return await call_next(request)
+    from app.web_ui.auth_routes import get_current_username
+    try:
+        get_current_username(request)
+    except HTTPException:
+        if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+            return RedirectResponse("/login", status_code=303)
+        return JSONResponse({"detail": "Not logged in"}, status_code=401)
+    return await call_next(request)
 
 
 # ── Root — serve the chat UI ───────────────────────────────────

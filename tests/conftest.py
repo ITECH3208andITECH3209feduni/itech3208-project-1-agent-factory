@@ -18,6 +18,16 @@ import tempfile
 
 _TEST_DATA_DIR = tempfile.mkdtemp(prefix="agent_factory_test_")
 
+# Tests must never reach a real provider. load_dotenv() searches upward for a
+# .env (it can find the main checkout's from inside a worktree) and only skips
+# names already present in the environment, so blank them *before* any
+# `config` / `integrations` import. Assignment, not setdefault, on purpose.
+for _name in (
+    "TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM_NUMBER", "TWILIO_PHONE_NUMBER",
+    "SMTP_HOST", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM_EMAIL",
+):
+    os.environ[_name] = ""
+
 os.environ.setdefault("MEMORY_DB", os.path.join(_TEST_DATA_DIR, "memory.db"))
 os.environ.setdefault("AUTH_DB", os.path.join(_TEST_DATA_DIR, "auth.db"))
 os.environ.setdefault("FAQ_DATA_PATH", os.path.join(_TEST_DATA_DIR, "faq_seed.json"))
@@ -29,6 +39,24 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "test-key-not-a-real-key")
 # specific test opts in via the google_calendar_configured fixture.
 os.environ.setdefault("GOOGLE_CALENDAR_KEY_PATH", "")
 os.environ.setdefault("GOOGLE_CALENDAR_ID", "")
+
+# ── Logged-in test clients ─────────────────────────────────────
+# The app denies anonymous requests by default (see require_login in
+# app/web_ui/main.py), so every TestClient starts with a valid session
+# cookie. Tests that check anonymous behaviour call client.cookies.clear().
+from starlette.testclient import TestClient as _TestClient  # noqa: E402
+
+_orig_client_init = _TestClient.__init__
+
+
+def _logged_in_client_init(self, *args, **kwargs):
+    _orig_client_init(self, *args, **kwargs)
+    from app.web_ui.auth_routes import COOKIE_NAME
+    from agent.auth import create_session_token
+    self.cookies.set(COOKIE_NAME, create_session_token("pytest"))
+
+
+_TestClient.__init__ = _logged_in_client_init
 
 _SEED_FAQ = [
     {
