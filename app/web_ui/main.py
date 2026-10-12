@@ -31,7 +31,7 @@ if _PROJECT not in sys.path:
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
 from app.web_ui.routes import router
 from app.web_ui.auth_routes import router as auth_router
@@ -193,20 +193,30 @@ async def serve_literature():
 @app.get("/showcase", include_in_schema=False)
 @app.get("/site", include_in_schema=False)
 async def serve_showcase():
-    """Serve the static information website home page."""
+    """Serve the information website home page.
+
+    The pages use relative links (css/site.css, features.html) so they also work
+    on GitHub Pages. Served from /showcase or /site those would resolve against
+    the site root, so point them at /site/ with a <base> tag.
+    """
     site_index = os.path.join(_SITE_DIR, "index.html")
-    if os.path.exists(site_index):
-        return FileResponse(site_index, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
-    return {"message": "Showcase site not found."}
+    if not os.path.exists(site_index):
+        return {"message": "Showcase site not found."}
+    with open(site_index, encoding="utf-8") as fh:
+        html = fh.read().replace("<head>", '<head>\n  <base href="/site/">', 1)
+    return HTMLResponse(html, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
 
 
-@app.get("/site/{page_name}", include_in_schema=False)
+@app.get("/site/{page_name:path}", include_in_schema=False)
 async def serve_site_page(page_name: str):
-    """Serve subpages of the information website (features, pricing, about, faq)."""
-    if not page_name.endswith(".html"):
+    """Serve the information website's pages and assets (features, pricing, about, faq, css, js)."""
+    if page_name in ("", "index", "index.html"):
+        return await serve_showcase()
+    if "." not in os.path.basename(page_name):
         page_name += ".html"
-    page_path = os.path.join(_SITE_DIR, page_name)
-    if os.path.exists(page_path):
+    root = os.path.realpath(_SITE_DIR)
+    page_path = os.path.realpath(os.path.join(root, page_name))
+    if page_path.startswith(root + os.sep) and os.path.isfile(page_path):
         return FileResponse(page_path, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
     raise HTTPException(status_code=404, detail=f"Page '{page_name}' not found.")
 

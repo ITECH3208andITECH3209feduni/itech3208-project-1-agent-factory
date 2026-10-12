@@ -93,3 +93,13 @@ def test_fastapi_serves_showcase_and_subpages(client):
         resp = client.get(f"/site/{page}")
         assert resp.status_code == 200
         assert "Agent Factory" in resp.text
+
+
+def test_showcase_assets_and_links_resolve(client):
+    """The page uses relative links; they must resolve under /site/ when served from /showcase."""
+    html = client.get("/showcase").text
+    assert '<base href="/site/">' in html
+    assert client.get("/site/css/site.css").status_code == 200
+    assert client.get("/site/js/site.js").status_code == 200
+    assert client.get("/site/features.html").status_code == 200
+    assert client.get("/site/../app/web_ui/main.py").status_code == 404
