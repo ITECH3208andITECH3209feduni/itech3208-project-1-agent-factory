@@ -138,9 +138,18 @@ def _send_via_smtp(to_email: str, reset_url: str) -> bool:
     from email.message import EmailMessage
 
     port = int(os.getenv("SMTP_PORT", "587"))
-    user = os.getenv("SMTP_USER", "")
+    # PROJ-467: config/settings.py, .env.example and the Fly secrets allow-list
+    # all use SMTP_USERNAME / SMTP_FROM_EMAIL. This module was the only reader of
+    # SMTP_USER / SMTP_FROM, so in production it authenticated with nothing and
+    # sent reset mail from noreply@agentfactory.local — which most providers drop.
+    user = os.getenv("SMTP_USERNAME") or os.getenv("SMTP_USER", "")
     password = os.getenv("SMTP_PASSWORD", "")
-    sender = os.getenv("SMTP_FROM", user or "noreply@agentfactory.local")
+    sender = (
+        os.getenv("SMTP_FROM_EMAIL")
+        or os.getenv("SMTP_FROM")
+        or user
+        or "noreply@agentfactory.local"
+    )
 
     msg = EmailMessage()
     msg["Subject"] = "Reset your Agent Factory password"

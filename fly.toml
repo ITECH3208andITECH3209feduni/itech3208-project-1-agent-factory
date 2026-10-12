@@ -17,6 +17,13 @@ primary_region = "syd"
   ESCALATION_LOG = "/data/escalations.jsonl"
   SCHEDULER_HEARTBEAT = "/data/scheduler.heartbeat"
   TWILIO_VALIDATE_SIGNATURE = "true"
+  # Reminders are scheduled in local time, so the container must not fall back
+  # to UTC. Matches config/settings.py's default; same offset as the syd region.
+  TIMEZONE = "Australia/Melbourne"
+  # PROJ-467: password-reset emails embed this. Unset it defaults to
+  # http://localhost:8000 and every emailed reset link is dead.
+  # UPDATE THIS if `fly launch` gave you a different app name.
+  APP_BASE_URL = "https://agent-factory.fly.dev"
 
 [mounts]
   source = "agent_factory_data"

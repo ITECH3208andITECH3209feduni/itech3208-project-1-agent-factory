@@ -12,9 +12,15 @@ command -v fly >/dev/null || { echo "Install flyctl first: https://fly.io/docs/f
 
 ALLOWED="ANTHROPIC_API_KEY AUTH_SECRET_KEY TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_FROM_NUMBER \
 SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_FROM_EMAIL SMTP_USE_TLS \
-GOOGLE_CALENDAR_ID GOOGLE_CALENDAR_KEY_PATH"
+GOOGLE_CALENDAR_ID GOOGLE_CALENDAR_KEY_PATH RAPIDAPI_KEY"
+
+# Without these the app deploys and serves, but the core flows fail at the
+# first real request rather than at deploy time — which is a much worse place
+# to find out. Named here so a missing one is loud instead of a skip line.
+REQUIRED="ANTHROPIC_API_KEY AUTH_SECRET_KEY TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN TWILIO_FROM_NUMBER"
 
 args=()
+missing=()
 for name in $ALLOWED; do
   line=$(grep -E "^${name}=" "$ENV_FILE" | tail -1 || true)
   value="${line#*=}"
@@ -22,8 +28,18 @@ for name in $ALLOWED; do
     args+=("${name}=${value}")
   else
     echo "skip  $name (not set in $ENV_FILE)"
+    case " $REQUIRED " in *" $name "*) missing+=("$name") ;; esac
   fi
 done
+
+if [ ${#missing[@]} -gt 0 ]; then
+  echo >&2
+  echo "ERROR: required secret(s) missing from $ENV_FILE: ${missing[*]}" >&2
+  echo "TWILIO_VALIDATE_SIGNATURE=true in fly.toml means a missing" >&2
+  echo "TWILIO_AUTH_TOKEN rejects every inbound webhook (PROJ-466)." >&2
+  echo "Set them, or re-run with ALLOW_INCOMPLETE=1 to push anyway." >&2
+  [ "${ALLOW_INCOMPLETE:-}" = "1" ] || exit 1
+fi
 
 [ ${#args[@]} -gt 0 ] || { echo "Nothing to set." >&2; exit 1; }
 # Values go over stdin, not argv, so they never show up in `ps`.

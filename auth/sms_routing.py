@@ -23,7 +23,9 @@ load_dotenv()
 
 # Single-tenant fallback: when only one org uses the project's own
 # Twilio number, unmatched inbound messages belong to it.
-DEFAULT_TWILIO_NUMBER = os.getenv("TWILIO_PHONE_NUMBER", "")
+# PROJ-467: TWILIO_FROM_NUMBER is the name actually configured everywhere else;
+# TWILIO_PHONE_NUMBER is kept as a fallback for existing local .env files.
+DEFAULT_TWILIO_NUMBER = os.getenv("TWILIO_FROM_NUMBER") or os.getenv("TWILIO_PHONE_NUMBER", "")
 
 
 def init_sms_routing() -> None:
