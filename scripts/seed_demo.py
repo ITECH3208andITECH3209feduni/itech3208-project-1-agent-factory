@@ -17,6 +17,7 @@ Demo login (local demo data only, not a real account):
 
 import http.cookiejar
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -24,7 +25,8 @@ from datetime import datetime, timedelta, timezone
 
 DEMO_EMAIL = "poster.demo@example.com"
 DEMO_ORG = "Demo Dental Clinic"
-DEMO_PASSWORD = "AgentFactory-Demo-2026"
+# Public deployments set DEMO_PASSWORD so the well-known default is never live.
+DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD") or "AgentFactory-Demo-2026"
 
 BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
 

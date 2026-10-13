@@ -22,6 +22,28 @@ tunnel, and prints the public URL plus the three Twilio webhook URLs. If
 Limits: it only runs while your machine is on, and the tunnel URL changes
 each start, so re-paste the Twilio webhook URLs after a restart.
 
+## Option A2: Render (free, no card needed if you already have an account)
+
+`render.yaml` in the repo root defines the whole service. Steps:
+
+1. Push the branch you want to deploy to GitHub.
+2. Render dashboard -> **New** -> **Blueprint** -> pick this repo and branch. Render reads `render.yaml`.
+3. Fill in the secrets it asks for (they are `sync: false`, never stored in git):
+   `ANTHROPIC_API_KEY`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`,
+   the `SMTP_*` values, and **`DEMO_PASSWORD`** (pick a new one; it becomes the demo login password).
+   Set `APP_BASE_URL` to the `https://<name>.onrender.com` address Render shows after the first deploy.
+4. Open `https://<name>.onrender.com/status`. It should return 200.
+5. Sign in at `/login` with `poster.demo@example.com` and your `DEMO_PASSWORD`.
+6. Point the Twilio webhooks at `https://<name>.onrender.com/twilio/...` (see section 4 below). The URL is permanent, so you paste them once.
+
+Free-plan limits (Render's):
+- The service **sleeps after about 15 minutes idle**; the first request after that takes about a minute. Open it a few minutes before presenting.
+- There is **no persistent disk**, so data is wiped on every restart or sleep. `SEED_DEMO=true` reloads the demo account, 6 contacts, 5 reminders and analytics on each boot, so the demo is always there. Anything created live is lost on the next sleep.
+- The reminder scheduler only runs while the service is awake.
+- The 750 free instance-hours a month are shared across every service in your Render workspace, including your other project.
+
+Why `DEMO_PASSWORD` matters: a logged-in user can call `POST /delivery/send`, which sends SMS and email through our Twilio account. On a public URL, never leave the default demo password live. The start script refuses to seed unless `DEMO_PASSWORD` is set.
+
 ## Option B: Fly.io
 
 Covers PROJ-465 (hosting), PROJ-466 (Twilio webhooks), PROJ-467 (secrets) and

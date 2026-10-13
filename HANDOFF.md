@@ -70,6 +70,9 @@ The tunnel URL **changes on every start**, so re-paste the Twilio webhooks after
 ### Mac mini (always on, permanent free URL): preferred
 Full setup in **`docs/MAC_MINI.md`**: keep it awake, Docker Desktop at login, Tailscale Funnel, then `./scripts/serve_up.sh`. Paste the Twilio webhooks **once**. `launchd/com.agentfactory.serve.plist` starts it at login. The Tailscale account setup has **not** been done yet.
 
+### Render (free, no Mac mini needed)
+The Mac mini has an Activation Lock, so the plan changed. `render.yaml` + `docs/DEPLOY.md` (Option A2) deploy the whole stack to Render's free plan. Permanent URL, webhooks pasted once. It sleeps when idle and loses data on restart, so demo data is re-seeded on every boot (`SEED_DEMO=true`, needs `DEMO_PASSWORD`). Not yet deployed: needs the Render Blueprint step and secrets entered in the Render dashboard.
+
 ### Other
 `docs/DEPLOY.md` also covers Fly.io (paid, needs a card). `fly.toml` is ready if ever wanted.
 
@@ -127,7 +130,7 @@ While adding config I completed the Twilio settings in `.env`; two consent tests
 
 0. **Commit, PR and merge branch `fix-web-login`** (login fix, `tests/test_web_login.py`, updated `seed_demo.py`, this file). Without it, main's login form is broken for the demo user. Email-registered users also have no org mapping for `/orgs/me` yet.
 1. **Poster session deliverables** (section 8): not started.
-2. **Mac mini setup:** do the Tailscale step in `docs/MAC_MINI.md`.
+2. **Hosting:** deploy to Render (`docs/DEPLOY.md`, Option A2). The Mac mini is blocked by Activation Lock; `docs/MAC_MINI.md` applies only if that is cleared.
 3. **Email:** add `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL` to `.env` (a Gmail app password works). Then restart and send a test. Closes PROJ-467 and the epic.
 4. **SMS:** needs Twilio A2P registration (may cost a fee; check the number's page). Until then show SMS via the web dashboard or a recording and say so on the poster.
 5. **Resolve the Jira/code mismatches** for Dhiman's auth work and Saifur's branch (section 3).
