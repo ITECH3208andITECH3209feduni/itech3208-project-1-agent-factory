@@ -36,6 +36,8 @@ each start, so re-paste the Twilio webhook URLs after a restart.
 5. Sign in at `/login` with `poster.demo@example.com` and your `DEMO_PASSWORD`.
 6. Point the Twilio webhooks at `https://<name>.onrender.com/twilio/...` (see section 4 below). The URL is permanent, so you paste them once.
 
+Where this host sits against the client's on-premise brief: see [DATA_SOVEREIGNTY.md](DATA_SOVEREIGNTY.md). Render is a demo host; the edge deployment is the product target.
+
 Free-plan limits (Render's):
 - The service **sleeps after about 15 minutes idle**; the first request after that takes about a minute. Open it a few minutes before presenting.
 - There is **no persistent disk**, so data is wiped on every restart or sleep. `SEED_DEMO=true` reloads the demo account, 6 contacts, 5 reminders and analytics on each boot, so the demo is always there. Anything created live is lost on the next sleep.

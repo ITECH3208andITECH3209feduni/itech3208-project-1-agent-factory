@@ -177,6 +177,7 @@ Final marking: value delivered to the client, **individual understanding** (Week
 | Need | File |
 |---|---|
 | Run on laptop / Fly / Mac mini | `docs/DEPLOY.md`, `docs/MAC_MINI.md` |
+| Where data lives, what leaves it, demo vs on-premise | `docs/DATA_SOVEREIGNTY.md` |
 | Release notes | `CHANGELOG-agent-factory.md` (the root `CHANGELOG.md` is upstream NanoClaw's) |
 | Env var names | `.env.example`, `config/settings.py` (`validate_env()`) |
 | Public/private route list | `app/web_ui/main.py` (`_PUBLIC_EXACT`, `_PUBLIC_PREFIXES`) |
