@@ -119,3 +119,28 @@ def test_voice_text_drops_emoji_and_markdown():
     out = _speakable("**Hello!** 😊 We offer research 📚 and Amazon tools 🛒 ✅ — call anytime 👍🏽")
     assert out == "Hello! We offer research and Amazon tools — call anytime"
     assert _speakable("Plain sentence, no emoji.") == "Plain sentence, no emoji."
+
+
+def test_goodbye_triggers_post_call_summary(client, monkeypatch):
+    calls = []
+    monkeypatch.setattr(twilio_routes, "_summarise_call_later", lambda sid, caller: calls.append((sid, caller)))
+    r = client.post("/twilio/voice/reply", data={"SpeechResult": "okay goodbye", "CallSid": "CA77", "From": "+15551234567"})
+    assert r.status_code == 200 and "Hangup" in r.text
+    assert calls == [("CA77", "+15551234567")]
+
+
+def test_completed_voice_status_callback_triggers_post_call_summary(client, monkeypatch):
+    calls = []
+    monkeypatch.setattr(twilio_routes, "_summarise_call_later", lambda sid, caller: calls.append((sid, caller)))
+    monkeypatch.setattr(twilio_routes, "update_delivery_status", lambda **kw: True)
+    r = client.post("/twilio/status-callback", data={"CallSid": "CA78", "CallStatus": "completed", "From": "+15551234567", "To": "+18024448729"})
+    assert r.status_code == 200
+    assert calls == [("CA78", "+15551234567")]
+
+
+def test_hangup_without_goodbye_is_not_summarised_until_the_call_completes(client, monkeypatch):
+    calls = []
+    monkeypatch.setattr(twilio_routes, "_summarise_call_later", lambda sid, caller: calls.append(sid))
+    monkeypatch.setattr(twilio_routes, "update_delivery_status", lambda **kw: True)
+    client.post("/twilio/status-callback", data={"CallSid": "CA79", "CallStatus": "ringing", "From": "+15551234567"})
+    assert calls == []

@@ -528,6 +528,13 @@ body {
 }
 .badge-sms   { background: rgba(34,197,94,0.12);  color: #22c55e; }
 .badge-voice { background: rgba(59,130,246,0.12); color: #3b82f6; }
+/* Post-call tags (PROJ-477): word plus colour, never colour alone */
+.tag-sentiment-positive { background: rgba(34,197,94,0.14); color: #4ade80; }
+.tag-sentiment-neutral  { background: rgba(148,163,184,0.14); color: #94a3b8; }
+.tag-sentiment-negative { background: rgba(239,68,68,0.14); color: #f87171; }
+.tag-priority-low    { background: rgba(148,163,184,0.10); color: #94a3b8; }
+.tag-priority-normal { background: rgba(59,130,246,0.12); color: #60a5fa; }
+.tag-priority-high   { background: rgba(245,158,11,0.18); color: #fbbf24; font-weight: 700; }
 .badge-web   { background: rgba(167,139,250,0.12); color: #a78bfa; }
 .recept-row-time { font-size: 11px; color: var(--text2); }
 .recept-row-body { color: var(--text); }
