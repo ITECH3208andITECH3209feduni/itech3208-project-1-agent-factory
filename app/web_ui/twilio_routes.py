@@ -102,6 +102,21 @@ def _strip_markdown(text: str) -> str:
     return text.strip()
 
 
+# Pictographs, dingbats, arrows, flags and the joiners that glue emoji together.
+# Polly reads these aloud by name ("smiling face with smiling eyes"), so voice
+# replies drop them. SMS keeps them.
+_EMOJI_RE = re.compile(
+    "[\U0001F000-\U0001FAFF\U00002190-\U000021FF\U00002300-\U000023FF"
+    "\U00002600-\U000027BF\U00002B00-\U00002BFF\U0000FE0F\U0000200D\U000020E3]"
+)
+
+
+def _speakable(text: str) -> str:
+    """Plain text for text-to-speech: no Markdown, no emoji."""
+    text = _EMOJI_RE.sub("", _strip_markdown(text))
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
+
+
 # ── SMS ────────────────────────────────────────────────────────
 
 @router.post("/twilio/sms")
@@ -241,7 +256,7 @@ async def voice_reply(
         query, session_id=CallSid,
         contact_channel="voice", contact_address=From,
     )
-    reply = _strip_markdown(result["answer"])
+    reply = _speakable(result["answer"])
 
     log_activity(
         channel="voice",

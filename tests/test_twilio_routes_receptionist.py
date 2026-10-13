@@ -110,3 +110,12 @@ def test_sms_stop_keyword_never_reaches_receptionist(client, monkeypatch):
     r = client.post("/twilio/sms", data={"Body": "STOP", "From": "+15551234567", "To": "+18024448729"})
     assert calls == []
     assert "unsubscribed" in r.text
+
+
+def test_voice_text_drops_emoji_and_markdown():
+    """Polly reads emoji aloud by name, so voice replies must not contain them."""
+    from app.web_ui.twilio_routes import _speakable
+
+    out = _speakable("**Hello!** 😊 We offer research 📚 and Amazon tools 🛒 ✅ — call anytime 👍🏽")
+    assert out == "Hello! We offer research and Amazon tools — call anytime"
+    assert _speakable("Plain sentence, no emoji.") == "Plain sentence, no emoji."
