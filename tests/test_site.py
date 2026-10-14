@@ -93,3 +93,44 @@ def test_fastapi_serves_showcase_and_subpages(client):
         resp = client.get(f"/site/{page}")
         assert resp.status_code == 200
         assert "Agent Factory" in resp.text
+
+
+def test_showcase_assets_and_links_resolve(client):
+    """The page uses relative links; they must resolve under /site/ when served from /showcase."""
+    html = client.get("/showcase").text
+    assert '<base href="/site/">' in html
+    assert client.get("/site/css/site.css").status_code == 200
+    assert client.get("/site/js/site.js").status_code == 200
+    assert client.get("/site/features.html").status_code == 200
+    assert client.get("/site/../app/web_ui/main.py").status_code == 404
+
+
+def test_app_shell_main_sits_inside_layout():
+    """A stray </div> once closed .layout before <main>, so every tab rendered with zero height."""
+    from html.parser import HTMLParser
+    from pathlib import Path
+
+    class Shell(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.stack, self.main_parent, self.unbalanced = [], None, False
+
+        def handle_starttag(self, tag, attrs):
+            if tag not in ("div", "main", "aside"):
+                return
+            cls = dict(attrs).get("class", "")
+            if tag == "main":
+                self.main_parent = self.stack[-1] if self.stack else None
+            self.stack.append(cls)
+
+        def handle_endtag(self, tag):
+            if tag in ("div", "main", "aside"):
+                if not self.stack:
+                    self.unbalanced = True
+                else:
+                    self.stack.pop()
+
+    p = Shell()
+    p.feed((Path(__file__).resolve().parent.parent / "static" / "index.html").read_text(encoding="utf-8"))
+    assert not p.unbalanced and not p.stack
+    assert p.main_parent == "layout"

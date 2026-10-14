@@ -988,6 +988,8 @@ async function loadReceptActivity() {
       <div class="recept-row">
         <div class="recept-row-header">
           <span class="recept-row-badge badge-${(i.channel||"web").toLowerCase()}">${i.channel || "web"}</span>
+          ${i.call_summary ? `<span class="recept-row-badge tag-sentiment-${escapeHtml(i.sentiment || "neutral")}">${escapeHtml(i.sentiment || "neutral")}</span>
+          <span class="recept-row-badge tag-priority-${escapeHtml(i.priority || "normal")}">${i.priority === "high" ? "⚠ " : ""}${escapeHtml(i.priority || "normal")} priority</span>` : ""}
           <span class="recept-row-time">${i.time || ""}</span>
         </div>
         <div class="recept-row-body">${escapeHtml(i.summary || i.message || "")}</div>

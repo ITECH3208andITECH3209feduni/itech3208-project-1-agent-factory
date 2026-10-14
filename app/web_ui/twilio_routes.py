@@ -21,6 +21,7 @@ import logging
 import os
 import re
 import sys
+import threading
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -30,6 +31,7 @@ from fastapi.responses import Response
 from twilio.twiml.messaging_response import MessagingResponse
 from twilio.twiml.voice_response import Gather, VoiceResponse
 
+from agent.call_summary import finalize_call
 from agent.receptionist import Receptionist
 from app.web_ui.activity_db import log_activity, log_delivery_event, update_delivery_status
 from app.web_ui.dashboard_routes import log_escalation
@@ -50,6 +52,22 @@ POLLY_LANG = "en-AU"
 GOODBYE_WORDS = {"goodbye", "bye", "hang up", "end call", "that's all", "no thanks"}
 
 log = logging.getLogger("agent_factory.twilio")
+
+
+def _summarise_call_later(call_sid: str, caller: str) -> None:
+    """Tag a finished call with a summary, sentiment and priority (PROJ-477).
+    Runs in a thread so the Claude call never delays the TwiML reply Twilio is
+    waiting on; any failure is logged and never reaches the caller."""
+    if not call_sid:
+        return
+
+    def _run() -> None:
+        try:
+            finalize_call(call_sid, caller, _receptionist.memory)
+        except Exception:  # noqa: BLE001
+            log.exception("post-call summary failed for %s", call_sid)
+
+    threading.Thread(target=_run, daemon=True).start()
 
 FORBIDDEN = Response(content="Forbidden", status_code=403)
 
@@ -100,6 +118,21 @@ def _strip_markdown(text: str) -> str:
     text = re.sub(r"^[-*•]\s+", "", text, flags=re.MULTILINE)  # bullets
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+# Pictographs, dingbats, arrows, flags and the joiners that glue emoji together.
+# Polly reads these aloud by name ("smiling face with smiling eyes"), so voice
+# replies drop them. SMS keeps them.
+_EMOJI_RE = re.compile(
+    "[\U0001F000-\U0001FAFF\U00002190-\U000021FF\U00002300-\U000023FF"
+    "\U00002600-\U000027BF\U00002B00-\U00002BFF\U0000FE0F\U0000200D\U000020E3]"
+)
+
+
+def _speakable(text: str) -> str:
+    """Plain text for text-to-speech: no Markdown, no emoji."""
+    text = _EMOJI_RE.sub("", _strip_markdown(text))
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
 
 
 # ── SMS ────────────────────────────────────────────────────────
@@ -217,6 +250,7 @@ async def voice_reply(
             language=POLLY_LANG,
         )
         resp.hangup()
+        _summarise_call_later(CallSid, From)
         return Response(content=str(resp), media_type="application/xml")
 
     # Empty transcript fallback
@@ -241,7 +275,7 @@ async def voice_reply(
         query, session_id=CallSid,
         contact_channel="voice", contact_address=From,
     )
-    reply = _strip_markdown(result["answer"])
+    reply = _speakable(result["answer"])
 
     log_activity(
         channel="voice",
@@ -366,6 +400,11 @@ async def twilio_status_callback(
             intent="delivery_failure",
             summary=f"Delivery failed for {msg_id}: {ErrorMessage or ErrorCode or status}",
         )
+
+    # A completed inbound call that never said goodbye (caller just hung up)
+    # still gets its post-call summary (PROJ-477).
+    if channel == "voice" and status.lower() == "completed":
+        _summarise_call_later(CallSid or msg_id, From or To)
 
     return Response(content="<Response/>", media_type="application/xml")
 

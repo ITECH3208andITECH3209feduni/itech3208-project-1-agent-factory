@@ -1,0 +1,61 @@
+# Render Blueprint: one Docker web service running the web app, reminder
+# scheduler and web bridge together (deploy/start.sh). Free plan.
+#
+# Free-plan limits (Render's, not ours):
+#   * sleeps after ~15 min without traffic; the first request wakes it (~1 min)
+#   * no persistent disk, so SQLite data is wiped on every restart/sleep.
+#     SEED_DEMO=true reloads the demo account and sample data on each boot.
+#   * the scheduler only runs while the service is awake
+# Secrets are marked sync: false: Render asks for them in the dashboard and
+# they never enter git.
+services:
+  - type: web
+    name: agent-factory
+    runtime: docker
+    plan: free
+    dockerfilePath: ./app/web_ui/Dockerfile
+    dockerContext: .
+    dockerCommand: sh deploy/start.sh   # web + scheduler + bridge, not the image default
+    healthCheckPath: /status
+    autoDeploy: false
+    envVars:
+      - key: TWILIO_VALIDATE_SIGNATURE
+        value: "true"
+      - key: AUTH_DB_PATH
+        value: /data/auth_users.db
+      - key: AUTH_DB
+        value: /data/auth.db
+      - key: MEMORY_DB
+        value: /data/memory.db
+      - key: REMINDERS_DB
+        value: /data/reminders.db
+      - key: KB_DB
+        value: /data/kb.db
+      - key: CRM_STORE_DIR
+        value: /data/store
+      - key: APP_BASE_URL
+        sync: false   # your https://<name>.onrender.com URL
+      - key: SEED_DEMO
+        value: "true"
+      - key: DEMO_PASSWORD
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM_NUMBER
+        sync: false
+      - key: AUTH_SECRET_KEY
+        generateValue: true
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USERNAME
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM_EMAIL
+        sync: false

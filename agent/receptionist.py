@@ -20,6 +20,7 @@
 
 import json
 import re
+import time
 from datetime import datetime
 
 import anthropic
@@ -64,10 +65,21 @@ _APPOINTMENT_KEYWORDS = {
 }
 
 
+# PROJ-478: a half-finished booking survives side questions (parking, pricing,
+# what to bring) for this long. In process memory, so it resets on a restart,
+# which is fine for a conversation that lasts minutes.
+_PENDING_BOOKING_TTL = 30 * 60
+_CANCEL_BOOKING_PHRASES = (
+    "never mind", "nevermind", "forget it", "forget the booking", "cancel the booking",
+    "don't book", "do not book", "no booking", "stop booking",
+)
+
+
 class Receptionist:
     def __init__(self):
         self.client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         self.memory = SessionMemory()
+        self._pending_bookings: dict[str, dict] = {}
 
     # ── Main entry point ─────────────────────────────────────────
     def handle(
@@ -87,14 +99,33 @@ class Receptionist:
         if not message:
             return {"answer": "Sorry, I didn't catch that — could you say that again?", "intent": "general"}
 
+        pending = self._get_pending(session_id)
+
+        # 0. Walking away from a half-finished booking (PROJ-478)
+        if pending and self._cancels_booking(message):
+            self._pending_bookings.pop(self._pending_key(session_id), None)
+            answer = "No problem, I've dropped that booking. Is there anything else I can help with?"
+            self.memory.save_context(message, "receptionist_general", answer, session_id=session_id)
+            return {"answer": answer, "intent": "general"}
+
         # 1. FAQ lookup first (PROJ-214: KB before skill routing)
-        faq_hit = find_answer(message)
+        # With a booking open, "let me talk to a person" hands off straight
+        # away instead of getting the FAQ blurb about how to ask for one.
+        faq_hit = None if (pending and self._wants_human(message)) else find_answer(message)
         if faq_hit:
-            self.memory.save_context(message, "receptionist_faq", faq_hit["answer"], session_id=session_id)
-            return {"answer": faq_hit["answer"], "intent": "faq", "faq_score": faq_hit["score"]}
+            answer = faq_hit["answer"]
+            result = {"intent": "faq", "faq_score": faq_hit["score"]}
+            if pending:
+                # PROJ-478: answer the question, then steer back to the booking
+                answer += f"\n\nWhenever you're ready, we can finish your booking. {pending['ask']}"
+                result["booking_pending"] = True
+            self.memory.save_context(message, "receptionist_faq", answer, session_id=session_id)
+            result["answer"] = answer
+            return result
 
         # 2. Escalation
         if self._wants_human(message):
+            self._pending_bookings.pop(self._pending_key(session_id), None)
             answer = (
                 "I've flagged this conversation for our team — someone will "
                 "follow up with you shortly. Is there anything else I can help "
@@ -104,15 +135,44 @@ class Receptionist:
             self.memory.save_context(message, "receptionist_escalate", answer, session_id=session_id)
             return {"answer": answer, "intent": "escalate"}
 
-        # 3. Appointment booking
-        if self._wants_appointment(message):
-            result = self._handle_appointment(message, session_id, contact_channel, contact_address)
+        # 3. Appointment booking. With a booking in progress, any other reply
+        # is the next piece of it ("Friday at 10 for a check-up"), so earlier
+        # booking messages are combined with this one (PROJ-478).
+        if pending or self._wants_appointment(message):
+            combined = " ".join(pending["messages"] + [message]) if pending else message
+            result = self._handle_appointment(combined, session_id, contact_channel, contact_address)
+            if result.get("needs_info"):
+                self._pending_bookings[self._pending_key(session_id)] = {
+                    "messages": (pending["messages"] if pending else []) + [message],
+                    "ask": result["answer"],
+                    "ts": time.time(),
+                }
+            else:
+                self._pending_bookings.pop(self._pending_key(session_id), None)
             return result
 
         # 4. General conversation fallback
         answer = self._general_reply(message, session_id)
         self.memory.save_context(message, "receptionist_general", answer, session_id=session_id)
         return {"answer": answer, "intent": "general"}
+
+    # ── Booking in progress (PROJ-478) ───────────────────────────
+    @staticmethod
+    def _pending_key(session_id: str | None) -> str:
+        return session_id or "_default"
+
+    def _get_pending(self, session_id: str | None) -> dict | None:
+        key = self._pending_key(session_id)
+        pending = self._pending_bookings.get(key)
+        if pending and time.time() - pending["ts"] > _PENDING_BOOKING_TTL:
+            del self._pending_bookings[key]
+            return None
+        return pending
+
+    @staticmethod
+    def _cancels_booking(message: str) -> bool:
+        m = message.lower()
+        return any(p in m for p in _CANCEL_BOOKING_PHRASES)
 
     # ── Intent keyword pre-checks ────────────────────────────────
     def _wants_human(self, message: str) -> bool:
@@ -160,7 +220,7 @@ class Receptionist:
         if extracted.get("clarify"):
             answer = extracted["clarify"]
             self.memory.save_context(message, "receptionist_appointment", answer, session_id=session_id)
-            return {"answer": answer, "intent": "appointment", "booked": False}
+            return {"answer": answer, "intent": "appointment", "booked": False, "needs_info": True}
 
         result = book_appointment(
             summary=extracted["summary"],

@@ -40,6 +40,14 @@ class Credentials(BaseModel):
     password: str
 
 
+class LoginBody(BaseModel):
+    """Sign in with a username (original accounts) or an email (accounts made
+    through organisation registration, which is what the web form posts)."""
+    username: str | None = None
+    email: str | None = None
+    password: str
+
+
 class AuthResponse(BaseModel):
     username: str
 
@@ -82,14 +90,28 @@ async def register(body: Credentials, response: Response):
 
 
 @router.post("/login", response_model=AuthResponse)
-async def login(body: Credentials, response: Response):
+async def login(body: LoginBody, response: Response):
     """Verify credentials and set the session cookie."""
-    try:
-        verify_login(body.username, body.password)
-    except AuthError as exc:
-        raise HTTPException(status_code=401, detail=str(exc))
+    identifier = (body.email or body.username or "").strip()
+    if not identifier:
+        raise HTTPException(status_code=422, detail="Enter your email and password.")
 
-    username = body.username.strip()
+    if "@" in identifier:
+        # Organisation owners live in auth/db's users table (POST /orgs/register).
+        from auth.db import get_user_by_email
+        from auth.security import verify_password
+
+        row = get_user_by_email(identifier.lower())
+        if row is None or not verify_password(body.password, row["password_hash"]):
+            raise HTTPException(status_code=401, detail="Invalid email or password.")
+        username = identifier.lower()
+    else:
+        try:
+            verify_login(identifier, body.password)
+        except AuthError as exc:
+            raise HTTPException(status_code=401, detail=str(exc))
+        username = identifier
+
     _set_session_cookie(response, username)
     return AuthResponse(username=username)
 
