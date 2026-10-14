@@ -47,6 +47,7 @@ from __future__ import annotations
 import csv
 import io
 import logging
+import re
 from datetime import datetime, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -541,6 +542,24 @@ EXPORT_COLUMNS = ("id", "contact_name", "contact_phone", "message", "status",
                    "created_at", "updated_at")
 
 
+_FORMULA_START = ("=", "+", "-", "@", "\t", "\r")
+_PHONE_LIKE = re.compile(r"\+?[\d\s().-]+")
+
+
+def csv_safe(value: Any) -> str:
+    """Make a cell safe to open in a spreadsheet (PROJ-492).
+
+    Excel and Sheets run a cell that starts with = + - or @ as a formula, so a
+    reminder message like =HYPERLINK(...) in an export could execute when
+    someone opens it. Prefix such text with an apostrophe. Phone numbers also
+    start with + and must stay intact, so a plain phone-shaped value is left alone.
+    """
+    text = "" if value is None else str(value)
+    if text.startswith(_FORMULA_START) and not _PHONE_LIKE.fullmatch(text):
+        return "'" + text
+    return text
+
+
 def history_csv(org_id: int = DEFAULT_ORG_ID) -> str:
     """Every reminder something has happened to (sent, blocked, or failed), as
     CSV — newest update first. Mirrors recent_history's status filter but with
@@ -557,14 +576,14 @@ def history_csv(org_id: int = DEFAULT_ORG_ID) -> str:
         contact = contacts.get_contact(r["contact_id"], org_id=org_id) if r.get("contact_id") else None
         writer.writerow({
             "id": r.get("id"),
-            "contact_name": (contact or {}).get("name") or "",
-            "contact_phone": (contact or {}).get("phone_number") or "",
-            "message": r.get("message", ""),
+            "contact_name": csv_safe((contact or {}).get("name")),
+            "contact_phone": csv_safe((contact or {}).get("phone_number")),
+            "message": csv_safe(r.get("message", "")),
             "status": r.get("status", ""),
             "send_at": r.get("send_at", ""),
             "sent_at": r.get("sent_at") or "",
-            "blocked_reason": r.get("blocked_reason", ""),
-            "failed_reason": r.get("failed_reason", ""),
+            "blocked_reason": csv_safe(r.get("blocked_reason", "")),
+            "failed_reason": csv_safe(r.get("failed_reason", "")),
             "created_at": r.get("created_at", ""),
             "updated_at": r.get("updated_at", ""),
         })

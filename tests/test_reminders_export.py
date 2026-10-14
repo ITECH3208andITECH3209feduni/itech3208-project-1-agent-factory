@@ -71,3 +71,32 @@ def test_export_csv_empty_history_still_returns_header(client):
         "send_at", "sent_at", "blocked_reason", "failed_reason",
         "created_at", "updated_at",
     ])]
+
+
+def test_csv_safe_neutralises_spreadsheet_formulas_but_keeps_phone_numbers():
+    from app.web.reminders import csv_safe
+
+    for evil in ("=HYPERLINK(\"http://x\")", "+cmd|' /C calc'!A0", "-2+3", "@SUM(A1)", "\t=1+1"):
+        assert csv_safe(evil).startswith("'"), evil
+    assert csv_safe("+61400009099") == "+61400009099"
+    assert csv_safe("+1 (555) 555-0101") == "+1 (555) 555-0101"
+    assert csv_safe("Hello there") == "Hello there"
+    assert csv_safe(None) == "" and csv_safe(42) == "42"
+
+
+def test_export_csv_escapes_formula_text_in_messages_and_names(client):
+    from app.web import reminders
+    from app.web.store import DEFAULT_ORG_ID
+    from auth import tenancy
+
+    contact_id = tenancy.create_contact(DEFAULT_ORG_ID, "+61400009098", "=cmd()", consent_state="opted_in", preferred_channel="sms")
+    reminders.reminders_table().insert({
+        "contact_id": contact_id, "message": "=HYPERLINK(\"http://evil\",\"click\")",
+        "send_at": "2020-01-01T09:00:00", "sent_at": "2020-01-01T09:00:05",
+        "status": "sent", "created_at": "2020-01-01T08:00:00", "updated_at": "2020-01-01T09:00:05",
+    }, org_id=DEFAULT_ORG_ID)
+
+    row = list(csv.DictReader(io.StringIO(client.get("/api/reminders/export.csv").text)))[0]
+    assert row["message"].startswith("'=")
+    assert row["contact_name"] == "'=cmd()"
+    assert row["contact_phone"] == "+61400009098"
