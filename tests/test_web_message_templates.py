@@ -19,13 +19,21 @@ class _FakeChannel:
 
 
 @pytest.fixture
-def web(tmp_path):
+def web(tmp_path, monkeypatch):
+    import agent.auth as session_auth
     from app.web import store
     from auth import db as auth_db, tenancy
 
-    auth_db.DB_PATH = str(tmp_path / "auth_users.db")
+    monkeypatch.setattr(auth_db, "DB_PATH", str(tmp_path / "auth_users.db"))
+    monkeypatch.setattr(session_auth, "AUTH_DB", str(tmp_path / "session_auth.db"))
+
     auth_db.init_db()
     tenancy.init_tenancy()
+    org_id = tenancy.create_org("Template Test Org")
+
+    session_auth.register_user("templateowner", "password123")
+    session_auth.set_user_org_id("templateowner", org_id)
+
     names = ("reminders", "consent_events", "message_templates")
     for name in names:
         store.set_table(name, store.JsonTable(tmp_path / f"{name}.json", name))
@@ -37,10 +45,14 @@ def web(tmp_path):
 @pytest.fixture
 def client(web):
     from fastapi.testclient import TestClient
-
+    from agent.auth import create_session_token
     from app.web.main import app
 
-    return TestClient(app)
+    test_client = TestClient(app)
+    test_client.cookies.set(
+        "af_session", create_session_token("templateowner")
+    )
+    return test_client
 
 
 def _contact(name="Jane Citizen"):
@@ -146,3 +158,120 @@ def test_bridge_personalises_message_when_sending(web):
     assert sms.sent == [("+15551234567", "Hi Sam, see you at 2pm.")]
     # The stored text keeps its placeholders, so a series re-renders each time.
     assert reminders.get_reminder(r["id"])["message"] == t["body"]
+
+def test_template_crud_fields_and_organisation_isolation(client, web):
+    from fastapi.testclient import TestClient
+
+    import agent.auth as session_auth
+    from app.web.main import app
+    from auth import tenancy
+
+    # Organisation 1 creates a template with the new fields.
+    created = client.post(
+        "/api/templates",
+        json={
+            "name": "Annual reminder",
+            "body": "Hi {name}",
+            "channel": "email",
+            "subject": "Your annual reminder",
+        },
+    )
+    assert created.status_code == 201, created.text
+    template = created.json()
+    template_id = template["id"]
+    assert template["channel"] == "email"
+    assert template["subject"] == "Your annual reminder"
+
+    # Create a second, independent organisation and session user.
+    second_org_id = tenancy.create_org("Another Template Org")
+    session_auth.register_user("otherowner", "password123")
+    session_auth.set_user_org_id("otherowner", second_org_id)
+
+    other = TestClient(app)
+    other.cookies.set(
+        "af_session", session_auth.create_session_token("otherowner")
+    )
+
+    # The second organisation cannot see or modify the first template.
+    assert other.get("/api/templates").json()["count"] == 0
+    assert other.get(f"/api/templates/{template_id}").status_code == 404
+    assert other.patch(
+        f"/api/templates/{template_id}",
+        json={"subject": "Stolen update"},
+    ).status_code == 404
+    assert other.delete(f"/api/templates/{template_id}").status_code == 404
+
+    # It can create a template with the same name in its own organisation.
+    second = other.post(
+        "/api/templates",
+        json={
+            "name": "Annual reminder",
+            "body": "Hello {first_name}",
+            "channel": "sms",
+            "subject": "",
+        },
+    )
+    assert second.status_code == 201, second.text
+    assert second.json()["org_id"] == second_org_id
+
+    # The original organisation can update its own template.
+    updated = client.patch(
+        f"/api/templates/{template_id}",
+        json={"channel": "voice", "subject": "Updated subject"},
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["channel"] == "voice"
+    assert updated.json()["subject"] == "Updated subject"
+
+    # Invalid channels and misspelled placeholders are rejected.
+    invalid_channel = client.post(
+        "/api/templates",
+        json={
+            "name": "Bad channel",
+            "body": "Hi {name}",
+            "channel": "fax",
+        },
+    )
+    assert invalid_channel.status_code == 422
+
+    invalid_field = client.post(
+        "/api/templates",
+        json={
+            "name": "Bad field",
+            "body": "Hi {frist_name}",
+        },
+    )
+    assert invalid_field.status_code == 422
+
+    # Cross-organisation attempts did not change the original template.
+    unchanged = client.get(f"/api/templates/{template_id}").json()
+    assert unchanged["subject"] == "Updated subject"
+    assert unchanged["channel"] == "voice"
+
+def test_template_crud_is_available_under_crm_mount(web):
+    from fastapi.testclient import TestClient
+
+    from agent.auth import create_session_token
+    from app.web_ui.main import app
+
+    mounted_client = TestClient(app)
+    mounted_client.cookies.set(
+        "af_session", create_session_token("templateowner")
+    )
+
+    created = mounted_client.post(
+        "/crm/api/templates",
+        json={
+            "name": "Mounted API template",
+            "body": "Hi {first_name}",
+            "channel": "sms",
+            "subject": "Appointment reminder",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["channel"] == "sms"
+    assert created.json()["subject"] == "Appointment reminder"
+
+    listing = mounted_client.get("/crm/api/templates")
+    assert listing.status_code == 200, listing.text
+    assert listing.json()["count"] == 1

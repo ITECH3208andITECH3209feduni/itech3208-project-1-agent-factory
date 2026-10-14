@@ -33,6 +33,8 @@ from app.web.store import DEFAULT_ORG_ID, table
 
 NAME_MAX = 80
 BODY_MAX = 1600     # same budget as a reminder message
+SUBJECT_MAX = 200
+VALID_CHANNELS = {"sms", "email", "voice"}
 
 # name -> (description shown in the UI, fallback when the value is missing)
 MERGE_FIELDS: dict[str, tuple[str, str]] = {
@@ -157,7 +159,22 @@ def validate(payload: dict[str, Any], *, creating: bool, current_id: int | None 
         else:
             clean["body"] = body
 
-    unexpected = set(payload) - {"name", "body"}
+    if creating or "channel" in payload:
+        channel = str(payload.get("channel") or ("sms" if creating else "")).strip().lower()
+        if channel not in VALID_CHANNELS:
+            errors["channel"] = f"Choose one of: {', '.join(sorted(VALID_CHANNELS))}."
+        else:
+            clean["channel"] = channel
+
+    if creating or "subject" in payload:
+        default_subject = "Reminder" if creating else ""
+        subject = str(payload.get("subject") or default_subject).strip()
+        if len(subject) > SUBJECT_MAX:
+            errors["subject"] = f"Keep the subject under {SUBJECT_MAX} characters."
+        else:
+            clean["subject"] = subject
+
+    unexpected = set(payload) - {"name", "body", "channel", "subject"}
     if unexpected:
         errors["_"] = f"Unexpected field(s): {', '.join(sorted(unexpected))}."
 
