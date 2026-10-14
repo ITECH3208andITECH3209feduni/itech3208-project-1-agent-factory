@@ -1,6 +1,6 @@
-# app/web_ui/main.py
-# ──────────────────────────────────────────────────────────────
-# FastAPI application entry point — Agent Factory Web UI
+﻿# app/web_ui/main.py
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# FastAPI application entry point â€” Agent Factory Web UI
 # PROJ-139 (Dilraj Singh)
 #
 # Usage:
@@ -11,14 +11,14 @@
 #
 # Merge note: this file reconciles two independently-built versions
 # of the web app. origin/main's /integrity (routes.py, backed by the
-# real skills/academic_integrity.py — Claude classification + real
+# real skills/academic_integrity.py â€” Claude classification + real
 # DuckDuckGo plagiarism search) supersedes the heuristic /integrity
 # route this branch built in app/web_ui/integrity_routes.py before
-# that real implementation was discovered during this merge — that
+# that real implementation was discovered during this merge â€” that
 # router is intentionally NOT included below to avoid two handlers
 # racing for the same path. See tests/qa/PROJ-369-qa-pass.md / the
 # PROJ-364 Jira comment for the full story.
-# ──────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 import os
 import sys
@@ -44,10 +44,10 @@ from app.web_ui.delivery_routes import router as delivery_router
 from app.web_ui.analytics_routes import router as analytics_router
 from app.web_ui.settings_routes import router as settings_router
 
-# ── App setup ──────────────────────────────────────────────────
+# â”€â”€ App setup â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 app = FastAPI(
     title="Agent Factory",
-    description="24/7 Research AI — Literature & Amazon Product Search",
+    description="24/7 Research AI â€” Literature & Amazon Product Search",
     version="2.0.0",
 )
 
@@ -62,7 +62,7 @@ if os.path.isdir(_SITE_DIR):
 
 # Create the org/user tenancy tables if they don't exist yet (PROJ-405).
 # auth/db.py's users table (PROJ-406's org registration writes to it)
-# is a separate SQLite file from Sprint 3's own auth — the two auth
+# is a separate SQLite file from Sprint 3's own auth â€” the two auth
 # systems aren't unified yet, see auth/org_routes.py's header comment.
 from auth.db import init_db
 from auth.tenancy import init_tenancy
@@ -83,9 +83,11 @@ init_send_log()
 
 # Include API routes
 from auth.org_routes import router as org_router
+from auth.api_keys import router as api_keys_router
 
 app.include_router(auth_router)          # /auth/register, /auth/login, /auth/logout, /auth/me
-app.include_router(org_router)           # /orgs — PROJ-406 organisation registration
+app.include_router(org_router)
+app.include_router(api_keys_router)           # /orgs â€” PROJ-406 organisation registration
 app.include_router(router)               # /query, /literature, /amazon, /integrity, /seller, /export, /history, /status
 app.include_router(receptionist_router)  # /receptionist (POST)
 app.include_router(calendar_router)      # /calendar/ics
@@ -97,12 +99,12 @@ app.include_router(analytics_router)     # /analytics/summary, /analytics/trends
 app.include_router(settings_router)      # /api/user/settings (PROJ-444)
 
 # Contacts CRM, Dashboard, Notification Preferences (PROJ-394, 399,
-# 400 — Prabhjot Singh) — mounted, not merged into this app's own
+# 400 â€” Prabhjot Singh) â€” mounted, not merged into this app's own
 # routing. It's a genuinely separate FastAPI app (app/web/main.py)
 # with its own /query, /dashboard, /contacts, /reminders, /api/* and
 # its own JSON-file persistence (app/web/store.py). That store.py is
 # explicit that it's a placeholder for exactly the account/contact
-# system PROJ-392/405/406 would bring — those are merged now (see
+# system PROJ-392/405/406 would bring â€” those are merged now (see
 # agent/reminders/ and auth/tenancy.py) but wiring this app onto them
 # is real integration work (unifying three independently-designed
 # contact/reminder data models), not a merge-conflict decision.
@@ -115,7 +117,7 @@ from app.web.main import app as crm_app
 app.mount("/crm", crm_app)
 
 
-# ── Default-deny login check ───────────────────────────────────
+# â”€â”€ Default-deny login check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Everything needs a session cookie except this explicit public list. The
 # /crm mount, /delivery/send, /activity and friends previously answered
 # anonymous requests, so a public URL exposed contacts and could send SMS.
@@ -131,12 +133,22 @@ _PUBLIC_PREFIXES = (
     "/twilio/",   # Twilio webhooks verify their own X-Twilio-Signature
 )
 
-
 @app.middleware("http")
 async def require_login(request: Request, call_next):
     path = request.url.path
     if request.method == "OPTIONS" or path in _PUBLIC_EXACT or path.startswith(_PUBLIC_PREFIXES):
         return await call_next(request)
+
+    if path == "/crm" or path.startswith("/crm/"):
+        from auth.rbac import get_current_identity
+        try:
+            get_current_identity(request)
+        except HTTPException as exc:
+            if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+                return RedirectResponse("/login", status_code=303)
+            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+        return await call_next(request)
+
     from app.web_ui.auth_routes import get_current_username
     try:
         get_current_username(request)
@@ -144,10 +156,10 @@ async def require_login(request: Request, call_next):
         if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
             return RedirectResponse("/login", status_code=303)
         return JSONResponse({"detail": "Not logged in"}, status_code=401)
+
     return await call_next(request)
 
-
-# ── Root — serve the chat UI ───────────────────────────────────
+# â”€â”€ Root â€” serve the chat UI â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 @app.get("/", include_in_schema=False)
 async def serve_index():
     """Serve the main chat interface."""
@@ -157,7 +169,7 @@ async def serve_index():
     return {"message": "Agent Factory API is running. Static files not found."}
 
 
-# ── /literature — serve the dedicated literature search page ────
+# â”€â”€ /literature â€” serve the dedicated literature search page â”€â”€â”€â”€
 @app.get("/forgot-password", include_in_schema=False)
 async def serve_forgot():
     return FileResponse(os.path.join(_STATIC_DIR, "forgot-password.html"))
@@ -185,7 +197,7 @@ async def serve_literature():
     return {"message": "literature.html not found."}
 
 
-# ── /showcase & /site — serve the information website (PROJ-403) ───
+# â”€â”€ /showcase & /site â€” serve the information website (PROJ-403) â”€â”€â”€
 @app.get("/showcase", include_in_schema=False)
 @app.get("/site", include_in_schema=False)
 async def serve_showcase():
@@ -218,7 +230,7 @@ async def serve_site_page(page_name: str):
 
 
 
-# ── Dev server ─────────────────────────────────────────────────
+# â”€â”€ Dev server â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000, reload=False)

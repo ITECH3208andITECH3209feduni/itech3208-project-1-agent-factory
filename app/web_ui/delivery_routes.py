@@ -1,11 +1,11 @@
-# app/web_ui/delivery_routes.py
-# ──────────────────────────────────────────────────────────────
+﻿# app/web_ui/delivery_routes.py
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Delivery Status & History, Twilio callback and Email Bounce API
 # PROJ-397 (Epic: Delivery Status & History)
 # PROJ-432 (Twilio status callback webhook)
 # PROJ-433 (Email bounce / failure handling)
 # PROJ-434 (Delivery history view per reminder)
-# ──────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 import os
 import sys
@@ -15,8 +15,10 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+
+from auth.rbac import require_admin
 
 from app.web_ui.activity_db import (
     add_email_suppression,
@@ -34,7 +36,7 @@ from app.web_ui.activity_db import (
 router = APIRouter(prefix="/delivery", tags=["Delivery Status & History"])
 
 
-# ── Pydantic Request / Response Models ─────────────────────────
+# â”€â”€ Pydantic Request / Response Models â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class SendReminderRequest(BaseModel):
     recipient: str = Field(..., description="Phone number or email address")
@@ -54,7 +56,7 @@ class EmailBounceWebhookPayload(BaseModel):
     timestamp: Optional[str] = None
 
 
-# ── PROJ-434: Delivery History Endpoints ───────────────────────
+# â”€â”€ PROJ-434: Delivery History Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @router.get("/history")
 async def list_delivery_history(
@@ -87,7 +89,7 @@ async def get_delivery_record(delivery_id: str):
 
 
 @router.post("/retry/{delivery_id}")
-async def retry_delivery(delivery_id: str):
+async def retry_delivery(delivery_id: str, identity: dict = Depends(require_admin)):
     """
     Retry a failed or bounced delivery message.
     Increments retry count and sets status back to queued (PROJ-434).
@@ -113,7 +115,7 @@ async def retry_delivery(delivery_id: str):
 
 
 @router.post("/send")
-async def send_reminder(payload: SendReminderRequest):
+async def send_reminder(payload: SendReminderRequest, identity: dict = Depends(require_admin)):
     """
     Trigger or schedule an outbound reminder delivery across SMS, Email, or Voice.
     Validates suppressions for email, logs delivery record, and returns tracking message_id.
@@ -150,7 +152,7 @@ async def send_reminder(payload: SendReminderRequest):
     return {"status": "sent", "message_id": msg_id, "record": record}
 
 
-# ── PROJ-433: Email Bounce & Failure Handling ──────────────────
+# â”€â”€ PROJ-433: Email Bounce & Failure Handling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 @router.post("/email/bounce")
 @router.post("/email/status")
@@ -240,13 +242,13 @@ async def handle_email_bounce(request: Request):
 
 
 @router.get("/email/suppressions")
-async def list_suppressions():
+async def list_suppressions(identity: dict = Depends(require_admin)):
     """List all suppressed email addresses (PROJ-433)."""
     return {"suppressions": get_email_suppressions()}
 
 
 @router.delete("/email/suppressions/{email}")
-async def remove_suppression(email: str):
+async def remove_suppression(email: str, identity: dict = Depends(require_admin)):
     """Remove an email address from suppression list (PROJ-433)."""
     from app.web_ui.activity_db import _get_db
     db = _get_db()
