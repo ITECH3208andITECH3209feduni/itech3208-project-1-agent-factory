@@ -98,7 +98,18 @@ async def websocket_dashboard_endpoint(websocket: WebSocket):
     """
     Real-time WebSocket connection for operator dashboard.
     Streams stats updates, new activity events, and delivery status transitions (PROJ-469).
+
+    The login middleware only covers plain HTTP requests, not WebSockets, and these
+    events carry caller numbers, summaries and delivery recipients, so the session
+    cookie is checked here before the connection is accepted.
     """
+    from agent.auth import verify_session_token
+    from app.web_ui.auth_routes import COOKIE_NAME
+
+    token = websocket.cookies.get(COOKIE_NAME)
+    if not (token and verify_session_token(token)):
+        await websocket.close(code=1008)  # policy violation: not signed in
+        return
     await manager.connect(websocket)
     try:
         while True:

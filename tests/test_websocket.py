@@ -196,3 +196,19 @@ def test_ws_active_clients_count():
             with client.websocket_connect("/ws/dashboard"):
                 resp = client.get("/ws/status")
                 assert resp.json()["active_clients"] >= 1
+
+
+def test_dashboard_websocket_rejects_anonymous_connections():
+    """The login middleware does not cover WebSockets, and the feed carries phone
+    numbers and delivery recipients, so an anonymous connection must be refused."""
+    import pytest
+    from fastapi.testclient import TestClient
+    from starlette.websockets import WebSocketDisconnect
+
+    from app.web_ui.main import app
+
+    anon = TestClient(app)
+    anon.cookies.clear()  # conftest signs test clients in by default
+    with pytest.raises(WebSocketDisconnect):
+        with anon.websocket_connect("/ws/dashboard") as ws:
+            ws.receive_text()
