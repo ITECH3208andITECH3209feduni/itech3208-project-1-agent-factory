@@ -7,6 +7,7 @@
 # PROJ-434 (Delivery history view per reminder)
 # ──────────────────────────────────────────────────────────────
 
+import logging
 import os
 import sys
 import uuid
@@ -19,7 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
-from agent.delivery import EmailChannel, SMSChannel, VoiceChannel
+from agent.delivery import DeliveryResult, EmailChannel, SMSChannel, VoiceChannel
 from auth.rbac import require_admin, require_org_member
 
 from app.web_ui.activity_db import (
@@ -34,6 +35,8 @@ from app.web_ui.activity_db import (
     retry_delivery_message,
     update_delivery_status,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/delivery", tags=["Delivery Status & History"])
 
@@ -153,7 +156,13 @@ async def send_reminder(payload: SendReminderRequest, identity: dict = Depends(r
 
     message = payload.message.strip() or "Reminder from Agent Factory"
     kwargs = {"subject": "Reminder"} if channel == "email" else {}
-    result = await run_in_threadpool(_channel_for(channel).send, recipient, message, **kwargs)
+    try:
+        result = await run_in_threadpool(_channel_for(channel).send, recipient, message, **kwargs)
+    except Exception as exc:  # an adapter bug must show up as a failed row, not a bare 500
+        logger.exception("Reminder send crashed on %s", channel)
+        result = DeliveryResult(
+            ok=False, channel=channel, to=recipient, error=f"{type(exc).__name__}: {exc}"
+        )
 
     msg_id = result.provider_id or f"{channel[:2].upper()}-{uuid.uuid4().hex[:12].upper()}"
     meta = payload.metadata or {}

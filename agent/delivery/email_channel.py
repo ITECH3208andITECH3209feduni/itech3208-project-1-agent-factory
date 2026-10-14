@@ -84,10 +84,21 @@ class EmailChannel(DeliveryChannel):
             )
 
         email_msg = EmailMessage()
-        email_msg["Subject"] = subject
-        email_msg["From"] = SMTP_FROM_EMAIL
-        email_msg["To"] = to
-        email_msg.set_content(message)
+        try:
+            email_msg["Subject"] = subject
+            email_msg["From"] = SMTP_FROM_EMAIL
+            email_msg["To"] = to
+            email_msg.set_content(message)
+        except (ValueError, UnicodeError) as exc:
+            # A malformed SMTP_FROM_EMAIL or recipient — retrying won't help.
+            return DeliveryResult(
+                ok=False,
+                channel=self.name,
+                to=to,
+                error=f"Email address is not valid ({exc}). Check SMTP_FROM_EMAIL "
+                "has no spaces or line breaks.",
+                retriable=False,
+            )
 
         try:
             with self._smtp_client_factory() as smtp:
@@ -103,6 +114,17 @@ class EmailChannel(DeliveryChannel):
         except smtplib.SMTPAuthenticationError as exc:
             return DeliveryResult(
                 ok=False, channel=self.name, to=to, error=str(exc), retriable=False
+            )
+        except UnicodeError as exc:
+            # smtplib cannot encode a non-ASCII character in the login (a
+            # pasted non-breaking space in the app password, for one).
+            return DeliveryResult(
+                ok=False,
+                channel=self.name,
+                to=to,
+                error=f"SMTP login contains a character that is not allowed ({exc}). "
+                "Re-enter SMTP_USERNAME and SMTP_PASSWORD.",
+                retriable=False,
             )
         except (smtplib.SMTPException, OSError) as exc:
             # Connection resets, timeouts, transient 4xx SMTP codes —
