@@ -47,9 +47,11 @@ class S3Store:
 
     def __init__(self, endpoint: str, bucket: str, key_id: str, secret: str, region: str, key: str):
         import boto3  # imported here so unconfigured installs never need it
+        from botocore.config import Config
 
         self._client = boto3.client(
             "s3",
+            config=Config(s3={"addressing_style": "path"}),  # works on B2, R2, Supabase, MinIO
             endpoint_url=endpoint,
             aws_access_key_id=key_id,
             aws_secret_access_key=secret,
