@@ -57,6 +57,27 @@ All Sprint 4 tickets (PROJ-392 to 452) are Done. Sprint 5 backlog was PROJ-453 t
 
 ---
 
+## 3a. Sprint 5 progress (as of 14 Oct 2026, evening)
+
+Verified against GitHub, not just Jira. PR states change fast; check GitHub for the current list.
+
+| Area | Who | State |
+|---|---|---|
+| Reminder form (recurrence, pause, cancel, reschedule), template picker, password-reset wiring, SMS evidence, poster 3 builder, handover checklist | Prabhjot | **Merged** (PRs #29, #30) |
+| Email-owner profile fix (PROJ-487) | Dhiman | **Merged** (#32) |
+| Merge fields at send time (PROJ-485), template CRUD (PROJ-484), conversational rescheduling (PROJ-486) | Dhiman | PRs #33, #34, #35 open, CI green |
+| RBAC and organisation API keys (PROJ-488) | Dhiman | PR #31 open; the fix PR #37 (encoding damage, 7 failing tests) is merged into its branch |
+| Marketing site rework, CSV export, multi-language voice, WebSocket dashboard, FAQ hours fix | Saifur | PR #36 open (his branch merged with current main; the language controls now require login) |
+| Post-call summary, FAQ inside booking, data-sovereignty note, main poster draft, recording scripts, timezone fix | Dilraj | Summary, booking, note and posters merged (#27); timezone fix is PR #28 |
+
+**Needs a person, not code:** recordings (PROJ-497), individual journals (PROJ-499), the live
+email and SMS proof (PROJ-481/482: SMTP secrets, Twilio A2P), the Render redeploy from `main`
+(PROJ-475), the client's written feedback, and the session date.
+
+**Known:** `tests/conftest.py` now gives the auto-login test user org 1 and the admin role (needed
+once RBAC lands). A plain username-only account has no organisation, so RBAC locks it out of `/crm`;
+email-registered accounts (including the demo login) are fine.
+
 ## 4. How to run it
 
 ### Fastest: your laptop, temporary public URL (free, no account)
