@@ -97,3 +97,30 @@ def test_unconfigured_does_nothing(monkeypatch):
         monkeypatch.delenv(key, raising=False)
     assert persist.store_from_env() is None
     assert persist.main(["persist.py", "restore"]) == 0
+
+
+def test_s3_store_treats_http_404_as_nothing_saved_and_explains_other_errors():
+    try:
+        from botocore.exceptions import ClientError
+    except Exception:  # not installed, or an old copy that cannot import
+        pytest.skip("botocore is not usable here")
+
+    def error(status, code=""):
+        return ClientError({"Error": {"Code": code, "Message": "m"}, "ResponseMetadata": {"HTTPStatusCode": status}}, "GetObject")
+
+    class Client:
+        def __init__(self, exc):
+            self.exc = exc
+
+        def get_object(self, **kw):
+            raise self.exc
+
+    store = persist.S3Store.__new__(persist.S3Store)
+    store._bucket, store._key, store._endpoint = "b", "k", "https://x"
+    store._client = Client(error(404))
+    assert store.get() is None                      # empty code, HTTP 404: first boot
+
+    store._client = Client(error(403, "AccessDenied"))
+    with pytest.raises(RuntimeError, match="HTTP 403"):
+        store.get()
+    assert "bucket='b'" in store.describe() and "secret" not in store.describe().lower()

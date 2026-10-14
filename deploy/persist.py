@@ -59,6 +59,20 @@ class S3Store:
         )
         self._bucket = bucket
         self._key = key
+        self._endpoint = endpoint
+
+    def describe(self) -> str:
+        """Where we are talking to (never the keys), for the log."""
+        return f"{self._endpoint} bucket={self._bucket!r} key={self._key!r}"
+
+    @staticmethod
+    def _explain(exc) -> str:
+        meta = exc.response.get("ResponseMetadata", {})
+        err = exc.response.get("Error", {})
+        return (
+            f"HTTP {meta.get('HTTPStatusCode')} code={err.get('Code')!r} "
+            f"message={err.get('Message')!r}"
+        )
 
     def get(self) -> bytes | None:
         from botocore.exceptions import ClientError
@@ -66,12 +80,18 @@ class S3Store:
         try:
             return self._client.get_object(Bucket=self._bucket, Key=self._key)["Body"].read()
         except ClientError as exc:
-            if exc.response.get("Error", {}).get("Code") in ("NoSuchKey", "404", "NotFound"):
-                return None
-            raise
+            status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if status == 404 or exc.response.get("Error", {}).get("Code") in ("NoSuchKey", "404", "NotFound"):
+                return None  # nothing saved yet; a wrong bucket shows up when we first save
+            raise RuntimeError(f"cannot read the saved copy: {self._explain(exc)}") from exc
 
     def put(self, data: bytes) -> None:
-        self._client.put_object(Bucket=self._bucket, Key=self._key, Body=data)
+        from botocore.exceptions import ClientError
+
+        try:
+            self._client.put_object(Bucket=self._bucket, Key=self._key, Body=data)
+        except ClientError as exc:
+            raise RuntimeError(f"cannot save: {self._explain(exc)}") from exc
 
 
 def store_from_env(env=os.environ) -> S3Store | None:
@@ -188,6 +208,7 @@ def main(argv: list[str]) -> int:
 
     data_dir = Path(os.environ.get("PERSIST_DIR", "/data"))
     snapper = Snapshotter(store, data_dir)
+    log.info("persist: %s using %s, folder %s", command or "?", store.describe(), data_dir)
 
     try:
         if command == "restore":
@@ -197,17 +218,19 @@ def main(argv: list[str]) -> int:
         elif command == "loop":
             interval = max(10, int(os.environ.get("PERSIST_INTERVAL", "60")))
             snapper.mark_current()
+            log.info("persist: watching %s, checking every %ds", data_dir, interval)
             while True:
                 time.sleep(interval)
                 try:
                     snapper.snapshot()
-                except Exception:  # a failed save must not stop the next try
-                    log.exception("persist: save failed, will retry")
+                except Exception as exc:  # a failed save must not stop the next try
+                    log.error("persist: save failed, will retry: %s", exc)
         else:
             print(__doc__)
             return 2
-    except Exception:
-        log.exception("persist: %s failed", command)
+    except Exception as exc:
+        # One clear line, not a traceback: the reason is in the message.
+        log.error("persist: %s failed: %s", command, exc)
         return 1
     return 0
 
