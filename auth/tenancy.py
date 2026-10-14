@@ -246,6 +246,15 @@ def get_contact_by_phone(org_id: int, phone_number: str) -> sqlite3.Row | None:
         ).fetchone()
 
 
+def get_contact_by_email(org_id: int, email: str) -> sqlite3.Row | None:
+    """Find an email contact within one organisation only."""
+    with get_conn() as conn:
+        return conn.execute(
+            "SELECT * FROM contacts WHERE org_id = ? AND lower(email) = lower(?)",
+            (org_id, email.strip()),
+        ).fetchone()
+
+
 def list_contacts(org_id: int) -> list[sqlite3.Row]:
     with get_conn() as conn:
         return conn.execute(

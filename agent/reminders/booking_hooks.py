@@ -64,6 +64,7 @@ def create_reminder_for_booking(
             scheduled_at_utc=remind_at_utc,
             contact_timezone=tz_name,
             booking_id=booking_id or str(uuid.uuid4()),
+            appointment_date=start_iso,
         )
     except ValueError as exc:
         return {"ok": False, "error": str(exc)}

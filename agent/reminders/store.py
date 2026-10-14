@@ -29,6 +29,7 @@ from datetime import datetime, timedelta, timezone as dt_timezone
 from zoneinfo import ZoneInfo
 
 from config.settings import REMINDERS_DB
+from app.web.store import DEFAULT_ORG_ID
 
 VALID_STATUSES = {"pending", "sending", "sent", "failed", "cancelled", "paused"}
 VALID_CHANNELS = {"sms", "voice", "email"}
@@ -46,6 +47,8 @@ CREATE TABLE IF NOT EXISTS reminders (
     recurrence        TEXT,
     status            TEXT    NOT NULL DEFAULT 'pending',
     booking_id        TEXT,
+    org_id             INTEGER NOT NULL DEFAULT 1,
+    appointment_date   TEXT,
     provider_id       TEXT,
     last_error        TEXT,
     send_attempts     INTEGER NOT NULL DEFAULT 0,
@@ -73,6 +76,8 @@ class Reminder:
     recurrence: dict | None
     status: str
     booking_id: str | None
+    org_id: int
+    appointment_date: str | None
     provider_id: str | None
     last_error: str | None
     send_attempts: int
@@ -138,6 +143,17 @@ class ReminderStore:
 
     def _apply_schema(self) -> None:
         self._conn.executescript(_SCHEMA)
+        columns = {
+            row["name"] for row in self._conn.execute("PRAGMA table_info(reminders)")
+        }
+        if "org_id" not in columns:
+            self._conn.execute(
+                "ALTER TABLE reminders ADD COLUMN org_id INTEGER NOT NULL DEFAULT 1"
+            )
+        if "appointment_date" not in columns:
+            self._conn.execute(
+                "ALTER TABLE reminders ADD COLUMN appointment_date TEXT"
+            )
         self._conn.commit()
 
     # ── Create (PROJ-422) ────────────────────────────────────────
@@ -152,6 +168,8 @@ class ReminderStore:
         subject: str = "Reminder",
         recurrence: dict | None = None,
         booking_id: str | None = None,
+        org_id: int = DEFAULT_ORG_ID,
+        appointment_date: str | None = None,
     ) -> Reminder:
         if contact_channel not in VALID_CHANNELS:
             raise ValueError(f"invalid contact_channel: {contact_channel!r}")
@@ -166,8 +184,8 @@ class ReminderStore:
         self._conn.execute(
             "INSERT INTO reminders (id, contact_channel, contact_address, message,"
             " subject, scheduled_at_utc, contact_timezone, recurrence, status,"
-            " booking_id, created_at, updated_at)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)",
+            " booking_id, org_id, appointment_date, created_at, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?)",
             (
                 reminder_id,
                 contact_channel,
@@ -178,6 +196,8 @@ class ReminderStore:
                 contact_timezone,
                 json.dumps(recurrence) if recurrence else None,
                 booking_id,
+                int(org_id),
+                appointment_date,
                 now,
                 now,
             ),
@@ -285,6 +305,8 @@ class ReminderStore:
             contact_timezone=sent_reminder.contact_timezone,
             recurrence=sent_reminder.recurrence,
             booking_id=sent_reminder.booking_id,
+            org_id=sent_reminder.org_id,
+            appointment_date=sent_reminder.appointment_date,
         )
 
     # ── Edit / pause / cancel / reschedule (PROJ-426) ────────────
