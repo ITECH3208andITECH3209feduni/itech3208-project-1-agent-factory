@@ -77,7 +77,7 @@ def test_reset_email_goes_through_smtp_when_configured(anon, monkeypatch):
     sent = []
 
     class FakeSMTP:
-        def __init__(self, host, port, timeout=None):
+        def __init__(self, host, port, timeout=None, local_hostname=None):
             sent.append(("connect", host, port))
         def __enter__(self):
             return self

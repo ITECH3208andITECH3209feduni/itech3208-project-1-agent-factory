@@ -313,3 +313,63 @@ def test_email_transient_smtp_error_is_retriable():
     assert result.ok is False
     assert result.retriable is True
     assert result.attempts == 2
+
+
+# ── EHLO name: reverse-DNS style hostnames make Gmail drop the connection ──
+
+def test_ehlo_name_replaces_reverse_dns_hostnames(monkeypatch):
+    import socket
+    from agent.delivery import email_channel
+
+    monkeypatch.delenv("SMTP_LOCAL_HOSTNAME", raising=False)
+    weird = "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa"
+    for bad in (weird, "10.0.0.1", "localhost", ""):
+        monkeypatch.setattr(socket, "getfqdn", lambda bad=bad: bad)
+        assert email_channel.ehlo_name() == "agentfactory.local", bad
+
+
+def test_ehlo_name_keeps_a_real_hostname_and_honours_the_override(monkeypatch):
+    import socket
+    from agent.delivery import email_channel
+
+    monkeypatch.delenv("SMTP_LOCAL_HOSTNAME", raising=False)
+    monkeypatch.setattr(socket, "getfqdn", lambda: "mini.example.org")
+    assert email_channel.ehlo_name() == "mini.example.org"
+    monkeypatch.setenv("SMTP_LOCAL_HOSTNAME", "relay.test")
+    assert email_channel.ehlo_name() == "relay.test"
+
+
+def test_password_reset_mailer_announces_a_valid_ehlo_name(monkeypatch):
+    """auth/password_reset.py has its own SMTP code; it must use the same EHLO
+    fix as EmailChannel or Gmail drops the connection on machines whose
+    hostname resolves to a reverse-DNS name."""
+    import smtplib
+
+    from auth import password_reset
+
+    seen = {}
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=None, local_hostname=None):
+            seen["local_hostname"] = local_hostname
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def starttls(self):
+            pass
+
+        def login(self, *a):
+            pass
+
+        def send_message(self, msg):
+            seen["sent"] = True
+
+    monkeypatch.setenv("SMTP_HOST", "smtp.example.test")
+    monkeypatch.setenv("SMTP_LOCAL_HOSTNAME", "relay.test")
+    monkeypatch.setattr(smtplib, "SMTP", FakeSMTP)
+    assert password_reset._send_via_smtp("someone@example.com", "http://x/reset?token=t") is True
+    assert seen == {"local_hostname": "relay.test", "sent": True}
