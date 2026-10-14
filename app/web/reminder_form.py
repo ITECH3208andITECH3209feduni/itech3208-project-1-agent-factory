@@ -18,6 +18,9 @@ contacts store did not exist:
     its own status, kept in the history; `blocked` still means consent or
     policy stopped it. Rescheduling is editing "Send at" — on a paused
     reminder that moves the time without resuming it.
+  - Templates (PROJ-480): pick one to fill the message, and a live preview
+    renders its merge fields against the chosen contact and send time — the
+    same rendering the bridge does when it sends.
 
 Style and the escape helper are shared with contacts_ui so the pages cannot
 drift apart.
@@ -52,6 +55,12 @@ FORM_HTML = """<!DOCTYPE html>
 
     <div id="consentwarn"></div>
 
+    <div class="field" id="field-template">
+      <label for="template">Start from a template</label>
+      <select id="template"><option value="">Loading templates…</option></select>
+      <div class="hint">Fills the message below; you can still edit it. <a href="/templates">Manage templates</a>.</div>
+    </div>
+
     <div class="field" id="field-message">
       <label for="message">Message <span class="req">— required</span>
         <span class="counter"><span id="msg-n">0</span>/1600</span></label>
@@ -77,13 +86,19 @@ FORM_HTML = """<!DOCTYPE html>
           <option value="weekly">Every week</option>
           <option value="custom">Every N days…</option>
         </select>
-        <span id="intervalwrap" hidden style="display:inline-flex;gap:6px;align-items:center">
+        <span id="intervalwrap" style="display:none;gap:6px;align-items:center">
           every <input type="number" id="interval_days" min="1" max="365" value="2"
             style="width:84px" aria-label="Days between reminders"> days
         </span>
       </div>
       <div class="hint">Each repeat goes out at the same local time and keeps its own sent/blocked record.</div>
       <div class="err"><span class="ico" aria-hidden="true">!</span><span class="msg"></span></div>
+    </div>
+
+    <div class="card pad" id="preview" style="margin:0 0 14px" hidden>
+      <div class="sub" style="margin-bottom:6px"><b>Preview</b> <span id="previewfor"></span></div>
+      <div id="previewtext" style="white-space:pre-wrap"></div>
+      <div class="sub" id="previewwarn" style="margin-top:6px"></div>
     </div>
 
     <div class="field" id="field-status">
@@ -132,7 +147,10 @@ msg.addEventListener("input", () => { msgN.textContent = msg.value.length; });
 
 const freq = document.getElementById("freq");
 const intervalDays = document.getElementById("interval_days");
-function syncFreq() { document.getElementById("intervalwrap").hidden = freq.value !== "custom"; }
+function syncFreq() {
+  // style.display, not .hidden: the span's inline display would override [hidden].
+  document.getElementById("intervalwrap").style.display = freq.value === "custom" ? "inline-flex" : "none";
+}
 freq.addEventListener("change", syncFreq);
 function recurrenceBody() {
   if (freq.value === "none") return null;
@@ -142,6 +160,56 @@ function recurrenceBody() {
   if (freq.value === "custom") out.interval_days = parseInt(intervalDays.value, 10);
   return out;
 }
+
+// ── Templates and live preview (PROJ-480) ───────────────────
+let TEMPLATES = [];
+async function loadTemplates() {
+  const sel = document.getElementById("template");
+  try {
+    const d = await (await fetch("/api/templates")).json();
+    TEMPLATES = d.templates || [];
+    sel.innerHTML = TEMPLATES.length
+      ? `<option value="">None — write it myself</option>` + TEMPLATES.map(t =>
+          `<option value="${esc(String(t.id))}">${esc(t.name)}</option>`).join("")
+      : `<option value="">No templates yet</option>`;
+  } catch (err) { sel.innerHTML = `<option value="">Could not load templates</option>`; }
+}
+document.getElementById("template").addEventListener("change", e => {
+  const t = TEMPLATES.find(x => String(x.id) === e.target.value);
+  if (!t) return;
+  if (msg.value.trim() && msg.value !== t.body &&
+      !confirm("Replace the current message with this template?")) { e.target.value = ""; return; }
+  msg.value = t.body; msgN.textContent = msg.value.length; schedulePreview();
+});
+
+let previewTimer = null, previewSeq = 0;
+function schedulePreview() { clearTimeout(previewTimer); previewTimer = setTimeout(updatePreview, 250); }
+async function updatePreview() {
+  const box = document.getElementById("preview");
+  if (!msg.value.includes("{")) { box.hidden = true; return; }
+  const mine = ++previewSeq;
+  const when = document.getElementById("send_at").value;
+  const cid = document.getElementById("contact_id").value;
+  const r = await fetch("/api/templates/preview", {
+    method: "POST", headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      body: msg.value, contact_id: cid ? parseInt(cid, 10) : null,
+      send_at: when ? new Date(when).toISOString() : null,
+      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    }),
+  }).catch(() => null);
+  if (!r || !r.ok || mine !== previewSeq) return;
+  const d = await r.json();
+  const c = CONTACTS.find(x => String(x.id) === String(cid));
+  document.getElementById("previewfor").textContent = c ? "for " + (c.name || c.phone_number) : "(choose a contact)";
+  document.getElementById("previewtext").textContent = d.rendered;
+  document.getElementById("previewwarn").textContent = d.unknown.length
+    ? `Not merge fields, will be sent as written: ${d.unknown.map(u => "{" + u + "}").join(", ")}.` : "";
+  box.hidden = false;
+}
+msg.addEventListener("input", schedulePreview);
+document.getElementById("contact_id").addEventListener("change", schedulePreview);
+document.getElementById("send_at").addEventListener("change", schedulePreview);
 
 // Pause / resume / cancel (PROJ-479). Each is its own endpoint so the server
 // can refuse a transition that does not apply, e.g. resuming a sent reminder.
@@ -308,7 +376,8 @@ document.getElementById("f").onsubmit = async ev => {
 };
 
 syncFreq();
-loadExisting();
+loadTemplates();
+loadExisting().then(schedulePreview);
 </script></body></html>
 """.replace("__STYLE__", STYLE).replace("__ESC__", ESC_JS)
 

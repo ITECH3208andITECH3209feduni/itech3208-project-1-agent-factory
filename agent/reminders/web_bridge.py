@@ -66,7 +66,7 @@ class WebReminderBridge:
         return result
 
     def _deliver(self, reminder: dict, org_id: int) -> dict:
-        from app.web import contacts, reminders
+        from app.web import contacts, message_templates, reminders
 
         reminder_id = reminder["id"]
         decision = reminders.dispatch_check(reminder_id, org_id)
@@ -90,8 +90,14 @@ class WebReminderBridge:
             reminders.mark_failed(reminder_id, reason, org_id)
             return {"reminder_id": reminder_id, "ok": False, "error": reason}
 
+        # PROJ-480/485: fill {first_name}, {date} and friends now, not when
+        # the reminder was saved, so each occurrence of a series is correct.
+        text = message_templates.render_for(
+            reminder["message"], contact, reminders.parse_dt(reminder["send_at"]), org_id,
+            (reminder.get("recurrence") or {}).get("tz"),
+        )
         kwargs = {"subject": "Reminder"} if preferred == "email" else {}
-        result = channel.send(address, reminder["message"], **kwargs)
+        result = channel.send(address, text, **kwargs)
 
         if result.ok:
             reminders.mark_sent(reminder_id, org_id)
