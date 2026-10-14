@@ -12,9 +12,12 @@ contacts store did not exist:
     reminder to someone who has not opted in is allowed (the reminder is a
     plan, not a send), but the form says up front that it will be blocked at
     send time. Discovering that later is worse.
-  - There is no "cancel" status. The contract's fourth status is `blocked`,
-    which means consent or policy stopped it — not the same as a human
-    changing their mind. Cancelling is therefore a delete.
+  - Repeat (PROJ-479): none, daily, weekly, or every N days. The bridge adds
+    the next occurrence as a new reminder each time one goes out.
+  - Pause, resume and cancel (PROJ-479) on an existing reminder. Cancelled is
+    its own status, kept in the history; `blocked` still means consent or
+    policy stopped it. Rescheduling is editing "Send at" — on a paused
+    reminder that moves the time without resuming it.
 
 Style and the escape helper are shared with contacts_ui so the pages cannot
 drift apart.
@@ -61,7 +64,25 @@ FORM_HTML = """<!DOCTYPE html>
     <div class="field" id="field-send_at">
       <label for="send_at">Send at <span class="req">— required</span></label>
       <input type="datetime-local" id="send_at">
-      <div class="hint">Read in this machine's timezone and stored with an offset.</div>
+      <div class="hint">Your browser's local time. Sent with its UTC offset, so it means the same moment wherever the server runs.</div>
+      <div class="err"><span class="ico" aria-hidden="true">!</span><span class="msg"></span></div>
+    </div>
+
+    <div class="field" id="field-recurrence">
+      <label for="freq">Repeat</label>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <select id="freq" style="flex:1;min-width:160px">
+          <option value="none">Does not repeat</option>
+          <option value="daily">Every day</option>
+          <option value="weekly">Every week</option>
+          <option value="custom">Every N days…</option>
+        </select>
+        <span id="intervalwrap" hidden style="display:inline-flex;gap:6px;align-items:center">
+          every <input type="number" id="interval_days" min="1" max="365" value="2"
+            style="width:84px" aria-label="Days between reminders"> days
+        </span>
+      </div>
+      <div class="hint">Each repeat goes out at the same local time and keeps its own sent/blocked record.</div>
       <div class="err"><span class="ico" aria-hidden="true">!</span><span class="msg"></span></div>
     </div>
 
@@ -76,7 +97,10 @@ FORM_HTML = """<!DOCTYPE html>
 
     <div class="row-actions" style="margin-top:6px">
       <button type="submit" class="btn" id="save">__SAVE__</button>
-      <button type="button" class="btn ghost" id="cancel">Cancel</button>
+      <button type="button" class="btn ghost" id="cancel">Back</button>
+      <button type="button" class="btn ghost" id="pause" hidden>Pause</button>
+      <button type="button" class="btn ghost" id="resume" hidden>Resume</button>
+      <button type="button" class="btn ghost" id="cancelrem" hidden>Cancel reminder</button>
       <button type="button" class="btn ghost" id="del" hidden>Delete</button>
       <span id="formstatus" role="status" aria-live="polite"></span>
     </div>
@@ -105,6 +129,35 @@ function setStatus(t) { document.getElementById("formstatus").textContent = t; }
 const msg = document.getElementById("message");
 const msgN = document.getElementById("msg-n");
 msg.addEventListener("input", () => { msgN.textContent = msg.value.length; });
+
+const freq = document.getElementById("freq");
+const intervalDays = document.getElementById("interval_days");
+function syncFreq() { document.getElementById("intervalwrap").hidden = freq.value !== "custom"; }
+freq.addEventListener("change", syncFreq);
+function recurrenceBody() {
+  if (freq.value === "none") return null;
+  // The zone makes "every day at 9am" mean 9am here, through DST changes,
+  // even when the server runs in UTC.
+  const out = {freq: freq.value, tz: Intl.DateTimeFormat().resolvedOptions().timeZone};
+  if (freq.value === "custom") out.interval_days = parseInt(intervalDays.value, 10);
+  return out;
+}
+
+// Pause / resume / cancel (PROJ-479). Each is its own endpoint so the server
+// can refuse a transition that does not apply, e.g. resuming a sent reminder.
+async function act(action, confirmText) {
+  if (confirmText && !confirm(confirmText)) return;
+  setStatus("Working…");
+  const r = await fetch("/api/reminders/" + encodeURIComponent(RID) + "/" + action, {method: "POST"});
+  const d = await r.json().catch(() => ({}));
+  if (r.status === 422) { showErrors(d.errors || {}); setStatus("Could not " + action + "."); return; }
+  if (!r.ok) { setStatus("Could not " + action + ": " + (d.detail || ("HTTP " + r.status))); return; }
+  window.location.reload();
+}
+document.getElementById("pause").onclick = () => act("pause");
+document.getElementById("resume").onclick = () => act("resume");
+document.getElementById("cancelrem").onclick = () =>
+  act("cancel", "Cancel this reminder? It stays in the list as cancelled and will not send.");
 
 // Say up front that a send will be blocked, rather than after the fact.
 function showConsentWarning() {
@@ -150,6 +203,15 @@ async function loadContacts(selected) {
 }
 document.getElementById("contact_id").addEventListener("change", showConsentWarning);
 
+// datetime-local wants local wall time; the stored value carries an offset
+// that may not be this browser's, so convert rather than slice.
+function toLocalInput(iso) {
+  const dt = new Date(iso || "");
+  if (isNaN(dt)) return (iso || "").slice(0, 16);
+  const pad = n => String(n).padStart(2, "0");
+  return `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}T${pad(dt.getHours())}:${pad(dt.getMinutes())}`;
+}
+
 async function loadExisting() {
   if (!RID) { await loadContacts(); return; }
   document.getElementById("del").hidden = false;
@@ -162,10 +224,26 @@ async function loadExisting() {
   }
   const d = await r.json();
   msg.value = d.message || ""; msgN.textContent = msg.value.length;
-  document.getElementById("send_at").value = (d.send_at || "").slice(0, 16);
+  document.getElementById("send_at").value = toLocalInput(d.send_at);
+  if (d.recurrence && d.recurrence.freq) {
+    freq.value = d.recurrence.freq;
+    if (d.recurrence.interval_days) intervalDays.value = d.recurrence.interval_days;
+  }
+  syncFreq();
   await loadContacts(d.contact_id);
 
-  if (d.status && d.status !== "scheduled") {
+  const editable = d.status === "scheduled" || d.status === "paused";
+  document.getElementById("pause").hidden = d.status !== "scheduled";
+  document.getElementById("resume").hidden = d.status !== "paused";
+  document.getElementById("cancelrem").hidden = !editable;
+  document.getElementById("save").disabled = !editable;
+
+  if (d.status === "paused") {
+    document.getElementById("dispatch").innerHTML =
+      `<div class="banner"><span class="ico" aria-hidden="true">||</span>
+        <div><b>Paused.</b> It will not send until you resume it. Changing "Send at"
+        reschedules it and leaves it paused.</div></div>`;
+  } else if (d.status && d.status !== "scheduled") {
     // The engine owns these. Editing is pointless once it has acted.
     document.getElementById("dispatch").innerHTML =
       `<div class="banner"><span class="ico" aria-hidden="true">!</span>
@@ -181,9 +259,9 @@ async function loadExisting() {
 document.getElementById("cancel").onclick = () => { window.location.href = "/reminders"; };
 
 document.getElementById("del").onclick = async () => {
-  // Delete is how you cancel: the contract has no 'cancelled' status, and
-  // 'blocked' means consent stopped it, which is a different fact.
-  if (!confirm("Delete this reminder? There is no 'cancelled' state in the data contract, so cancelling is a delete.")) return;
+  // Delete removes the row outright. "Cancel reminder" is the one that keeps
+  // a record that someone stopped it.
+  if (!confirm("Delete this reminder permanently? To stop it but keep a record, use Cancel reminder.")) return;
   const r = await fetch("/api/reminders/" + encodeURIComponent(RID), {method: "DELETE"});
   if (r.ok || r.status === 204) { window.location.href = "/reminders"; }
   else setStatus("Could not delete: HTTP " + r.status);
@@ -194,6 +272,10 @@ document.getElementById("f").onsubmit = async ev => {
 
   const local = {};
   if (!document.getElementById("contact_id").value) local.contact_id = "Choose a contact.";
+  if (freq.value === "custom") {
+    const n = parseInt(intervalDays.value, 10);
+    if (!(n >= 1 && n <= 365)) local.recurrence = "Repeat every 1 to 365 days.";
+  }
   if (!msg.value.trim()) local.message = "Enter a message.";
   const when = document.getElementById("send_at").value;
   if (!when) local.send_at = "Enter a valid date and time.";
@@ -203,7 +285,10 @@ document.getElementById("f").onsubmit = async ev => {
   const body = {
     contact_id: parseInt(document.getElementById("contact_id").value, 10),
     message: msg.value.trim(),
-    send_at: when,
+    // With an offset: a bare local time would be read in the server's zone,
+    // which on a UTC host is hours away from what the user picked.
+    send_at: new Date(when).toISOString(),
+    recurrence: recurrenceBody(),
   };
   const save = document.getElementById("save");
   save.disabled = true; setStatus("Saving…");
@@ -222,6 +307,7 @@ document.getElementById("f").onsubmit = async ev => {
   finally { save.disabled = false; }
 };
 
+syncFreq();
 loadExisting();
 </script></body></html>
 """.replace("__STYLE__", STYLE).replace("__ESC__", ESC_JS)

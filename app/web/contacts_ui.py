@@ -102,6 +102,10 @@ STYLE = """
   .badge.blocked .dot { background: var(--critical); }
   .badge.failed .dot { background: var(--critical); }
   .badge.scheduled .dot { background: var(--accent); }
+  .badge.paused .dot { background: var(--warning); }
+  .badge.cancelled .dot { background: var(--text-muted); }
+  .linkbtn { background: none; border: 0; padding: 0; font: inherit; color: var(--accent);
+    cursor: pointer; text-decoration: underline; }
 
   .banner { display: flex; gap: 10px; align-items: flex-start;
     background: var(--surface-1); border: 1px solid var(--border);

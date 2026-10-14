@@ -390,7 +390,8 @@ async function load() {
 
 // ── Panels (PROJ-438) ───────────────────────────────────────
 const STATUS_LABEL = {
-  scheduled: "Scheduled", sent: "Sent", blocked: "Blocked", failed: "Failed",
+  scheduled: "Scheduled", paused: "Paused", sent: "Sent", blocked: "Blocked",
+  failed: "Failed", cancelled: "Cancelled",
 };
 
 function fmtDue(iso) {

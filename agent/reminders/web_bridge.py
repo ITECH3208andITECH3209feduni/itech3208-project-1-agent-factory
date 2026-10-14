@@ -53,6 +53,19 @@ class WebReminderBridge:
         return results
 
     def _send_one(self, reminder: dict, org_id: int) -> dict:
+        from app.web import reminders
+
+        result = self._deliver(reminder, org_id)
+        # PROJ-479: a recurring reminder continues whatever happened to this
+        # occurrence — each one is its own row with its own outcome, so one
+        # blocked or failed send must not silently end the series.
+        try:
+            reminders.schedule_next_occurrence(reminder, org_id)
+        except (ValueError, KeyError) as exc:
+            logger.error("Failed to schedule next occurrence for %s: %s", reminder["id"], exc)
+        return result
+
+    def _deliver(self, reminder: dict, org_id: int) -> dict:
         from app.web import contacts, reminders
 
         reminder_id = reminder["id"]

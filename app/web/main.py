@@ -498,9 +498,55 @@ def update_reminder(reminder_id: int, payload: dict) -> dict:
         row = reminders.update_reminder(reminder_id, payload)
     except reminders.ValidationError as exc:
         return JSONResponse(status_code=422, content={"errors": exc.errors})
+    except reminders.TransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if row is None:
         raise HTTPException(status_code=404, detail="reminder not found")
     return row
+
+
+def _reminder_action(action, reminder_id: int, *args: Any) -> dict:
+    """Shared shape for pause/resume/cancel/reschedule: 404 if missing, 409 if
+    the reminder's status does not allow it, 422 for a bad send_at."""
+    from app.web import reminders
+
+    try:
+        row = action(reminder_id, *args)
+    except reminders.ValidationError as exc:
+        return JSONResponse(status_code=422, content={"errors": exc.errors})
+    except reminders.TransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="reminder not found")
+    return row
+
+
+@app.post("/api/reminders/{reminder_id}/pause")
+def pause_reminder(reminder_id: int) -> dict:
+    from app.web import reminders
+
+    return _reminder_action(reminders.pause_reminder, reminder_id)
+
+
+@app.post("/api/reminders/{reminder_id}/resume")
+def resume_reminder(reminder_id: int) -> dict:
+    from app.web import reminders
+
+    return _reminder_action(reminders.resume_reminder, reminder_id)
+
+
+@app.post("/api/reminders/{reminder_id}/cancel")
+def cancel_reminder(reminder_id: int) -> dict:
+    from app.web import reminders
+
+    return _reminder_action(reminders.cancel_reminder, reminder_id)
+
+
+@app.post("/api/reminders/{reminder_id}/reschedule")
+def reschedule_reminder(reminder_id: int, payload: dict) -> dict:
+    from app.web import reminders
+
+    return _reminder_action(reminders.reschedule_reminder, reminder_id, payload.get("send_at"))
 
 
 @app.delete("/api/reminders/{reminder_id}", status_code=204)
