@@ -56,3 +56,24 @@ def test_brand_name_is_escaped(monkeypatch):
     monkeypatch.setenv("BRAND_NAME", "<script>x</script>")
     html = branding.page(os.path.join(main._STATIC_DIR, "login.html")).body.decode()
     assert "<script>x</script>" not in html
+
+
+def test_site_is_branded_in_clinic_mode(client, monkeypatch):
+    monkeypatch.setenv("BRAND_NAME", "Bright Smile Dental")
+    monkeypatch.setenv("BRAND_MODE", "clinic")
+    home = client.get("/showcase").text
+    assert "Bright Smile Dental" in home and "Agent Factory" not in home
+    assert "\U0001F9B7" in home and "img/logo.svg" not in home
+
+    about = client.get("/site/about.html").text
+    assert "<span>Bright Smile Dental</span>" in about          # header and footer
+    assert "Agent Factory was engineered as a capstone" in about  # the sentences about the project stay true
+    assert "— Bright Smile Dental</title>" in about
+
+
+def test_site_is_unchanged_by_default(client, monkeypatch):
+    monkeypatch.delenv("BRAND_NAME", raising=False)
+    monkeypatch.delenv("BRAND_MODE", raising=False)
+    home = client.get("/showcase").text
+    assert "Agent Factory" in home and "img/logo.svg" in home
+    assert "<span>Agent Factory</span>" in client.get("/site/about.html").text
