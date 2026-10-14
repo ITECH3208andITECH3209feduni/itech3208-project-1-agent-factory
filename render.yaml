@@ -3,8 +3,9 @@
 #
 # Free-plan limits (Render's, not ours):
 #   * sleeps after ~15 min without traffic; the first request wakes it (~1 min)
-#   * no persistent disk, so SQLite data is wiped on every restart/sleep.
-#     SEED_DEMO=true reloads the demo account and sample data on each boot.
+#   * no persistent disk, so /data is wiped on every restart/sleep. deploy/persist.py
+#     saves it to a free S3-compatible bucket (PERSIST_S3_*) and restores it on boot.
+#     SEED_DEMO=true tops up the demo account and sample data on each boot.
 #   * the scheduler only runs while the service is awake
 # Secrets are marked sync: false: Render asks for them in the dashboard and
 # they never enter git.
@@ -33,6 +34,20 @@ services:
         value: /data/kb.db
       - key: CRM_STORE_DIR
         value: /data/store
+      - key: ESCALATION_LOG
+        value: /data/escalations.jsonl
+      # Saving /data to a free S3-compatible bucket (deploy/persist.py), so contacts,
+      # reminders and accounts survive a restart or sleep. Fill these in the dashboard.
+      - key: PERSIST_DIR
+        value: /data
+      - key: PERSIST_S3_ENDPOINT
+        sync: false
+      - key: PERSIST_S3_BUCKET
+        sync: false
+      - key: PERSIST_S3_KEY_ID
+        sync: false
+      - key: PERSIST_S3_SECRET
+        sync: false
       - key: APP_BASE_URL
         sync: false   # your https://<name>.onrender.com URL
       - key: BRAND_NAME
