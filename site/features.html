@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Features & Capabilities — Agent Factory</title>
-  <meta name="description" content="Explore the deep technical features of Agent Factory: Academic literature search, Amazon commercial intelligence, 24/7 AI Receptionist, and delivery analytics.">
+  <title>Features — Agent Factory</title>
+  <meta name="description" content="What Agent Factory does: scheduled and recurring reminders by SMS, voice and email, consent checked before every send, a 24/7 AI receptionist, and a dashboard with call summaries and exports.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -45,103 +45,146 @@
   <main class="site-main">
     <section class="section">
       <div class="section-header">
-        <div class="badge">Deep Dive</div>
-        <h1>Platform Capabilities</h1>
-        <p>A comprehensive overview of the specialized agents, backend pipelines, and analytical tracking engines built into Agent Factory.</p>
+        <div class="badge">What it does</div>
+        <h1>Reminders, Consent and a Receptionist</h1>
+        <p>How Agent Factory keeps customers informed without missing a call, sending a message they did not agree to, or doubling up.</p>
       </div>
 
-      <!-- Feature 1: Literature Review -->
-      <div class="card" id="literature" style="margin-bottom: 2.5rem;">
-        <div class="card-icon">📚</div>
-        <span class="card-tag">Research Intelligence</span>
-        <h2>Academic Literature Review Agent</h2>
+      <div class="card" id="reminders" style="margin-bottom: 2.5rem;">
+        <div class="card-icon">⏰</div>
+        <span class="card-tag">Reminders</span>
+        <h2>Reminders That Run Themselves</h2>
         <p>
-          Automates the literature search process across major scientific and medical repositories, delivering synthesized findings and exportable citations in seconds.
+          Schedule a reminder once, and it goes out on time by the channel each contact prefers, whether it is a single appointment or a weekly routine.
         </p>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
           <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
-            <h4>Multi-Repository Aggregation</h4>
-            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Simultaneous parallel queries to Semantic Scholar (computer science/general), arXiv (physics, math, CS preprints), and PubMed (biomedical literature).</p>
+            <h4>One-off and recurring</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Pick a date and time, or repeat daily, weekly or on a custom interval. Times follow the organisation's timezone and stay correct through daylight saving.</p>
           </div>
           <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
-            <h4>Claude AI Synthesis</h4>
-            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Generates a coherent synthesis paragraph connecting key insights, methodological patterns, and consensus points across retrieved papers.</p>
+            <h4>Full control after scheduling</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Edit, pause, resume, reschedule or cancel any reminder from the dashboard without recreating it.</p>
           </div>
           <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
-            <h4>BibTeX Citation Export</h4>
-            <p style="font-size: 0.92rem; margin-top: 0.5rem;">One-click generation of formatted BibTeX citations ready for immediate inclusion in LaTeX and academic reference managers.</p>
+            <h4>Never sent twice</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Each reminder is claimed once before sending, so a restart or a second worker cannot deliver it a second time.</p>
           </div>
         </div>
       </div>
 
-      <!-- Feature 2: Amazon Scraper & Scorer -->
-      <div class="card" id="amazon" style="margin-bottom: 2.5rem;">
-        <div class="card-icon">🛒</div>
-        <span class="card-tag">Commercial Intelligence</span>
-        <h2>Amazon Product Intelligence & Scoring Engine</h2>
+      <div class="card" id="consent" style="margin-bottom: 2.5rem;">
+        <div class="card-icon">🛡️</div>
+        <span class="card-tag">Consent & Privacy</span>
+        <h2>Consent Is Checked Before Every Send</h2>
         <p>
-          Extracts live product listings, customer sentiment signals, and pricing dynamics with automated anti-detection resilience.
+          No message goes to a contact who has not opted in. The rule runs in the send path itself, not just in a form.
         </p>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
           <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
-            <h4>Stealth Playwright Scraper</h4>
-            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Headless Chromium automation configured with playwright-stealth to bypass aggressive anti-bot captchas and rate limits.</p>
+            <h4>Opt-in required</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">A contact must be explicitly opted in before the first reminder. Silence is never treated as consent, and opted-out contacts are blocked.</p>
           </div>
           <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
-            <h4>0–100 Quality Scoring</h4>
-            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Algorithmic evaluation scoring products on review density, star rating calibration, price competitiveness, and prime badge verification.</p>
+            <h4>STOP works automatically</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">STOP, START and HELP texts are handled before the AI sees them, and every change is written to an audit trail.</p>
           </div>
           <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
-            <h4>RapidAPI Automatic Fallback</h4>
-            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Fail-soft architecture that automatically falls back to secondary RapidAPI endpoints if direct scraping meets network anomalies.</p>
+            <h4>Quiet hours and preferences</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Per-contact channel preference and quiet hours are respected, so nobody is messaged at 11pm.</p>
           </div>
         </div>
       </div>
 
-      <!-- Feature 3: AI Receptionist -->
+      <div class="card" id="delivery" style="margin-bottom: 2.5rem;">
+        <div class="card-icon">📬</div>
+        <span class="card-tag">Delivery</span>
+        <h2>SMS, Voice and Email From One Place</h2>
+        <p>
+          Reminders go out by the channel that suits the contact, with the status of every message recorded.
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>Three channels</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Text message and voice calls through Twilio, and email through any standard SMTP provider. US text delivery depends on carrier registration, which is in progress.</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>Retries and bounces</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Temporary failures retry with backoff. Hard email bounces go on a suppression list to protect the sending domain.</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>Delivery history</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Twilio status callbacks record queued, sent, delivered and failed with the carrier error code, and the history can be exported as CSV.</p>
+          </div>
+        </div>
+      </div>
+
       <div class="card" id="receptionist" style="margin-bottom: 2.5rem;">
         <div class="card-icon">📞</div>
         <span class="card-tag">Communications</span>
-        <h2>24/7 AI Receptionist with Twilio Integration</h2>
+        <h2>24/7 AI Receptionist</h2>
         <p>
-          Operates across inbound SMS and voice calls, providing immediate answers, appointment bookings, and intelligent human escalation.
+          Answers calls and texts at any hour, books appointments, and hands over to a person when asked.
         </p>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
           <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
-            <h4>Polly.Joanna Voice Synthesis</h4>
-            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Australian English voice synthesis with automated markdown stripping and phrase pacing optimized for phone conversations.</p>
+            <h4>Answers, books, escalates</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Common questions are answered from a knowledge base first. Booking uses Google Calendar with a calendar-file fallback and schedules a reminder automatically. Asking for a person flags the conversation for your team.</p>
           </div>
           <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
-            <h4>Google Calendar & iCal Booking</h4>
-            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Direct appointment booking via Google Calendar service-account credentials with automatic fallback to standard `.ics` calendar files.</p>
+            <h4>Keeps the booking in mind</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">A caller can ask about parking or what to bring in the middle of a booking, and the receptionist answers and then carries on with the booking.</p>
           </div>
           <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
-            <h4>ChromaDB Vector Store RAG</h4>
-            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Semantic search across crawled university pages and PDF documents to answer campus and organizational questions factually.</p>
+            <h4>Seven voice languages</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Greets and speaks in English, Spanish, Hindi, Chinese, French and German, with the operator choosing the default.</p>
           </div>
         </div>
       </div>
 
-      <!-- Feature 4: Delivery Tracking & Analytics -->
-      <div class="card" id="delivery-analytics">
+      <div class="card" id="delivery-analytics" style="margin-bottom: 2.5rem;">
         <div class="card-icon">📊</div>
         <span class="card-tag">Operations & Analytics</span>
-        <h2>Delivery Status & Analytics Engine</h2>
+        <h2>Dashboard, Call Summaries and Reports</h2>
         <p>
-          Comprehensive tracking for all outbound messages, confirmations, callbacks, and bounces.
+          One screen shows what is coming up, what was sent, and which calls need attention first.
         </p>
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
           <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
-            <h4>Twilio Status Callback Webhook</h4>
-            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Real-time callback receiver logging message statuses (queued, sent, delivered, undelivered, failed) with carrier error codes.</p>
+            <h4>Live dashboard</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Stats and activity update as they happen over a secured live connection, with delivery rate, response rate, channel breakdown and daily trends.</p>
           </div>
           <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
-            <h4>Email Bounce & Suppression</h4>
-            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Hard bounce detection that automatically adds bad addresses to a suppression list to protect domain reputation and prevent spam triggers.</p>
+            <h4>Call summaries</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">After each call the operator sees a one-line summary with a sentiment and a priority tag, so the urgent ones stand out.</p>
           </div>
           <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
-            <h4>Interactive KPI Gauges & Trends</h4>
-            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Live delivery rate %, response rate %, channel breakdown donuts, and daily volume time-series charts on the operator dashboard.</p>
+            <h4>Contacts and exports</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Import contacts from CSV, manage them per organisation, and export reminder history and daily trends as CSV.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="research" style="margin-bottom: 0;">
+        <span id="literature"></span><span id="amazon"></span><span id="integrity"></span>
+        <div class="card-icon">🔬</div>
+        <span class="card-tag">Also on the platform</span>
+        <h2>Research Agents</h2>
+        <p>
+          The same platform also hosts three research agents from the first sprints, available in the web app alongside the receptionist.
+        </p>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>Literature review</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Searches arXiv, Semantic Scholar and PubMed in parallel, writes a short synthesis and exports BibTeX citations.</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>Amazon seller research</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Scrapes and scores products and suppliers to help find and compare opportunities.</p>
+          </div>
+          <div style="background: rgba(255,255,255,0.03); padding: 1.25rem; border-radius: 12px; border: 1px solid var(--border-glass);">
+            <h4>Academic integrity check</h4>
+            <p style="font-size: 0.92rem; margin-top: 0.5rem;">Estimates how likely a text is AI-generated and searches for matching sources.</p>
           </div>
         </div>
       </div>
