@@ -70,3 +70,64 @@ def create_reminder_for_booking(
         return {"ok": False, "error": str(exc)}
 
     return {"ok": True, "reminder_id": reminder.id, "fires_at_utc": reminder.scheduled_at_utc}
+
+def reschedule_reminders_for_booking(
+    booking_id: str,
+    summary: str,
+    start_iso: str,
+    store: ReminderStore | None = None,
+    lead_hours: int | None = None,
+    contact_timezone: str | None = None,
+) -> dict:
+    """Move pending or paused reminders associated with a calendar event."""
+    if not booking_id:
+        return {"ok": False, "error": "No calendar booking ID is available"}
+
+    store = store or ReminderStore()
+    lead_hours = (
+        lead_hours if lead_hours is not None
+        else REMINDER_DEFAULT_LEAD_HOURS
+    )
+    tz_name = contact_timezone or TIMEZONE
+
+    try:
+        appointment_local = datetime.fromisoformat(start_iso)
+        reminder_utc = local_to_utc_iso(
+            (appointment_local - timedelta(hours=lead_hours)).isoformat(),
+            tz_name,
+        )
+    except (ValueError, TypeError) as exc:
+        return {"ok": False, "error": f"Couldn't parse appointment time: {exc}"}
+
+    reminders = store.list_for_booking(booking_id)
+    updated = 0
+    skipped = 0
+    formatted_time = appointment_local.strftime(
+        "%A %d %B, %I:%M %p"
+    ).replace(" 0", " ")
+    message = f"Reminder: you have '{summary}' coming up at {formatted_time}."
+
+    for reminder in reminders:
+        if reminder.status not in ("pending", "paused"):
+            skipped += 1
+            continue
+
+        if not store.reschedule(reminder.id, reminder_utc):
+            return {
+                "ok": False,
+                "error": "A linked reminder could not be rescheduled",
+                "updated": updated,
+            }
+
+        if not store.update_message(
+            reminder.id, message, subject=f"Reminder: {summary}"
+        ):
+            return {
+                "ok": False,
+                "error": "Reminder time changed, but its message could not be updated",
+                "updated": updated + 1,
+            }
+
+        updated += 1
+
+    return {"ok": True, "updated": updated, "skipped": skipped}

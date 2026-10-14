@@ -21,14 +21,22 @@
 import json
 import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import anthropic
 
-from agent.calendar_client import book_appointment, is_configured as calendar_configured
+from agent.calendar_client import (
+    book_appointment,
+    find_upcoming_appointments,
+    update_appointment,
+    is_configured as calendar_configured,
+)
 from agent.faq import find_answer
 from agent.memory import SessionMemory
-from agent.reminders.booking_hooks import create_reminder_for_booking
+from agent.reminders.booking_hooks import (
+    create_reminder_for_booking,
+    reschedule_reminders_for_booking,
+)
 from config.settings import ANTHROPIC_API_KEY, CLAUDE_MODEL, TIMEZONE, ESCALATION_LOG
 
 RECEPTIONIST_SYSTEM_PROMPT = """You are the front-desk AI receptionist for Agent Factory.
@@ -80,6 +88,7 @@ class Receptionist:
         self.client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
         self.memory = SessionMemory()
         self._pending_bookings: dict[str, dict] = {}
+        self._pending_reschedules: dict[str, dict] = {}
 
     # ── Main entry point ─────────────────────────────────────────
     def handle(
@@ -98,6 +107,21 @@ class Receptionist:
         message = (message or "").strip()
         if not message:
             return {"answer": "Sorry, I didn't catch that — could you say that again?", "intent": "general"}
+
+        pending_reschedule = self._get_pending_reschedule(
+            session_id, contact_channel, contact_address
+        )
+        if self._wants_reschedule(message) or pending_reschedule:
+            result = self._handle_reschedule(
+                message, session_id, contact_channel, contact_address
+            )
+            self.memory.save_context(
+                message,
+                "receptionist_reschedule",
+                result.get("answer", ""),
+                session_id=session_id,
+            )
+            return result
 
         pending = self._get_pending(session_id)
 
@@ -200,6 +224,358 @@ class Receptionist:
             pass  # don't fail the user-facing reply just because logging failed
 
     # ── Appointment booking ──────────────────────────────────────
+    @staticmethod
+    def _reschedule_key(
+        session_id: str | None,
+        contact_channel: str | None,
+        contact_address: str | None,
+    ) -> str:
+        if contact_channel and contact_address:
+            return (
+                f"contact:{contact_channel.strip().lower()}:"
+                f"{contact_address.strip().lower()}"
+            )
+        return session_id or "_default"
+
+    def _get_pending_reschedule(
+        self,
+        session_id: str | None,
+        contact_channel: str | None,
+        contact_address: str | None,
+    ) -> dict | None:
+        key = self._reschedule_key(session_id, contact_channel, contact_address)
+        pending = self._pending_reschedules.get(key)
+        if pending and time.time() - pending["ts"] > _PENDING_BOOKING_TTL:
+            del self._pending_reschedules[key]
+            return None
+        return pending
+
+    @staticmethod
+    def _wants_reschedule(message: str) -> bool:
+        text = (message or "").lower()
+        phrases = (
+            "reschedule", "rescheduling", "move my appointment",
+            "move the appointment", "move my booking",
+            "change my appointment", "change the appointment",
+            "change my booking", "can't do", "cannot do",
+            "can't make", "cannot make", "won't make it",
+            "will not make it", "different time", "change the time",
+        )
+        if any(phrase in text for phrase in phrases):
+            return True
+        if "what about" in text:
+            date_terms = (
+                "monday", "tuesday", "wednesday", "thursday",
+                "friday", "saturday", "sunday", "morning",
+                "afternoon", "evening", "tomorrow", "next week",
+            )
+            return any(term in text for term in date_terms)
+        return False
+
+    @staticmethod
+    def _event_datetime(event: dict, field: str) -> str | None:
+        value = event.get(field) or {}
+        return value.get("dateTime") or value.get("date")
+
+    @staticmethod
+    def _select_reschedule_event(events: list[dict], message: str) -> dict | None:
+        if len(events) == 1:
+            return events[0]
+
+        text = re.sub(r"[^a-z0-9]+", " ", (message or "").lower()).strip()
+        ignored = {
+            "appointment", "booking", "book", "move", "change",
+            "reschedule", "please", "the", "my", "that", "one",
+        }
+        matches = []
+
+        for event in events:
+            summary = str(event.get("summary") or "").lower()
+            normal = re.sub(r"[^a-z0-9]+", " ", summary).strip()
+            tokens = [
+                token for token in normal.split()
+                if len(token) >= 4 and token not in ignored
+            ]
+            if normal and normal in text:
+                matches.append(event)
+            elif any(
+                re.search(rf"\b{re.escape(token)}\b", text)
+                for token in tokens
+            ):
+                matches.append(event)
+
+        return matches[0] if len(matches) == 1 else None
+
+    def _extract_reschedule_start(self, message: str, event: dict) -> dict:
+        now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
+        old_start = self._event_datetime(event, "start") or "unknown"
+        prompt = (
+            "Extract the NEW proposed start date and time for an existing appointment.\n"
+            f"Today's date/time is {now} in {TIMEZONE}.\n"
+            f"Existing appointment: {event.get('summary') or 'appointment'}, "
+            f"currently at {old_start}.\n"
+            'Return only JSON: {"start": "YYYY-MM-DDTHH:MM:SS", "clarify": null}.\n'
+            "If the user gives only a vague part of day, such as Friday morning "
+            "without an hour, or omits a definite date or time, return start:null "
+            "and ask a short clarification. Never invent the hour or date. "
+            "Resolve clearly stated relative dates using today's date.\n"
+            f"User message: {message}"
+        )
+
+        try:
+            response = self.client.messages.create(
+                model=CLAUDE_MODEL,
+                max_tokens=160,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            raw = response.content[0].text.strip()
+            raw = re.sub(
+                r"^```(?:json)?|```$", "", raw, flags=re.MULTILINE
+            ).strip()
+            data = json.loads(raw)
+        except Exception:
+            return {"clarify": "What exact date and time would suit you instead?"}
+
+        if not isinstance(data, dict) or not data.get("start"):
+            clarify = data.get("clarify") if isinstance(data, dict) else None
+            return {
+                "clarify": clarify or "What exact date and time would suit you instead?"
+            }
+
+        try:
+            datetime.fromisoformat(str(data["start"]).replace("Z", "+00:00"))
+        except ValueError:
+            return {"clarify": "What exact date and time would suit you instead?"}
+
+        return data
+
+    def _handle_reschedule(
+        self,
+        message: str,
+        session_id: str | None,
+        contact_channel: str | None = None,
+        contact_address: str | None = None,
+    ) -> dict:
+        key = self._reschedule_key(
+            session_id, contact_channel, contact_address
+        )
+        pending = self._get_pending_reschedule(
+            session_id, contact_channel, contact_address
+        )
+        request_message = message
+
+        if not contact_channel or not contact_address:
+            return {
+                "answer": (
+                    "To find your existing appointment safely, please contact "
+                    "us through the same phone number or email address used "
+                    "when booking."
+                ),
+                "intent": "reschedule",
+                "rescheduled": False,
+                "needs_info": True,
+            }
+
+        if not calendar_configured():
+            self._pending_reschedules.pop(key, None)
+            return {
+                "answer": (
+                    "I can't access the booking calendar right now, so I "
+                    "haven't changed anything. Please contact our team."
+                ),
+                "intent": "reschedule",
+                "rescheduled": False,
+            }
+
+        if pending and pending.get("event"):
+            event = pending["event"]
+            request_message = " ".join(
+                part for part in (pending.get("request_message"), message) if part
+            )
+        else:
+            if pending and pending.get("events"):
+                events = pending["events"]
+                request_message = " ".join(
+                    part for part in (pending.get("request_message"), message) if part
+                )
+            else:
+                lookup = find_upcoming_appointments(
+                    contact_channel, contact_address
+                )
+                if not lookup.get("ok"):
+                    self._pending_reschedules.pop(key, None)
+                    return {
+                        "answer": (
+                            "I couldn't check the booking calendar just now, "
+                            "so I haven't changed anything. Please try again shortly."
+                        ),
+                        "intent": "reschedule",
+                        "rescheduled": False,
+                    }
+                events = lookup.get("events", [])
+
+            if not events:
+                self._pending_reschedules.pop(key, None)
+                return {
+                    "answer": (
+                        "I couldn't find an upcoming appointment linked to "
+                        "this contact. I haven't made any changes. Would you "
+                        "like help making a new booking?"
+                    ),
+                    "intent": "reschedule",
+                    "rescheduled": False,
+                }
+
+            event = self._select_reschedule_event(events, message)
+            if event is None:
+                self._pending_reschedules[key] = {
+                    "events": events,
+                    "kind": "select_event",
+                    "request_message": request_message,
+                    "ts": time.time(),
+                }
+                options = []
+                for item in events[:5]:
+                    start = self._event_datetime(item, "start") or "date unavailable"
+                    options.append(
+                        f"{item.get('summary') or 'Appointment'} "
+                        f"({start.replace('T', ' ')[:16]})"
+                    )
+                return {
+                    "answer": (
+                        "I found more than one upcoming appointment. "
+                        "Which one would you like to move? "
+                        + "; ".join(options)
+                        + "."
+                    ),
+                    "intent": "reschedule",
+                    "rescheduled": False,
+                    "needs_info": True,
+                }
+
+        old_start = self._event_datetime(event, "start")
+        old_end = self._event_datetime(event, "end")
+        event_id = event.get("id")
+
+        if (
+            not event_id
+            or not old_start
+            or not old_end
+            or "T" not in old_start
+            or "T" not in old_end
+        ):
+            self._pending_reschedules[key] = {
+                "event": event,
+                "kind": "target_time",
+                "request_message": request_message,
+                "ts": time.time()
+            }
+            return {
+                "answer": (
+                    "I found the appointment, but it doesn't contain enough "
+                    "timed-event details for me to move it safely. Please "
+                    "contact our team for help."
+                ),
+                "intent": "reschedule",
+                "rescheduled": False,
+            }
+
+        extracted = self._extract_reschedule_start(request_message, event)
+        if extracted.get("clarify") or not extracted.get("start"):
+            self._pending_reschedules[key] = {
+                "event": event,
+                "kind": "target_time",
+                "request_message": request_message,
+                "ts": time.time()
+            }
+            return {
+                "answer": (
+                    extracted.get("clarify")
+                    or "What exact date and time would suit you instead?"
+                ),
+                "intent": "reschedule",
+                "rescheduled": False,
+                "needs_info": True,
+            }
+
+        try:
+            old_start_dt = datetime.fromisoformat(
+                old_start.replace("Z", "+00:00")
+            )
+            old_end_dt = datetime.fromisoformat(
+                old_end.replace("Z", "+00:00")
+            )
+            proposed_start = datetime.fromisoformat(
+                str(extracted["start"]).replace("Z", "+00:00")
+            )
+            duration = old_end_dt - old_start_dt
+            if duration.total_seconds() <= 0:
+                duration = timedelta(minutes=30)
+            proposed_end = proposed_start + duration
+        except (ValueError, TypeError):
+            self._pending_reschedules[key] = {
+                "event": event,
+                "kind": "target_time",
+                "request_message": request_message,
+                "ts": time.time()
+            }
+            return {
+                "answer": (
+                    "I couldn't safely interpret the appointment times. "
+                    "What exact date and time would suit you instead?"
+                ),
+                "intent": "reschedule",
+                "rescheduled": False,
+                "needs_info": True,
+            }
+
+        moved = update_appointment(
+            event_id=event_id,
+            start_iso=proposed_start.isoformat(),
+            end_iso=proposed_end.isoformat(),
+            timezone=TIMEZONE,
+        )
+        if not moved.get("ok"):
+            self._pending_reschedules.pop(key, None)
+            return {
+                "answer": (
+                    "I couldn't move the appointment on the calendar, so "
+                    "its time is unchanged. Please try again or contact our team."
+                ),
+                "intent": "reschedule",
+                "rescheduled": False,
+            }
+
+        reminder_update = reschedule_reminders_for_booking(
+            booking_id=event_id,
+            summary=str(event.get("summary") or "Appointment"),
+            start_iso=proposed_start.isoformat(),
+        )
+        self._pending_reschedules.pop(key, None)
+
+        answer = (
+            f"Your appointment, **{event.get('summary') or 'Appointment'}**, "
+            f"has been moved to "
+            f"{proposed_start.strftime('%A %d %B at %I:%M %p').replace(' 0', ' ')}."
+        )
+        if moved.get("event_url"):
+            answer += f" [View updated event]({moved['event_url']})"
+        if reminder_update.get("ok") and reminder_update.get("updated", 0) > 0:
+            answer += " Your existing reminder has also been updated."
+        elif not reminder_update.get("ok"):
+            answer += (
+                " However, I couldn't update the linked reminder; "
+                "please contact our team to check it."
+            )
+
+        return {
+            "answer": answer,
+            "intent": "reschedule",
+            "rescheduled": True,
+            "event_id": event_id,
+            "reminders_updated": reminder_update.get("updated", 0),
+        }
+
     def _handle_appointment(
         self,
         message: str,
@@ -222,11 +598,18 @@ class Receptionist:
             self.memory.save_context(message, "receptionist_appointment", answer, session_id=session_id)
             return {"answer": answer, "intent": "appointment", "booked": False, "needs_info": True}
 
+        calendar_identity = {}
+        if contact_channel and contact_address:
+            calendar_identity = {
+                "contact_channel": contact_channel,
+                "contact_address": contact_address,
+            }
         result = book_appointment(
             summary=extracted["summary"],
             start_iso=extracted["start"],
             end_iso=extracted["end"],
             timezone=TIMEZONE,
+            **calendar_identity,
         )
         ics_link = self._ics_link(extracted)
 
@@ -246,6 +629,7 @@ class Receptionist:
                     start_iso=extracted["start"],
                     contact_channel=contact_channel,
                     contact_address=contact_address,
+                    booking_id=result.get("event_id"),
                 )
                 if reminder_result["ok"]:
                     answer += " We'll send you a reminder before it starts."
