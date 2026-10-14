@@ -17,6 +17,7 @@ from datetime import datetime, timezone, timedelta
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from fastapi import APIRouter, Depends, Query, Response
+from auth.rbac import require_org_member
 from app.web_ui.activity_db import (
     get_delivery_analytics,
     log_delivery_event,
@@ -29,7 +30,7 @@ router = APIRouter(prefix="/analytics", tags=["Analytics & Reporting"])
 
 
 @router.get("/summary")
-async def get_analytics_summary():
+async def get_analytics_summary(identity: dict = Depends(require_org_member)):
     """
     Get aggregated analytics metrics:
     - Delivery rate %
@@ -38,34 +39,34 @@ async def get_analytics_summary():
     - Channel breakdown
     PROJ-435
     """
-    return get_delivery_analytics()
+    return get_delivery_analytics(identity["org_id"])
 
 
 @router.get("/trends")
-async def get_analytics_trends():
+async def get_analytics_trends(identity: dict = Depends(require_org_member)):
     """Get time-series delivery and response trends for dashboard charts (PROJ-436)."""
-    analytics = get_delivery_analytics()
+    analytics = get_delivery_analytics(identity["org_id"])
     return {"daily_trends": analytics.get("daily_trends", [])}
 
 
 @router.get("/channels")
-async def get_channel_metrics():
+async def get_channel_metrics(identity: dict = Depends(require_org_member)):
     """Get performance metrics broken down by delivery channel (PROJ-435)."""
-    analytics = get_delivery_analytics()
+    analytics = get_delivery_analytics(identity["org_id"])
     return {"channels": analytics.get("channels", {})}
 
 
 @router.get("/failures")
-async def get_failure_breakdown():
+async def get_failure_breakdown(identity: dict = Depends(require_org_member)):
     """Get top failure and bounce error breakdown (PROJ-435)."""
-    analytics = get_delivery_analytics()
+    analytics = get_delivery_analytics(identity["org_id"])
     return {"failure_reasons": analytics.get("failure_reasons", {})}
 
 
 @router.get("/export.csv", include_in_schema=False)
-async def export_analytics_csv():
+async def export_analytics_csv(identity: dict = Depends(require_org_member)):
     """Daily delivery trends (last 7 days) as a downloadable CSV (PROJ-492)."""
-    trends = get_delivery_analytics().get("daily_trends", [])
+    trends = get_delivery_analytics(identity["org_id"]).get("daily_trends", [])
 
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=("date", "sent", "delivered", "failed"))
@@ -83,7 +84,7 @@ async def export_analytics_csv():
 @router.post("/seed-demo-data")
 async def seed_demo_analytics_data(
     count: int = Query(default=35, ge=5, le=100),
-    username: str = Depends(get_current_username),
+    identity: dict = Depends(require_org_member),
 ):
     """
     Seed realistic sample delivery records and responses for testing and demonstration.
@@ -135,6 +136,7 @@ async def seed_demo_analytics_data(
             reminder_type=rtype,
             status=status,
             metadata={"source": "demo_seed", "seeded_at": item_time},
+            org_id=identity["org_id"],
         )
 
         delivered_time = (now - timedelta(days=day_offset, hours=random.randint(0, 10))).isoformat() if status == "delivered" else None
@@ -148,4 +150,4 @@ async def seed_demo_analytics_data(
 
         seeded += 1
 
-    return {"status": "ok", "seeded_records": seeded, "analytics": get_delivery_analytics()}
+    return {"status": "ok", "seeded_records": seeded, "analytics": get_delivery_analytics(identity["org_id"])}

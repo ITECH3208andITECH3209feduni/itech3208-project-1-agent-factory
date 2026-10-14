@@ -84,21 +84,53 @@ def _get_db() -> sqlite3.Connection:
         _db.row_factory = sqlite3.Row
         _db.execute("PRAGMA journal_mode=WAL")
         _db.executescript(_SCHEMA)
+        _migrate_org_columns(_db)
     return _db
 
 
-def log_activity(channel: str, caller: str, intent: str = "", summary: str = "") -> None:
+# PROJ-501: activity, delivery history and call summaries belong to an
+# organisation. Rows written before the column existed (org_id NULL) are the
+# original single-tenant data, so they stay visible to the default organisation
+# only; every other organisation sees just its own rows.
+LEGACY_ORG_ID = 1
+_ORG_TABLES = ("activity", "delivery_history", "call_summaries")
+
+
+def _migrate_org_columns(db: sqlite3.Connection) -> None:
+    for table in _ORG_TABLES:
+        cols = {r["name"] for r in db.execute(f"PRAGMA table_info({table})")}
+        if "org_id" not in cols:
+            db.execute(f"ALTER TABLE {table} ADD COLUMN org_id INTEGER")
+        db.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_org ON {table} (org_id)")
+    db.commit()
+
+
+def _org_filter(org_id: int | None) -> tuple[str, list]:
+    """SQL fragment and params limiting a query to one organisation.
+
+    org_id=None means "no scoping" for internal callers (tests, scripts); every
+    HTTP route passes the caller's organisation."""
+    if org_id is None:
+        return "", []
+    if org_id == LEGACY_ORG_ID:
+        return " AND (org_id = ? OR org_id IS NULL)", [org_id]
+    return " AND org_id = ?", [org_id]
+
+
+def log_activity(channel: str, caller: str, intent: str = "", summary: str = "",
+                 org_id: int | None = None) -> None:
     """Insert one interaction row into the activity table."""
     db = _get_db()
     db.execute(
-        "INSERT INTO activity (timestamp, channel, caller, intent, summary)"
-        " VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO activity (timestamp, channel, caller, intent, summary, org_id)"
+        " VALUES (?, ?, ?, ?, ?, ?)",
         (
             datetime.now(timezone.utc).isoformat(),
             channel,
             caller,
             (intent or "")[:100],
             (summary or "")[:300],
+            org_id,
         ),
     )
     db.commit()
@@ -108,19 +140,20 @@ def log_activity(channel: str, caller: str, intent: str = "", summary: str = "")
         "intent": intent,
         "summary": summary,
         "time": "just now",
-    })
+    }, org_id)
 
 
-def _notify_ws(event_type: str, data: dict):
+def _notify_ws(event_type: str, data: dict, org_id: int | None = None):
     try:
         from app.web_ui.ws_routes import broadcast_dashboard_event
-        broadcast_dashboard_event(event_type, data)
+        broadcast_dashboard_event(event_type, data, org_id)
     except Exception:
         pass
 
 
 def save_call_summary(
-    call_sid: str, caller: str, summary: str, sentiment: str, priority: str, turns: int = 0
+    call_sid: str, caller: str, summary: str, sentiment: str, priority: str, turns: int = 0,
+    org_id: int | None = None,
 ) -> None:
     """Store the post-call summary once per call (PROJ-477). A second call with
     the same SID is ignored, so the goodbye path and the status callback can
@@ -128,8 +161,8 @@ def save_call_summary(
     db = _get_db()
     db.execute(
         "INSERT OR IGNORE INTO call_summaries"
-        " (call_sid, timestamp, caller, summary, sentiment, priority, turns)"
-        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        " (call_sid, timestamp, caller, summary, sentiment, priority, turns, org_id)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             call_sid,
             datetime.now(timezone.utc).isoformat(),
@@ -138,6 +171,7 @@ def save_call_summary(
             sentiment,
             priority,
             turns,
+            org_id,
         ),
     )
     db.commit()
@@ -150,7 +184,7 @@ def get_call_summary(call_sid: str) -> dict | None:
     return dict(row) if row else None
 
 
-def get_recent(limit: int = 50) -> list[dict]:
+def get_recent(limit: int = 50, org_id: int | None = None) -> list[dict]:
     """Return the last `limit` interactions, newest first, with human time.
 
     A voice call logs one row per turn. Once a call has a post-call summary
@@ -158,12 +192,13 @@ def get_recent(limit: int = 50) -> list[dict]:
     sentiment and a priority; calls still in progress keep their per-turn rows.
     """
     db = _get_db()
+    clause, params = _org_filter(org_id)
     rows = db.execute(
-        "SELECT * FROM activity ORDER BY id DESC LIMIT ?", (limit * 3,)
+        f"SELECT * FROM activity WHERE 1=1{clause} ORDER BY id DESC LIMIT ?", params + [limit * 3]
     ).fetchall()
     summaries = {
         r["call_sid"]: dict(r)
-        for r in db.execute("SELECT * FROM call_summaries").fetchall()
+        for r in db.execute(f"SELECT * FROM call_summaries WHERE 1=1{clause}", params).fetchall()
     }
     result = []
     seen_calls: set[str] = set()
@@ -199,11 +234,12 @@ def start_of_today_utc() -> str:
     return midnight.astimezone(timezone.utc).isoformat()
 
 
-def get_stats_today() -> dict:
+def get_stats_today(org_id: int | None = None) -> dict:
     """Return today's call / SMS / booked counts (today in the configured timezone)."""
     db = _get_db()
+    clause, params = _org_filter(org_id)
     rows = db.execute(
-        "SELECT channel, intent FROM activity WHERE timestamp >= ?", (start_of_today_utc(),)
+        f"SELECT channel, intent FROM activity WHERE timestamp >= ?{clause}", [start_of_today_utc()] + params
     ).fetchall()
     calls   = sum(1 for r in rows if r["channel"] == "voice")
     sms     = sum(1 for r in rows if r["channel"] == "sms")
@@ -240,6 +276,7 @@ def log_delivery_event(
     reminder_type: str = "general",
     status: str = "queued",
     metadata: dict | None = None,
+    org_id: int | None = None,
 ) -> dict:
     """Log an outbound message/reminder delivery event."""
     db = _get_db()
@@ -249,23 +286,24 @@ def log_delivery_event(
         """
         INSERT INTO delivery_history (
             message_id, recipient, channel, reminder_type, status,
-            sent_at, updated_at, metadata
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            sent_at, updated_at, metadata, org_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(message_id) DO UPDATE SET
             recipient = excluded.recipient,
             channel = excluded.channel,
             reminder_type = excluded.reminder_type,
             status = excluded.status,
             updated_at = excluded.updated_at,
-            metadata = excluded.metadata
+            metadata = excluded.metadata,
+            org_id = COALESCE(delivery_history.org_id, excluded.org_id)
         """,
-        (message_id, recipient, channel.lower(), reminder_type.lower(), status.lower(), now, now, meta_json),
+        (message_id, recipient, channel.lower(), reminder_type.lower(), status.lower(), now, now, meta_json, org_id),
     )
     db.commit()
     row = db.execute("SELECT * FROM delivery_history WHERE message_id = ?", (message_id,)).fetchone()
     res = _format_delivery_row(dict(row)) if row else {}
     if res:
-        _notify_ws("delivery_update", res)
+        _notify_ws("delivery_update", res, row["org_id"])
     return res
 
 
@@ -317,7 +355,7 @@ def update_delivery_status(
     row = db.execute("SELECT * FROM delivery_history WHERE message_id = ?", (message_id,)).fetchone()
     res = _format_delivery_row(dict(row)) if row else None
     if res:
-        _notify_ws("delivery_update", res)
+        _notify_ws("delivery_update", res, row["org_id"])
     return res
 
 
@@ -327,11 +365,12 @@ def get_delivery_history(
     status: str | None = None,
     channel: str | None = None,
     search: str | None = None,
+    org_id: int | None = None,
 ) -> dict:
     """Return filtered, paginated delivery history."""
     db = _get_db()
-    query = "SELECT * FROM delivery_history WHERE 1=1"
-    params: list = []
+    clause, params = _org_filter(org_id)
+    query = f"SELECT * FROM delivery_history WHERE 1=1{clause}"
 
     if status and status.lower() != "all":
         query += " AND LOWER(status) = ?"
@@ -363,20 +402,21 @@ def get_delivery_history(
     }
 
 
-def get_delivery_by_id(delivery_id_or_msg_id: int | str) -> dict | None:
-    """Fetch single delivery record by ID or message_id."""
+def get_delivery_by_id(delivery_id_or_msg_id: int | str, org_id: int | None = None) -> dict | None:
+    """Fetch single delivery record by ID or message_id (only within org_id when given)."""
     db = _get_db()
+    clause, params = _org_filter(org_id)
     if isinstance(delivery_id_or_msg_id, int) or (isinstance(delivery_id_or_msg_id, str) and delivery_id_or_msg_id.isdigit()):
-        row = db.execute("SELECT * FROM delivery_history WHERE id = ?", (int(delivery_id_or_msg_id),)).fetchone()
+        row = db.execute(f"SELECT * FROM delivery_history WHERE id = ?{clause}", [int(delivery_id_or_msg_id)] + params).fetchone()
     else:
-        row = db.execute("SELECT * FROM delivery_history WHERE message_id = ?", (str(delivery_id_or_msg_id),)).fetchone()
+        row = db.execute(f"SELECT * FROM delivery_history WHERE message_id = ?{clause}", [str(delivery_id_or_msg_id)] + params).fetchone()
     return _format_delivery_row(dict(row)) if row else None
 
 
-def retry_delivery_message(delivery_id_or_msg_id: int | str) -> dict | None:
+def retry_delivery_message(delivery_id_or_msg_id: int | str, org_id: int | None = None) -> dict | None:
     """Increment retry count, reset status to queued, and return updated record."""
     db = _get_db()
-    record = get_delivery_by_id(delivery_id_or_msg_id)
+    record = get_delivery_by_id(delivery_id_or_msg_id, org_id)
     if not record:
         return None
 
@@ -434,10 +474,13 @@ def _format_delivery_row(d: dict) -> dict:
 
 # ── Analytics Aggregation (PROJ-398, PROJ-435) ────────────────────────────
 
-def get_delivery_analytics() -> dict:
-    """Compute delivery metrics, rates, and channel breakdowns."""
+def get_delivery_analytics(org_id: int | None = None) -> dict:
+    """Compute delivery metrics, rates, and channel breakdowns (for one organisation when given)."""
     db = _get_db()
-    rows = db.execute("SELECT channel, status, sent_at, error_code, error_message FROM delivery_history").fetchall()
+    clause, params = _org_filter(org_id)
+    rows = db.execute(
+        f"SELECT channel, status, sent_at, error_code, error_message FROM delivery_history WHERE 1=1{clause}", params
+    ).fetchall()
     
     total = len(rows)
     delivered = sum(1 for r in rows if r["status"] in ("delivered", "completed"))
@@ -449,7 +492,7 @@ def get_delivery_analytics() -> dict:
     failure_rate = round(((failed + bounced) / total * 100), 1) if total > 0 else 0.0
 
     # Activity responses
-    activity_rows = db.execute("SELECT channel, timestamp FROM activity").fetchall()
+    activity_rows = db.execute(f"SELECT channel, timestamp FROM activity WHERE 1=1{clause}", params).fetchall()
     total_activity = len(activity_rows)
     response_rate = round((total_activity / max(total, 1) * 100), 1) if total > 0 else (92.5 if total_activity > 0 else 0.0)
     if response_rate > 100.0:

@@ -18,7 +18,9 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from auth.rbac import require_org_member
 
 from app.web_ui.activity_db import get_recent, get_stats_today, start_of_today_utc
 from config.settings import OUTPUT_DIR
@@ -31,12 +33,12 @@ _ESCALATIONS_FILE = os.path.join(OUTPUT_DIR, "escalations.jsonl")
 # ── PROJ-390 — Stats ───────────────────────────────────────────
 
 @router.get("/activity/stats")
-async def activity_stats():
+async def activity_stats(identity: dict = Depends(require_org_member)):
     """
     Today's receptionist counters: calls, SMS, booked, escalations.
     Powers the four stat tiles in the operator dashboard.
     """
-    stats = get_stats_today()
+    stats = get_stats_today(identity["org_id"])
     stats["escalations"] = _count_escalations_today()
     return stats
 
@@ -44,12 +46,12 @@ async def activity_stats():
 # ── PROJ-387 — Activity feed ───────────────────────────────────
 
 @router.get("/activity")
-async def activity_feed():
+async def activity_feed(identity: dict = Depends(require_org_member)):
     """
     Last 50 receptionist interactions (voice + SMS), newest first.
     Each item: channel, caller, intent, summary, time.
     """
-    return get_recent(50)
+    return get_recent(50, identity["org_id"])
 
 
 # ── PROJ-388 — Escalation queue ───────────────────────────────
