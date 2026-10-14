@@ -10,11 +10,23 @@ import pytest
 from fastapi.testclient import TestClient
 from app.web_ui.main import app
 from app.web_ui.activity_db import log_activity, log_delivery_event, update_delivery_status
+from app.web_ui.auth_routes import get_current_username
 
 
 @pytest.fixture
 def client():
     return TestClient(app)
+
+
+@pytest.fixture
+def authed_client():
+    """seed-demo-data is gated behind login (PROJ-491 review: it was reachable
+    by anyone, unauthenticated, able to pollute live delivery data)."""
+    app.dependency_overrides[get_current_username] = lambda: "test-user"
+    try:
+        yield TestClient(app)
+    finally:
+        del app.dependency_overrides[get_current_username]
 
 
 def test_analytics_aggregation_summary(client):
@@ -63,11 +75,28 @@ def test_analytics_trends_for_charts(client):
     assert isinstance(data["daily_trends"], list)
 
 
-def test_analytics_seed_demo_data(client):
+def test_analytics_seed_demo_data(authed_client):
     """Verify POST /analytics/seed-demo-data populates sample data (PROJ-435, PROJ-436)."""
-    resp = client.post("/analytics/seed-demo-data?count=10")
+    resp = authed_client.post("/analytics/seed-demo-data?count=10")
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "ok"
     assert data["seeded_records"] == 10
     assert "summary" in data["analytics"]
+
+
+def test_analytics_seed_demo_data_requires_login(client):
+    """Unauthenticated callers cannot pollute live delivery/analytics data (PROJ-491)."""
+    client.cookies.clear()  # conftest signs test clients in by default
+    resp = client.post("/analytics/seed-demo-data?count=10")
+    assert resp.status_code == 401
+
+
+def test_analytics_export_csv(client):
+    """Verify GET /analytics/export.csv returns a downloadable daily-trends CSV (PROJ-492)."""
+    log_delivery_event("EXPORT-S1", "+614111", "sms", "appointment", "delivered")
+    resp = client.get("/analytics/export.csv")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("text/csv")
+    assert "attachment" in resp.headers["content-disposition"]
+    assert resp.text.splitlines()[0] == "date,sent,delivered,failed"

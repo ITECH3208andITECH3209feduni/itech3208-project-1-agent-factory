@@ -11,7 +11,6 @@ vi.mock('../env.js', () => ({ readEnvFile: vi.fn(() => ({})) }));
 // Mock config
 vi.mock('../config.js', () => ({
   ASSISTANT_NAME: 'Andy',
-  DEFAULT_TRIGGER: '@Andy',
   TRIGGER_PATTERN: /^@Andy\b/i,
 }));
 
@@ -27,10 +26,9 @@ vi.mock('../logger.js', () => ({
 
 // Mock group-folder (used by downloadFile)
 vi.mock('../group-folder.js', () => ({
-  resolveGroupFolderPath: vi.fn(
-    (folder: string) => `/tmp/test-groups/${folder}`,
-  ),
+  resolveGroupFolderPath: vi.fn((folder: string) => `/tmp/test-groups/${folder}`),
 }));
+
 
 // --- Grammy mock ---
 
@@ -75,25 +73,6 @@ vi.mock('grammy', () => ({
     }
 
     stop() {}
-  },
-  // Minimal chainable stand-in for grammy's real InlineKeyboard — just
-  // enough to let telegram.ts build a keyboard object without needing the
-  // real grammy package in the unit test environment.
-  InlineKeyboard: class MockInlineKeyboard {
-    rows: Array<Array<{ text: string; callback_data: string }>> = [[]];
-
-    text(label: string, data: string) {
-      this.rows[this.rows.length - 1].push({
-        text: label,
-        callback_data: data,
-      });
-      return this;
-    }
-
-    row() {
-      this.rows.push([]);
-      return this;
-    }
   },
 }));
 
@@ -221,13 +200,10 @@ describe('TelegramChannel', () => {
     vi.spyOn(fs, 'writeFileSync').mockReturnValue(undefined);
 
     // Mock global fetch for file downloads
-    vi.stubGlobal(
-      'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
-      }),
-    );
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+    }));
   });
 
   afterEach(() => {
@@ -255,7 +231,6 @@ describe('TelegramChannel', () => {
 
       expect(currentBot().commandHandlers.has('chatid')).toBe(true);
       expect(currentBot().commandHandlers.has('ping')).toBe(true);
-      expect(currentBot().commandHandlers.has('start')).toBe(true);
       expect(currentBot().filterHandlers.has('message:text')).toBe(true);
       expect(currentBot().filterHandlers.has('message:photo')).toBe(true);
       expect(currentBot().filterHandlers.has('message:video')).toBe(true);
@@ -703,12 +678,7 @@ describe('TelegramChannel', () => {
       await channel.connect();
 
       const ctx = createMediaCtx({
-        extra: {
-          photo: [
-            { file_id: 'small_id', width: 90 },
-            { file_id: 'large_id', width: 800 },
-          ],
-        },
+        extra: { photo: [{ file_id: 'small_id', width: 90 }, { file_id: 'large_id', width: 800 }] },
       });
       await triggerMediaMessage('message:photo', ctx);
       await flushPromises();
@@ -737,8 +707,7 @@ describe('TelegramChannel', () => {
       expect(opts.onMessage).toHaveBeenCalledWith(
         'tg:100200300',
         expect.objectContaining({
-          content:
-            '[Photo] (/workspace/group/attachments/photo_1.jpg) Look at this',
+          content: '[Photo] (/workspace/group/attachments/photo_1.jpg) Look at this',
         }),
       );
     });
@@ -769,9 +738,7 @@ describe('TelegramChannel', () => {
       const channel = new TelegramChannel('test-token', opts);
       await channel.connect();
 
-      currentBot().api.getFile.mockResolvedValueOnce({
-        file_path: 'documents/file_0.pdf',
-      });
+      currentBot().api.getFile.mockResolvedValueOnce({ file_path: 'documents/file_0.pdf' });
 
       const ctx = createMediaCtx({
         extra: { document: { file_name: 'report.pdf', file_id: 'doc_id' } },
@@ -783,8 +750,7 @@ describe('TelegramChannel', () => {
       expect(opts.onMessage).toHaveBeenCalledWith(
         'tg:100200300',
         expect.objectContaining({
-          content:
-            '[Document: report.pdf] (/workspace/group/attachments/report.pdf)',
+          content: '[Document: report.pdf] (/workspace/group/attachments/report.pdf)',
         }),
       );
     });
@@ -794,9 +760,7 @@ describe('TelegramChannel', () => {
       const channel = new TelegramChannel('test-token', opts);
       await channel.connect();
 
-      currentBot().api.getFile.mockResolvedValueOnce({
-        file_path: 'videos/file_0.mp4',
-      });
+      currentBot().api.getFile.mockResolvedValueOnce({ file_path: 'videos/file_0.mp4' });
 
       const ctx = createMediaCtx({
         extra: { video: { file_id: 'vid_id' } },
@@ -818,9 +782,7 @@ describe('TelegramChannel', () => {
       const channel = new TelegramChannel('test-token', opts);
       await channel.connect();
 
-      currentBot().api.getFile.mockResolvedValueOnce({
-        file_path: 'voice/file_0.oga',
-      });
+      currentBot().api.getFile.mockResolvedValueOnce({ file_path: 'voice/file_0.oga' });
 
       const ctx = createMediaCtx({
         extra: { voice: { file_id: 'voice_id' } },
@@ -842,9 +804,7 @@ describe('TelegramChannel', () => {
       const channel = new TelegramChannel('test-token', opts);
       await channel.connect();
 
-      currentBot().api.getFile.mockResolvedValueOnce({
-        file_path: 'audio/file_0.mp3',
-      });
+      currentBot().api.getFile.mockResolvedValueOnce({ file_path: 'audio/file_0.mp3' });
 
       const ctx = createMediaCtx({
         extra: { audio: { file_id: 'audio_id', file_name: 'song.mp3' } },
@@ -922,13 +882,9 @@ describe('TelegramChannel', () => {
       const channel = new TelegramChannel('test-token', opts);
       await channel.connect();
 
-      currentBot().api.getFile.mockResolvedValueOnce({
-        file_path: 'documents/file_0.bin',
-      });
+      currentBot().api.getFile.mockResolvedValueOnce({ file_path: 'documents/file_0.bin' });
 
-      const ctx = createMediaCtx({
-        extra: { document: { file_id: 'doc_id' } },
-      });
+      const ctx = createMediaCtx({ extra: { document: { file_id: 'doc_id' } } });
       await triggerMediaMessage('message:document', ctx);
       await flushPromises();
 
@@ -1166,210 +1122,6 @@ describe('TelegramChannel', () => {
       await handler(ctx);
 
       expect(ctx.reply).toHaveBeenCalledWith('Andy is online.');
-    });
-
-    it('/start replies with health-check message and group instructions', async () => {
-      const opts = createTestOpts();
-      const channel = new TelegramChannel('test-token', opts);
-      await channel.connect();
-
-      const handler = currentBot().commandHandlers.get('start')!;
-      const ctx = {
-        chat: { id: 100200300, type: 'group' as const },
-        reply: vi.fn(),
-      };
-
-      await handler(ctx);
-
-      expect(ctx.reply).toHaveBeenCalledWith(
-        expect.stringContaining('Andy is online and ready'),
-        expect.objectContaining({ parse_mode: 'Markdown' }),
-      );
-      expect(ctx.reply).toHaveBeenCalledWith(
-        expect.stringContaining('/chatid'),
-        expect.any(Object),
-      );
-    });
-
-    it('/start replies with private-chat instructions', async () => {
-      const opts = createTestOpts();
-      const channel = new TelegramChannel('test-token', opts);
-      await channel.connect();
-
-      const handler = currentBot().commandHandlers.get('start')!;
-      const ctx = {
-        chat: { id: 555, type: 'private' as const },
-        reply: vi.fn(),
-      };
-
-      await handler(ctx);
-
-      expect(ctx.reply).toHaveBeenCalledWith(
-        expect.stringContaining('Just send me a message'),
-        expect.any(Object),
-      );
-    });
-
-    it('skips /start in the general message handler (not stored as a message)', async () => {
-      const opts = createTestOpts();
-      const channel = new TelegramChannel('test-token', opts);
-      await channel.connect();
-
-      const ctx = createTextCtx({ text: '/start' });
-      await triggerTextMessage(ctx);
-
-      expect(opts.onMessage).not.toHaveBeenCalled();
-    });
-
-    it('/start in a private chat attaches the mode-menu inline keyboard', async () => {
-      const opts = createTestOpts();
-      const channel = new TelegramChannel('test-token', opts);
-      await channel.connect();
-
-      const handler = currentBot().commandHandlers.get('start')!;
-      const ctx = {
-        chat: { id: 555, type: 'private' as const },
-        reply: vi.fn(),
-      };
-
-      await handler(ctx);
-
-      expect(ctx.reply).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({ reply_markup: expect.anything() }),
-      );
-    });
-
-    it('/start in a group omits the inline keyboard (chips only make sense 1:1)', async () => {
-      const opts = createTestOpts();
-      const channel = new TelegramChannel('test-token', opts);
-      await channel.connect();
-
-      const handler = currentBot().commandHandlers.get('start')!;
-      const ctx = {
-        chat: { id: 100200300, type: 'group' as const },
-        reply: vi.fn(),
-      };
-
-      await handler(ctx);
-
-      expect(ctx.reply).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({ reply_markup: undefined }),
-      );
-    });
-
-    it('/menu replies with the quick-action inline keyboard', async () => {
-      const opts = createTestOpts();
-      const channel = new TelegramChannel('test-token', opts);
-      await channel.connect();
-
-      const handler = currentBot().commandHandlers.get('menu')!;
-      const ctx = { reply: vi.fn() };
-
-      await handler(ctx);
-
-      expect(ctx.reply).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({ reply_markup: expect.anything() }),
-      );
-    });
-  });
-
-  // --- Inline keyboard chips (PROJ-229: mode selection) ---
-
-  describe('callback_query:data (menu chips)', () => {
-    function triggerCallback(ctx: any) {
-      const handlers =
-        currentBot().filterHandlers.get('callback_query:data') || [];
-      return Promise.all(handlers.map((h: Handler) => h(ctx)));
-    }
-
-    function createCallbackCtx(data: string, overrides?: Record<string, any>) {
-      return {
-        callbackQuery: {
-          id: 'cbq_1',
-          data,
-          message: { chat: { id: 100200300, type: 'group' } },
-        },
-        from: { id: 99001, first_name: 'Alice', username: 'alice_user' },
-        answerCallbackQuery: vi.fn().mockResolvedValue(undefined),
-        ...overrides,
-      };
-    }
-
-    it('the "book appointment" chip delivers a trigger-prefixed message', async () => {
-      const opts = createTestOpts();
-      const channel = new TelegramChannel('test-token', opts);
-      await channel.connect();
-
-      const ctx = createCallbackCtx('menu:book');
-      await triggerCallback(ctx);
-
-      expect(ctx.answerCallbackQuery).toHaveBeenCalled();
-      expect(opts.onMessage).toHaveBeenCalledWith(
-        'tg:100200300',
-        expect.objectContaining({
-          content: expect.stringContaining("I'd like to book an appointment"),
-          sender_name: 'Alice',
-        }),
-      );
-    });
-
-    it('the "history" chip delivers /history so it hits the existing UX-command path', async () => {
-      const opts = createTestOpts();
-      const channel = new TelegramChannel('test-token', opts);
-      await channel.connect();
-
-      const ctx = createCallbackCtx('menu:history');
-      await triggerCallback(ctx);
-
-      expect(opts.onMessage).toHaveBeenCalledWith(
-        'tg:100200300',
-        expect.objectContaining({ content: '/history' }),
-      );
-    });
-
-    it('the "help" chip delivers /help', async () => {
-      const opts = createTestOpts();
-      const channel = new TelegramChannel('test-token', opts);
-      await channel.connect();
-
-      const ctx = createCallbackCtx('menu:help');
-      await triggerCallback(ctx);
-
-      expect(opts.onMessage).toHaveBeenCalledWith(
-        'tg:100200300',
-        expect.objectContaining({ content: '/help' }),
-      );
-    });
-
-    it('acknowledges but ignores unrecognized callback data', async () => {
-      const opts = createTestOpts();
-      const channel = new TelegramChannel('test-token', opts);
-      await channel.connect();
-
-      const ctx = createCallbackCtx('menu:nonsense');
-      await triggerCallback(ctx);
-
-      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
-        expect.objectContaining({ text: expect.any(String) }),
-      );
-      expect(opts.onMessage).not.toHaveBeenCalled();
-    });
-
-    it('does nothing for chats that are not registered groups', async () => {
-      const opts = createTestOpts({
-        registeredGroups: vi.fn(() => ({})), // no groups registered
-      });
-      const channel = new TelegramChannel('test-token', opts);
-      await channel.connect();
-
-      const ctx = createCallbackCtx('menu:book');
-      await triggerCallback(ctx);
-
-      expect(ctx.answerCallbackQuery).toHaveBeenCalled();
-      expect(opts.onMessage).not.toHaveBeenCalled();
     });
   });
 

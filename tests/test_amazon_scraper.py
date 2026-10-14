@@ -6,6 +6,7 @@ All tests use mocked Playwright — they never hit real Amazon.
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+pytest.importorskip("playwright")
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from skills.amazon_scraper import scrape, ScraperError, _parse_search_results

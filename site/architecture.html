@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Architecture & Privacy — Agent Factory</title>
+  <meta name="description" content="How Agent Factory is built for the edge of your business: per-organisation data isolation, opt-in consent, an append-only audit trail, and what that means under the Australian Privacy Act.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/site.css">
+</head>
+<body>
+  <div class="bg-ambient"></div>
+
+  <!-- Navigation -->
+  <header class="site-nav">
+    <div class="nav-container">
+      <a href="index.html" class="nav-brand">
+        <span class="brand-icon">⚡</span>
+        <span>Agent Factory</span>
+      </a>
+
+      <button class="mobile-nav-toggle" id="mobile-nav-toggle" aria-label="Toggle Navigation">☰</button>
+
+      <ul class="nav-links" id="nav-links">
+        <li><a href="index.html" class="nav-link">Home</a></li>
+        <li><a href="features.html" class="nav-link">Features</a></li>
+        <li><a href="architecture.html" class="nav-link active">Architecture & Privacy</a></li>
+        <li><a href="pricing.html" class="nav-link">Deployment Tiers</a></li>
+        <li><a href="about.html" class="nav-link">About Project</a></li>
+        <li><a href="faq.html" class="nav-link">FAQ</a></li>
+      </ul>
+
+      <div class="nav-actions">
+        <button class="theme-toggle-btn" id="theme-toggle-btn" title="Toggle Dark/Light Mode">
+          <span id="theme-icon">☀️</span>
+        </button>
+        <a href="/" class="btn btn-primary">Open Web UI →</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="site-main">
+    <section class="section">
+      <div class="section-header">
+        <div class="badge">System Architecture &amp; Trust</div>
+        <h1>Built at the Edge of Your Business</h1>
+        <p>
+          Agent Factory answers at the point of contact — the phone, the SMS inbox — instead of
+          routing a caller through a cloud contact centre. Here's how it's built, and what that means for the data your customers hand over.
+        </p>
+      </div>
+
+      <div class="architecture-box">
+        <div class="arch-steps">
+          <div class="arch-step">
+            <div class="step-num">1</div>
+            <h4>Answers at the Edge</h4>
+            <p>Twilio Voice and SMS webhooks hit the receptionist the moment a call or text arrives — no hold queue, no after-hours voicemail. The orchestrator answers, books, or escalates in the same conversation.</p>
+          </div>
+          <div class="arch-step">
+            <div class="step-num">2</div>
+            <h4>Org-Scoped by Design</h4>
+            <p>Every contact, reminder, and consent record carries an <code>org_id</code>. Reads and writes are scoped to it at the database level, so one business's customer list cannot be queried from another's session.</p>
+          </div>
+          <div class="arch-step">
+            <div class="step-num">3</div>
+            <h4>Consent Before Contact</h4>
+            <p>Nothing sends to a contact who hasn't opted in — silence is not treated as consent. A <code>STOP</code> reply is honoured instantly, from any state, with no confirmation step in between.</p>
+          </div>
+          <div class="arch-step">
+            <div class="step-num">4</div>
+            <h4>An Audit Trail You Can't Edit</h4>
+            <p>Every consent change is appended to a permanent log — old state, new state, source, timestamp. There is no update or delete path for it, because an editable audit trail isn't evidence of anything.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Privacy Act section -->
+    <section class="section">
+      <div class="section-header">
+        <div class="badge">Privacy &amp; Consent</div>
+        <h2>What This Means Under the Privacy Act</h2>
+        <p>Federation University is based in Victoria, Australia — the platform's consent handling is built around the data-handling principles that matter most to a small business's customers.</p>
+      </div>
+
+      <div class="cards-grid">
+        <div class="card">
+          <div class="card-icon">🔒</div>
+          <h3>Data Minimisation</h3>
+          <p>A contact record holds only what a reminder needs: name, phone or email, channel preference, and quiet hours. No profiling fields, no data collected "just in case."</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">✅</div>
+          <h3>Opt-In, Not Opt-Out</h3>
+          <p>Under Australian anti-spam rules, the absence of a refusal is not consent. A contact must be explicitly opted in before the first reminder ever sends.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">🌙</div>
+          <h3>Quiet Hours, Respected</h3>
+          <p>Every contact sets their own do-not-disturb window. A reminder due inside it is held, not sent — your customers' evenings stay theirs.</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">📜</div>
+          <h3>A Record You Can Show</h3>
+          <p>If a customer asks "did I agree to this?", the append-only consent log answers it — source, timestamp, and the state it changed to.</p>
+        </div>
+      </div>
+
+      <div style="margin-top: 2.5rem; background: rgba(99, 102, 241, 0.08); border: 1px solid var(--border-glass-strong); border-radius: var(--radius-lg); padding: 1.75rem; font-size: 0.9rem; color: var(--text-secondary);">
+        <strong style="color: var(--text-primary);">In plain terms:</strong> this describes how the consent and contact-isolation system is architected and tested, not a legal compliance certification. If you're piloting this for a regulated industry, review it against your own obligations before go-live.
+      </div>
+    </section>
+
+    <!-- Pilot CTA -->
+    <section class="section">
+      <div class="architecture-box" style="text-align: center;">
+        <div class="badge">Pilot Program</div>
+        <h2 style="margin-bottom: 0.75rem;">Bring Agent Factory to Your Front Desk</h2>
+        <p style="max-width: 640px; margin: 0 auto 1.75rem auto;">
+          Built first for clinics, salons, and trades — businesses where a missed call is a missed booking. We're looking for a handful of pilot businesses to run their reminders and reception through it.
+        </p>
+        <div class="hero-cta" style="margin: 0 auto;">
+          <a href="/register" class="btn btn-primary">Start a Pilot: Register Your Organisation</a>
+          <a href="https://github.com/ITECH3208andITECH3209feduni/itech3208-project-1-agent-factory" target="_blank" rel="noopener" class="btn btn-secondary">View the Code on GitHub</a>
+          <a href="/" class="btn btn-secondary">Try the Live Receptionist</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-brand">
+        <a href="index.html" class="nav-brand">
+          <span class="brand-icon">⚡</span>
+          <span>Agent Factory</span>
+        </a>
+        <p>An autonomous research and operational AI system developed for Federation University Australia (ITECH3208 / 3209).</p>
+      </div>
+
+      <div class="footer-links">
+        <h4>Navigation</h4>
+        <ul>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="architecture.html">Architecture & Privacy</a></li>
+          <li><a href="pricing.html">Deployment Tiers</a></li>
+          <li><a href="about.html">About Project</a></li>
+          <li><a href="faq.html">FAQ</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-links">
+        <h4>System</h4>
+        <ul>
+          <li><a href="/">Live Web UI</a></li>
+          <li><a href="/docs">API Documentation</a></li>
+          <li><a href="https://github.com/ITECH3208andITECH3209feduni/itech3208-project-1-agent-factory" target="_blank" rel="noopener">GitHub Repository</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-bottom">
+      <span>© 2026 Federation University Australia — ITECH3208/3209 Team. All rights reserved.</span>
+      <span>Information Website • No trial or signup required</span>
+    </div>
+  </footer>
+
+  <script src="js/site.js"></script>
+</body>
+</html>

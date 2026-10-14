@@ -33,6 +33,7 @@ LIST_HTML = """<!DOCTYPE html>
   <div class="head">
     <div><h1>Reminders</h1><div class="sub" id="count">Loading…</div></div>
     <div class="row-actions"><a class="btn ghost" href="/templates">Templates</a>
+      <a class="btn ghost" href="/api/reminders/export.csv">Export CSV</a>
       <a class="btn" href="/reminders/new">New reminder</a></div>
   </div>
 

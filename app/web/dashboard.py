@@ -243,6 +243,8 @@ INDEX_HTML = """<!DOCTYPE html>
     <a href="/reminders/new">New reminder</a>
     <a href="/reminders">Reminders</a>
     <a href="/templates">Templates</a>
+    <a href="/api/reminders/export.csv">Export reminders CSV</a>
+    <a href="/analytics/export.csv">Export analytics CSV</a>
     <a href="/contacts">Preferences</a>
 
     <div class="navsec">Agent</div>

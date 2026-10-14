@@ -6,6 +6,8 @@
 # PROJ-436 (Analytics charts backend endpoints)
 # ──────────────────────────────────────────────────────────────
 
+import csv
+import io
 import os
 import sys
 import uuid
@@ -14,13 +16,14 @@ from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query, Response
 from app.web_ui.activity_db import (
     get_delivery_analytics,
     log_delivery_event,
     update_delivery_status,
     log_activity,
 )
+from app.web_ui.auth_routes import get_current_username
 
 router = APIRouter(prefix="/analytics", tags=["Analytics & Reporting"])
 
@@ -59,11 +62,35 @@ async def get_failure_breakdown():
     return {"failure_reasons": analytics.get("failure_reasons", {})}
 
 
+@router.get("/export.csv", include_in_schema=False)
+async def export_analytics_csv():
+    """Daily delivery trends (last 7 days) as a downloadable CSV (PROJ-492)."""
+    trends = get_delivery_analytics().get("daily_trends", [])
+
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=("date", "sent", "delivered", "failed"))
+    writer.writeheader()
+    for row in trends:
+        writer.writerow({k: row.get(k, "") for k in ("date", "sent", "delivered", "failed")})
+
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=analytics-daily-trends.csv"},
+    )
+
+
 @router.post("/seed-demo-data")
-async def seed_demo_analytics_data(count: int = Query(default=35, ge=5, le=100)):
+async def seed_demo_analytics_data(
+    count: int = Query(default=35, ge=5, le=100),
+    username: str = Depends(get_current_username),
+):
     """
     Seed realistic sample delivery records and responses for testing and demonstration.
     PROJ-435 / PROJ-436
+
+    Gated behind login (PROJ-491 review flagged this as reachable by anyone,
+    unauthenticated, able to pollute live delivery/analytics data).
     """
     now = datetime.now(timezone.utc)
     channels = ["sms", "sms", "email", "email", "voice"]
