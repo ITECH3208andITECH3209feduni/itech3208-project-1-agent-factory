@@ -314,45 +314,70 @@
 
       <!-- Sub-nav -->
       <div class="recept-subnav">
-        <div class="recept-tab active" data-rtab="chat" onclick="switchReceptTab('chat')">💬 Chat</div>
-        <div class="recept-tab" data-rtab="activity" onclick="switchReceptTab('activity')">⚡ Activity</div>
+        <div class="recept-tab active" data-rtab="activity" onclick="switchReceptTab('activity')">⚡ Activity</div>
+        <div class="recept-tab" data-rtab="contacts" onclick="switchReceptTab('contacts')">👥 Contacts</div>
+        <div class="recept-tab" data-rtab="reminders" onclick="switchReceptTab('reminders')">⏰ Reminders</div>
         <div class="recept-tab" data-rtab="analytics" onclick="switchReceptTab('analytics')">📊 Analytics</div>
         <div class="recept-tab" data-rtab="delivery" onclick="switchReceptTab('delivery')">📬 Delivery History</div>
         <div class="recept-tab" data-rtab="escalations" onclick="switchReceptTab('escalations')">🚨 Escalations</div>
         <div class="recept-tab" data-rtab="calendar" onclick="switchReceptTab('calendar')">📅 Calendar</div>
+        <div class="recept-tab" data-rtab="chat" onclick="switchReceptTab('chat')">✨ MyAI</div>
       </div>
 
       <!-- Chat panel -->
-      <div class="recept-panel" id="rtab-chat">
+      <div class="recept-panel" id="rtab-chat" style="display:none">
+        <div class="chat-mode" role="tablist">
+          <button type="button" class="chat-mode-btn active" data-mode="myai" onclick="setChatMode('myai')">Ask MyAI</button>
+          <button type="button" class="chat-mode-btn" data-mode="patient" onclick="setChatMode('patient')">Patient preview</button>
+        </div>
         <div class="messages" id="receptionist-area">
-          <div class="welcome">
+          <div class="welcome" id="welcome-myai">
+            <div class="welcome-heading">MyAI</div>
+            <div class="welcome-sub">Ask me how to use this dashboard: adding contacts, scheduling reminders, reading results.</div>
+            <div class="chips">
+              <div class="chip" onclick="prefillChat('How do I add a contact?')">How do I add a contact?</div>
+              <div class="chip" onclick="prefillChat('How do I schedule a reminder?')">How do I schedule a reminder?</div>
+              <div class="chip" onclick="prefillChat('What does Delivery History show?')">What does Delivery History show?</div>
+              <div class="chip" onclick="prefillChat('What are escalations?')">What are escalations?</div>
+            </div>
+          </div>
+          <div class="welcome" id="welcome-patient" style="display:none">
             <div class="welcome-heading">AI Receptionist</div>
             <div class="welcome-sub">Your 24/7 virtual receptionist — answers calls and SMS, books appointments, and handles enquiries via voice or text.</div>
+            <div class="welcome-sub">This is a preview of what patients get on web chat, SMS and calls.</div>
             <div class="chips">
-              <div class="chip" onclick="prefillReceptionist('What are your opening hours?')">🕐 Opening Hours</div>
-              <div class="chip" onclick="prefillReceptionist('I would like to book an appointment')">📅 Book Appointment</div>
-              <div class="chip" onclick="prefillReceptionist('What services do you offer?')">📋 Our Services</div>
-              <div class="chip" onclick="prefillReceptionist('How do I get in touch?')">📞 Contact Info</div>
+              <div class="chip" onclick="prefillChat('What are your opening hours?')">🕐 Opening Hours</div>
+              <div class="chip" onclick="prefillChat('I would like to book an appointment')">📅 Book Appointment</div>
+              <div class="chip" onclick="prefillChat('What services do you offer?')">📋 Our Services</div>
+              <div class="chip" onclick="prefillChat('How do I get in touch?')">📞 Contact Info</div>
             </div>
           </div>
         </div>
         <div class="input-area">
           <div class="input-box">
-            <input type="text" id="receptionist-input" placeholder="Ask the receptionist anything…" aria-label="Receptionist chat" />
+            <input type="text" id="receptionist-input" placeholder="Ask MyAI how to use the dashboard…" aria-label="Chat" />
             <button class="send-btn" id="receptionist-btn" onclick="sendReceptionistQuery()">Send ↑</button>
           </div>
           <div class="input-hints">
-            <span class="hint-text">Web chat · SMS · Voice · Calendar booking</span>
+            <span class="hint-text" id="chat-hint">Dashboard help · Contacts · Reminders · Delivery · Calendar</span>
             <span class="hint-text">Press <kbd>Enter</kbd> to send</span>
           </div>
         </div>
       </div>
 
       <!-- Activity panel -->
-      <div class="recept-panel" id="rtab-activity" style="display:none">
+      <div class="recept-panel" id="rtab-activity">
         <div class="recept-feed" id="activity-feed">
           <div class="recept-empty">Loading activity…</div>
         </div>
+      </div>
+
+      <!-- Contacts and Reminders: the CRM screens, loaded on first open -->
+      <div class="recept-panel" id="rtab-contacts" style="display:none">
+        <iframe class="crm-frame" data-src="/crm/contacts" title="Contacts"></iframe>
+      </div>
+      <div class="recept-panel" id="rtab-reminders" style="display:none">
+        <iframe class="crm-frame" data-src="/crm/reminders" title="Reminders"></iframe>
       </div>
 
       <!-- Analytics panel (PROJ-436) -->
@@ -468,8 +493,8 @@
 
 <script src="/static/js/auth.js"></script>
 <script>requireAuth();</script>
-<script src="/static/js/i18n.js?v=2"></script>
-<script src="/static/js/app.js?v=14"></script>
+<script src="/static/js/i18n.js?v=4"></script>
+<script src="/static/js/app.js?v=17"></script>
 
 <!-- ══ WELCOME OVERLAY ══ -->
 <div id="welcome-overlay">

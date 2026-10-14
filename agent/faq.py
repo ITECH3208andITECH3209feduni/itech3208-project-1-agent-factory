@@ -12,6 +12,7 @@
 # ──────────────────────────────────────────────────────────────
 
 import json
+import math
 import os
 import re
 
@@ -70,13 +71,12 @@ def _tokenize(text: str) -> set[str]:
     return {_stem(w) for w in words if w not in _STOPWORDS and len(w) > 1}
 
 
-def find_answer(query: str, min_score: float = None) -> dict | None:
-    """Return the best-matching FAQ entry for query, or None if nothing
-    clears the confidence threshold. Score is Jaccard similarity
-    (token overlap / token union) between the query and each entry's
-    question + tags."""
-    threshold = FAQ_MIN_SCORE if min_score is None else min_score
-    entries = _load_faq()
+def best_match(entries: list[dict], query: str, threshold: float, weighted: bool = False) -> dict | None:
+    """The entry whose question and tags best cover the query's own words, if
+    it clears the threshold. Shared by the FAQ and by MyAI's dashboard help.
+
+    weighted=True counts rare words for more than common ones (a word found in
+    every entry, like "tab", says little), which suits a larger help set."""
     if not entries:
         return None
 
@@ -84,11 +84,21 @@ def find_answer(query: str, min_score: float = None) -> dict | None:
     if not q_tokens:
         return None
 
+    token_sets = [
+        _tokenize(e.get("question", "") + " " + " ".join(e.get("tags", []))) for e in entries
+    ]
+    weight = lambda t: 1.0  # noqa: E731
+    if weighted:
+        df: dict[str, int] = {}
+        for tokens in token_sets:
+            for t in tokens:
+                df[t] = df.get(t, 0) + 1
+        weight = lambda t: math.log(1 + len(entries) / df.get(t, 0.5))  # noqa: E731
+    total = sum(weight(t) for t in q_tokens)
+
     best: dict | None = None
     best_score = 0.0
-    for entry in entries:
-        candidate = entry.get("question", "") + " " + " ".join(entry.get("tags", []))
-        e_tokens = _tokenize(candidate)
+    for entry, e_tokens in zip(entries, token_sets):
         if not e_tokens:
             continue
         overlap = q_tokens & e_tokens
@@ -98,10 +108,18 @@ def find_answer(query: str, min_score: float = None) -> dict | None:
         # meaningful words did this FAQ entry recognise". A short query
         # with 2-3 topic words shouldn't get diluted just because the
         # user also typed a few unrelated filler words.
-        score = len(overlap) / len(q_tokens)
+        score = sum(weight(t) for t in overlap) / total
         if score > best_score:
             best, best_score = entry, score
 
     if best is not None and best_score >= threshold:
         return {**best, "score": round(best_score, 3)}
     return None
+
+
+def find_answer(query: str, min_score: float = None) -> dict | None:
+    """Return the best-matching FAQ entry for query, or None if nothing
+    clears the confidence threshold. Score is token overlap between the
+    query and each entry's question + tags."""
+    threshold = FAQ_MIN_SCORE if min_score is None else min_score
+    return best_match(_load_faq(), query, threshold)

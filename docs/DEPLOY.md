@@ -46,6 +46,33 @@ Free-plan limits (Render's):
 
 Why `DEMO_PASSWORD` matters: a logged-in user can call `POST /delivery/send`, which sends SMS and email through our Twilio account. On a public URL, never leave the default demo password live. The start script refuses to seed unless `DEMO_PASSWORD` is set.
 
+### Keeping contacts and reminders across restarts (free)
+
+Render's free plan has no disk, so `/data` is empty after every restart or sleep. `deploy/persist.py`
+saves the whole data folder (accounts, contacts, reminders, templates, activity, the escalation log) to
+any S3-compatible bucket and restores it on boot. It saves every 60 seconds when something changed, and
+once more when Render stops the service. Nothing happens until all four `PERSIST_S3_*` settings exist.
+
+Backblaze B2 gives 10 GB free (Cloudflare R2 works the same way):
+
+1. Sign up at backblaze.com, then **Buckets, Create a Bucket**. Name it, set **Private**, leave encryption on.
+2. Open the bucket and copy its **Endpoint** (like `s3.us-west-004.backblazeb2.com`).
+3. **Application Keys, Add a New Application Key**. Restrict it to that bucket, allow read and write.
+   Copy the **keyID** and the **applicationKey** (shown once).
+4. In Render, **Environment**, add:
+   - `PERSIST_S3_ENDPOINT` = `https://` + the endpoint from step 2
+   - `PERSIST_S3_BUCKET` = the bucket name
+   - `PERSIST_S3_KEY_ID` = the keyID
+   - `PERSIST_S3_SECRET` = the applicationKey
+   - `PERSIST_S3_REGION` = the region in the endpoint, e.g. `us-west-004`
+   - `ESCALATION_LOG` = `/data/escalations.jsonl` (so escalations are saved too)
+5. Save. The deploy log shows `persist: restored saved data` on later boots, and `persist: saved N bytes`
+   within a minute of any change.
+
+Limits to know: the bucket holds personal data (names, numbers), so keep it private and use a key limited to
+that one bucket; a change made in the last minute before a crash can be lost; one service only (two
+instances would overwrite each other's copy).
+
 ### Turning email on (PROJ-481)
 
 1. Make a project Gmail account, turn on 2-step verification, then create an **App password** (Google Account → Security → App passwords). Use that 16-character password, never the normal one.

@@ -46,7 +46,7 @@ def page(path: str, *, dashboard: bool = False, headers: dict | None = None):
             "and handles enquiries via voice or text.",
         )
         html = html.replace("<html", '<html data-brand="clinic"', 1)
-        html = html.replace("</head>", '<link rel="stylesheet" href="/static/css/clinic.css?v=1">\n</head>', 1)
+        html = html.replace("</head>", '<link rel="stylesheet" href="/static/css/clinic.css?v=2">\n</head>', 1)
         if dashboard:
             html = html.replace("</body>", _OPEN_RECEPTIONIST + "</body>", 1)
     return HTMLResponse(html, headers=headers or _NO_CACHE)

@@ -3,8 +3,13 @@
 # single writer machine, so they share one process group and one volume.
 set -eu
 
-# Hosts without a persistent disk (Render free) have no /data yet.
+# Hosts without a persistent disk (Render free) start with an empty /data. If a
+# bucket is configured (PERSIST_S3_*), bring the last saved copy back first, before
+# anything opens a database; with no bucket configured this does nothing.
+python deploy/persist.py restore || true
 mkdir -p "${CRM_STORE_DIR:-/data/store}"
+# ...and keep saving it while running (see the TERM handler below for the last save).
+python deploy/persist.py loop &
 
 python -m agent.reminders.scheduler &
 python -m agent.reminders.web_bridge &
@@ -29,5 +34,10 @@ if [ "${SEED_DEMO:-}" = "true" ]; then
   fi
 fi
 
-exec uvicorn app.web_ui.main:app --host 0.0.0.0 --port "${PORT:-8000}" \
-  --proxy-headers --forwarded-allow-ips "*"
+uvicorn app.web_ui.main:app --host 0.0.0.0 --port "${PORT:-8000}" \
+  --proxy-headers --forwarded-allow-ips "*" &
+UVICORN_PID=$!
+
+# On stop or sleep the host sends TERM: let the web app finish, then save once more.
+trap 'kill -TERM "$UVICORN_PID" 2>/dev/null; wait "$UVICORN_PID" 2>/dev/null; python deploy/persist.py snapshot || true; exit 0' TERM INT
+wait "$UVICORN_PID"

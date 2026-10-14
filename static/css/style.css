@@ -500,7 +500,10 @@ body {
 .recept-subnav {
   display: flex; gap: 4px; padding: 10px 20px 0;
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
 }
+.recept-tab { white-space: nowrap; }
+.crm-frame { flex: 1; width: 100%; border: 0; background: var(--bg); }
 .recept-tab {
   padding: 6px 14px; border-radius: 8px 8px 0 0; font-size: 12px;
   font-weight: 600; color: var(--text2); cursor: pointer;
@@ -828,3 +831,11 @@ body {
   font-size: 12px;
 }
 
+
+/* MyAI / patient preview switch */
+.chat-mode { display: flex; gap: 6px; padding: 12px 20px 0; }
+.chat-mode-btn {
+  background: var(--surface2); color: var(--text2); border: 1px solid var(--border);
+  border-radius: 999px; padding: 5px 14px; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.chat-mode-btn.active { color: var(--text); border-color: var(--sky); background: rgba(14,165,233,0.12); }

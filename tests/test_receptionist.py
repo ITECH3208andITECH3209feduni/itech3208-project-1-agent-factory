@@ -323,3 +323,13 @@ def test_clinic_mode_uses_a_dental_prompt(monkeypatch):
 
     monkeypatch.delenv("BRAND_MODE")
     assert "Agent Factory" in _system_prompt()
+
+
+def test_escalation_time_is_utc_and_number_not_repeated(receptionist):
+    import agent.receptionist as module
+    from datetime import datetime
+
+    receptionist.handle("call me back on 0412 345 678", session_id="s9")
+    row = _log(module)[0]
+    assert datetime.fromisoformat(row["timestamp"]).utcoffset() is not None
+    assert row["reason"].count("0412 345 678") == 1

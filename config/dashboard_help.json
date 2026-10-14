@@ -1,0 +1,480 @@
+[
+  {
+    "question": "How is the dashboard laid out? What are the tabs?",
+    "answer": "The tabs along the top are: Activity (calls, texts and chats as they happen), Contacts (your people and their consent), Reminders (messages to send, and when), Analytics (delivery and reply numbers), Delivery History (every message sent, with its result), Escalations (people who need a human), Calendar (upcoming appointments) and MyAI (this assistant). The four tiles above them show today's calls, texts, bookings and escalations.",
+    "tags": [
+      "dashboard",
+      "tabs",
+      "layout",
+      "overview",
+      "menu",
+      "navigate",
+      "where",
+      "start",
+      "tour",
+      "sections"
+    ]
+  },
+  {
+    "question": "What do the four tiles at the top mean?",
+    "answer": "Calls today counts different callers who phoned today. SMS today counts text conversations, not reminders you sent. Booked counts appointments the receptionist booked. Escalations counts people flagged for a human, including urgent and call-back requests.",
+    "tags": [
+      "tiles",
+      "stats",
+      "counters",
+      "calls",
+      "sms",
+      "booked",
+      "numbers",
+      "today",
+      "top",
+      "escalation count"
+    ]
+  },
+  {
+    "question": "How do I add a contact?",
+    "answer": "Open the Contacts tab and click New contact. The phone number is required; name and email are optional. Choose the preferred channel (SMS or email) and their consent: Never asked, Invited, Opted in or Opted out. You can also set quiet hours, a time window when they should not be messaged. Click Save. Only people who are Opted in can be sent reminders.",
+    "tags": [
+      "add",
+      "contact",
+      "new",
+      "create",
+      "patient",
+      "person",
+      "customer",
+      "client",
+      "phone",
+      "number",
+      "register"
+    ]
+  },
+  {
+    "question": "How do I import many contacts at once from a spreadsheet or CSV?",
+    "answer": "In Contacts click Import CSV. The columns are phone_number, name, email, preferred_channel, quiet_hours_start, quiet_hours_end and consent_state, in a header row, and the page offers a template file with one example row. Only phone_number is required. Save your spreadsheet as CSV, choose the file and import.",
+    "tags": [
+      "import",
+      "csv",
+      "spreadsheet",
+      "excel",
+      "bulk",
+      "upload",
+      "many",
+      "file",
+      "list",
+      "template"
+    ]
+  },
+  {
+    "question": "What do the consent states mean?",
+    "answer": "Opted in: they agreed to be messaged, so reminders can go out. Invited: you asked, no answer yet. Never asked: no consent recorded. Opted out: they said no, so nothing is ever sent. Consent is checked at the moment a reminder is due, so changing it takes effect straight away, and every change is recorded in an audit trail.",
+    "tags": [
+      "consent",
+      "opt",
+      "opted",
+      "invited",
+      "permission",
+      "agree",
+      "gdpr",
+      "spam",
+      "privacy",
+      "never",
+      "asked"
+    ]
+  },
+  {
+    "question": "Why was my reminder blocked or not sent?",
+    "answer": "A reminder is blocked when the contact has not opted in or has opted out, when it falls inside their quiet hours, or when they have no address for the chosen channel (no phone number for SMS, no email for email). Open the reminder to see the reason, fix the contact, then reschedule it. Delivery History shows the outcome and any error.",
+    "tags": [
+      "blocked",
+      "not",
+      "sent",
+      "why",
+      "failed",
+      "reminder",
+      "stuck",
+      "quiet",
+      "skipped",
+      "missing",
+      "didn't",
+      "didnt",
+      "send",
+      "sending",
+      "working",
+      "doesn't",
+      "wasn't",
+      "error",
+      "problem"
+    ]
+  },
+  {
+    "question": "What are quiet hours?",
+    "answer": "Quiet hours are a daily window, for example 21:00 to 07:00, when a contact should not be messaged. Set them on the contact. A reminder due inside that window is held back instead of sent, so reschedule it for a time outside the window.",
+    "tags": [
+      "quiet",
+      "hours",
+      "night",
+      "sleep",
+      "window",
+      "time",
+      "disturb",
+      "evening"
+    ]
+  },
+  {
+    "question": "How do I schedule a reminder?",
+    "answer": "Open the Reminders tab and click New reminder. Choose the contact, write the message (or start from a template), set the send date and time, and optionally set it to repeat. Save, and it shows as Scheduled. The scheduler sends it when the time arrives, as long as the contact has opted in.",
+    "tags": [
+      "schedule",
+      "reminder",
+      "create",
+      "new",
+      "set",
+      "appointment",
+      "remind",
+      "message",
+      "send",
+      "later",
+      "when"
+    ]
+  },
+  {
+    "question": "How do I make a reminder repeat?",
+    "answer": "In the New reminder form use the Repeat setting: Does not repeat, Every day, Every week, or Every N days. Each time it is sent, the next one is scheduled automatically and has its own result in Delivery History.",
+    "tags": [
+      "repeat",
+      "recurring",
+      "daily",
+      "weekly",
+      "every",
+      "again",
+      "regular",
+      "recurrence"
+    ]
+  },
+  {
+    "question": "How do I edit, pause, reschedule or cancel a reminder?",
+    "answer": "In the Reminders tab each row has links on the right: Edit to change the message or contact, Pause to hold it without losing it, Reschedule to pick a new time, and Cancel to stop it.",
+    "tags": [
+      "edit",
+      "pause",
+      "cancel",
+      "reschedule",
+      "change",
+      "delete",
+      "stop",
+      "move",
+      "resume",
+      "reminder"
+    ]
+  },
+  {
+    "question": "What are message templates and merge fields?",
+    "answer": "A template is a saved message you can reuse when creating a reminder. Fields in curly brackets are filled in per contact: {name}, {first_name}, {date}, {time}, {org} (your organisation's name) and {appointment_date}. For example: Hi {first_name}, a reminder of your appointment on {date} at {time}. Reply STOP to opt out. - {org}. Open Reminders, then Templates to manage them. A misspelt field is rejected so a broken message never goes out.",
+    "tags": [
+      "template",
+      "templates",
+      "merge",
+      "field",
+      "fields",
+      "placeholder",
+      "first_name",
+      "saved",
+      "reuse",
+      "wording"
+    ]
+  },
+  {
+    "question": "How do I send a message right now, not scheduled?",
+    "answer": "Open Delivery History and click + Send Reminder. Enter the phone number or email, pick the channel (SMS, email or voice), the type, and the message, then Send. You need an admin account for this. The result appears as a new row, marked sent or failed with the reason.",
+    "tags": [
+      "send",
+      "now",
+      "immediately",
+      "instant",
+      "one-off",
+      "manual",
+      "outbound",
+      "quick",
+      "right"
+    ]
+  },
+  {
+    "question": "What does Delivery History show? What do sent, delivered, failed and bounced mean?",
+    "answer": "Every message the system has sent, with time, channel, recipient, type, status and any error. Queued: waiting to go. Sent: handed to the provider. Delivered: the provider confirmed it arrived (texts and calls). Failed: it could not be sent, and the error says why. Bounced: the email address rejected it. Use the filters and search to find a message, and Retry on a failed one.",
+    "tags": [
+      "delivery",
+      "history",
+      "status",
+      "sent",
+      "delivered",
+      "failed",
+      "bounced",
+      "queued",
+      "log",
+      "retry",
+      "results"
+    ]
+  },
+  {
+    "question": "Why does an email say sent but never delivered?",
+    "answer": "Email is handed to the mail server, which does not send back a delivery receipt, so emails stay at sent unless a bounce comes back. Texts and calls can reach delivered because the phone network reports back. If an email did not arrive, check the recipient's spam folder.",
+    "tags": [
+      "email",
+      "sent",
+      "delivered",
+      "never",
+      "receipt",
+      "spam",
+      "arrived",
+      "inbox",
+      "bounce"
+    ]
+  },
+  {
+    "question": "What does the Analytics tab show?",
+    "answer": "Delivery rate (share of messages confirmed delivered), SMS reply rate (people who texted back), total sent, failures and bounces, a 7-day trend chart, and a breakdown by channel. With no traffic yet the cards show a dash instead of a made-up number. Seed Demo Data adds clearly labelled sample records so you can see the charts.",
+    "tags": [
+      "analytics",
+      "rate",
+      "charts",
+      "trend",
+      "metrics",
+      "statistics",
+      "reply",
+      "delivery",
+      "report",
+      "numbers",
+      "graph"
+    ]
+  },
+  {
+    "question": "What is the Activity tab?",
+    "answer": "A live feed of calls, texts and chats with the receptionist. After a phone call it shows a short summary with the caller's sentiment and a priority tag. New items appear without refreshing while the Live badge is green.",
+    "tags": [
+      "activity",
+      "feed",
+      "live",
+      "calls",
+      "summary",
+      "sentiment",
+      "priority",
+      "history",
+      "recent",
+      "conversations"
+    ]
+  },
+  {
+    "question": "What are escalations and what should I do with them?",
+    "answer": "An escalation is a person the receptionist could not or should not handle alone: someone who asked for a human, an urgent case (a toothache, swelling, bleeding) marked HIGH priority, or a call-back request with the number to ring. Open the Escalations tab, contact the person using the details shown, and treat HIGH items first. For a real emergency the receptionist also tells them to call 000.",
+    "tags": [
+      "escalation",
+      "escalations",
+      "urgent",
+      "emergency",
+      "callback",
+      "call",
+      "back",
+      "human",
+      "priority",
+      "high",
+      "follow",
+      "up",
+      "tab",
+      "tabs"
+    ]
+  },
+  {
+    "question": "How do I see appointments? What is the Calendar tab?",
+    "answer": "The Calendar tab lists upcoming appointments from the business Google Calendar. Appointments the receptionist books by text, call or chat appear there. It needs the Google Calendar connection to be set up on the server; without it the receptionist tells patients that online booking is not set up.",
+    "tags": [
+      "calendar",
+      "appointments",
+      "bookings",
+      "upcoming",
+      "google",
+      "schedule",
+      "diary",
+      "booked",
+      "see",
+      "tab"
+    ]
+  },
+  {
+    "question": "How do patients book an appointment?",
+    "answer": "They tell the receptionist the day, time and reason, by text, phone call or web chat, for example: book me a check-up next Tuesday at 2pm. It adds the booking to the calendar. If they texted or phoned, a reminder is scheduled automatically (a text for SMS bookings, a voice call for phone bookings). Web chat can't create a reminder because it does not know their number.",
+    "tags": [
+      "patients",
+      "book",
+      "booking",
+      "appointment",
+      "how",
+      "receptionist",
+      "text",
+      "call",
+      "chat",
+      "customers"
+    ]
+  },
+  {
+    "question": "What happens when someone texts STOP?",
+    "answer": "They are opted out straight away and receive no more reminders. An opt-out can't be switched back on by editing a flag; it needs a separate, recorded action, so a STOP is always respected.",
+    "tags": [
+      "stop",
+      "unsubscribe",
+      "opt",
+      "out",
+      "opted",
+      "texts",
+      "remove",
+      "quit",
+      "cancel",
+      "messages"
+    ]
+  },
+  {
+    "question": "What is the MyAI tab and the Patient preview?",
+    "answer": "MyAI answers questions about using this dashboard. Patient preview, the second button inside the tab, lets you chat with the receptionist exactly as a patient would, so you can try bookings, call-backs and emergency messages without phoning in.",
+    "tags": [
+      "myai",
+      "preview",
+      "patient",
+      "test",
+      "chat",
+      "assistant",
+      "help",
+      "try",
+      "receptionist"
+    ]
+  },
+  {
+    "question": "How do I change the language?",
+    "answer": "Use the language menu at the top right of the dashboard: English (AU or US), Spanish, Hindi, Mandarin, French or German. It changes the dashboard text and also the voice language used on phone calls. Your choice is remembered in this browser.",
+    "tags": [
+      "language",
+      "translate",
+      "spanish",
+      "hindi",
+      "french",
+      "german",
+      "mandarin",
+      "chinese",
+      "english",
+      "voice"
+    ]
+  },
+  {
+    "question": "How do I change the theme, colours or hide parts of the dashboard?",
+    "answer": "Click Personalise UI & Theme at the bottom of the left sidebar. Choose Dark, Light or High Contrast, pick an accent colour, and switch widgets on or off (analytics cards, trend chart, delivery history, live feed, escalation queue). Save & Apply, or Reset to Defaults. Saving needs an admin account.",
+    "tags": [
+      "theme",
+      "colour",
+      "color",
+      "dark",
+      "light",
+      "contrast",
+      "personalise",
+      "personalize",
+      "customise",
+      "hide",
+      "widgets",
+      "appearance"
+    ]
+  },
+  {
+    "question": "Who can do what? What is the difference between admin and staff?",
+    "answer": "Admins (the person who registered the organisation is one) can do everything. Staff can use Contacts, Reminders and the live screens, but can't send a one-off message from Delivery History or save theme and organisation settings; if a button gives a permission message, ask an admin.",
+    "tags": [
+      "admin",
+      "staff",
+      "role",
+      "permission",
+      "access",
+      "who",
+      "allowed",
+      "owner",
+      "member",
+      "rights"
+    ]
+  },
+  {
+    "question": "Where is my data stored and is it kept after a restart?",
+    "answer": "Accounts, contacts, reminders and message history are stored on the server that runs the dashboard. On the free hosted demo the server's disk is wiped on restart, so the data is saved to a private storage bucket about every minute and restored on start. On a clinic's own computer the data stays on that machine.",
+    "tags": [
+      "data",
+      "stored",
+      "storage",
+      "memory",
+      "saved",
+      "restart",
+      "lost",
+      "backup",
+      "persist",
+      "where",
+      "safe",
+      "disk",
+      "keep"
+    ]
+  },
+  {
+    "question": "How do I change my password or sign out?",
+    "answer": "On the sign-in page choose Forgot password and enter your email; you will be sent a link to set a new one. If email is not set up on the server, ask your administrator.",
+    "tags": [
+      "password",
+      "forgot",
+      "reset",
+      "sign",
+      "login",
+      "log",
+      "out",
+      "account",
+      "change"
+    ]
+  },
+  {
+    "question": "Can I add another team member?",
+    "answer": "There is no invite screen in the dashboard yet. Each person registers their own organisation today, so ask the project team if you need several staff on one account.",
+    "tags": [
+      "team",
+      "member",
+      "invite",
+      "staff",
+      "user",
+      "add",
+      "colleague",
+      "share",
+      "another",
+      "login"
+    ]
+  },
+  {
+    "question": "What is the Information Website link?",
+    "answer": "It opens the public information site for the project: what the platform does, features, how it works, pricing and FAQ. It opens in a new tab.",
+    "tags": [
+      "website",
+      "information",
+      "site",
+      "about",
+      "features",
+      "pricing",
+      "faq",
+      "link",
+      "public"
+    ]
+  },
+  {
+    "question": "Can MyAI see my contacts or change things for me?",
+    "answer": "No. MyAI explains how to use the dashboard and where to find things, but it can't read your contacts or messages, and it can't send or change anything. You do those yourself in the tabs.",
+    "tags": [
+      "myai",
+      "can",
+      "see",
+      "read",
+      "change",
+      "access",
+      "do",
+      "actions",
+      "limits",
+      "private"
+    ]
+  }
+]
