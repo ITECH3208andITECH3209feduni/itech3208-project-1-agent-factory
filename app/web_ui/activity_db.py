@@ -234,19 +234,36 @@ def start_of_today_utc() -> str:
     return midnight.astimezone(timezone.utc).isoformat()
 
 
+# Activity rows with these intents are the system's own bookkeeping (a reminder we
+# sent, a failed delivery, a retry, a bounce), not a customer conversation, so the
+# receptionist tiles leave them out.
+_SYSTEM_INTENT_PREFIXES = ("reminder_", "delivery_", "email_bounce")
+BOOKED_INTENT = "appointment_booked"
+
+
 def get_stats_today(org_id: int | None = None) -> dict:
-    """Return today's call / SMS / booked counts (today in the configured timezone)."""
+    """Today's receptionist tiles (today in the configured timezone).
+
+    calls         distinct phone calls. A call logs one row per turn, all under the
+                  same call id, so counting rows would count turns.
+    sms           texts received from customers (our own reminders and delivery
+                  notes are not texts to the receptionist).
+    appointments  bookings that actually succeeded (intent appointment_booked),
+                  not clarifying questions or reminder log lines.
+    """
     db = _get_db()
     clause, params = _org_filter(org_id)
     rows = db.execute(
-        f"SELECT channel, intent FROM activity WHERE timestamp >= ?{clause}", [start_of_today_utc()] + params
+        f"SELECT channel, caller, intent FROM activity WHERE timestamp >= ?{clause}",
+        [start_of_today_utc()] + params,
     ).fetchall()
-    calls   = sum(1 for r in rows if r["channel"] == "voice")
-    sms     = sum(1 for r in rows if r["channel"] == "sms")
-    booked  = sum(
-        1 for r in rows
-        if any(kw in (r["intent"] or "").lower() for kw in ("book", "appoint", "schedul"))
-    )
+    conversation = [
+        r for r in rows
+        if not (r["intent"] or "").lower().startswith(_SYSTEM_INTENT_PREFIXES)
+    ]
+    calls = len({r["caller"] for r in conversation if r["channel"] == "voice"})
+    sms = sum(1 for r in conversation if r["channel"] == "sms")
+    booked = sum(1 for r in conversation if (r["intent"] or "").lower() == BOOKED_INTENT)
     return {"calls": calls, "sms": sms, "appointments": booked}
 
 

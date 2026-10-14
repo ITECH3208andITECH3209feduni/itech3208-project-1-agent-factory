@@ -68,6 +68,14 @@ GOODBYE_WORDS = {"goodbye", "bye", "hang up", "end call", "that's all", "no than
 log = logging.getLogger("agent_factory.twilio")
 
 
+def _activity_intent(result: dict) -> str:
+    """The intent recorded in the activity log. A booking that really went through is
+    logged as appointment_booked so the Booked tile counts bookings, not questions."""
+    if result.get("booked") is True:
+        return "appointment_booked"
+    return result.get("intent", "")
+
+
 def _org_for(*numbers: str) -> int | None:
     """Which organisation owns this conversation? Looked up from our Twilio number
     (the To of an inbound call or text, the From of an outbound status callback).
@@ -204,7 +212,7 @@ async def sms_webhook(
     log_activity(
         channel="sms",
         caller=From or "unknown",
-        intent=result.get("intent", ""),
+        intent=_activity_intent(result),
         summary=reply[:200],
         org_id=_org_for(To),
     )
@@ -400,7 +408,7 @@ async def voice_reply(
     log_activity(
         channel="voice",
         caller=CallSid or "unknown",
-        intent=result.get("intent", ""),
+        intent=_activity_intent(result),
         summary=reply[:200],
         org_id=_org_for(To),
     )
