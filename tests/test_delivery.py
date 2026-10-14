@@ -373,3 +373,32 @@ def test_password_reset_mailer_announces_a_valid_ehlo_name(monkeypatch):
     monkeypatch.setattr(smtplib, "SMTP", FakeSMTP)
     assert password_reset._send_via_smtp("someone@example.com", "http://x/reset?token=t") is True
     assert seen == {"local_hostname": "relay.test", "sent": True}
+
+
+def test_bad_from_address_is_a_clear_failure_not_a_crash(monkeypatch):
+    """A newline pasted into SMTP_FROM_EMAIL used to raise out of _send_once (a 500)."""
+    from agent.delivery import email_channel
+
+    monkeypatch.setattr(email_channel, "SMTP_HOST", "smtp.example.com")
+    monkeypatch.setattr(email_channel, "SMTP_FROM_EMAIL", "bad\r\nBcc: x@example.com")
+    result = email_channel.EmailChannel()._send_once("a@example.com", "hi")
+    assert result.ok is False and result.retriable is False
+    assert "not valid" in result.error
+
+
+def test_smtp_settings_are_stripped_of_pasted_whitespace(monkeypatch):
+    import importlib
+
+    from config import settings
+
+    monkeypatch.setenv("SMTP_HOST", " smtp.gmail.com\n")
+    monkeypatch.setenv("SMTP_FROM_EMAIL", "me@gmail.com\n")
+    monkeypatch.setenv("SMTP_PASSWORD", "abcd efgh ijkl mnop\n")
+    try:
+        importlib.reload(settings)
+        assert settings.SMTP_HOST == "smtp.gmail.com"
+        assert settings.SMTP_FROM_EMAIL == "me@gmail.com"
+        assert settings.SMTP_PASSWORD == "abcdefghijklmnop"
+    finally:
+        monkeypatch.undo()
+        importlib.reload(settings)

@@ -35,6 +35,10 @@ services:
         value: /data/store
       - key: APP_BASE_URL
         sync: false   # your https://<name>.onrender.com URL
+      - key: BRAND_NAME
+        value: Bright Smile Dental   # demo skin; delete both to show "Agent Factory"
+      - key: BRAND_MODE
+        value: clinic
       - key: SEED_DEMO
         value: "true"
       - key: DEMO_PASSWORD

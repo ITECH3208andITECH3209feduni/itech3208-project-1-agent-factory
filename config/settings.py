@@ -105,7 +105,9 @@ TIMEZONE                 = os.environ.get("TIMEZONE", "Australia/Melbourne")
 # ChromaDB semantic search called for in PROJ-214-218 — swap in real
 # embeddings + vector search once there's a real document corpus to
 # index; a JSON keyword matcher isn't a substitute for that long-term).
-FAQ_DATA_PATH      = os.environ.get("FAQ_DATA_PATH") or os.path.join(_BASE_DIR, "config", "faq_seed.json")
+# BRAND_MODE=clinic (the dental demo) answers from the clinic's own questions.
+_FAQ_FILE          = "faq_clinic.json" if os.environ.get("BRAND_MODE", "").strip().lower() == "clinic" else "faq_seed.json"
+FAQ_DATA_PATH      = os.environ.get("FAQ_DATA_PATH") or os.path.join(_BASE_DIR, "config", _FAQ_FILE)
 FAQ_MIN_SCORE      = 0.3    # Jaccard token-overlap threshold to accept a match
 
 # Human escalation log (PROJ-195: "human escalation")
@@ -136,11 +138,20 @@ TWILIO_FROM_NUMBER  = os.environ.get("TWILIO_FROM_NUMBER", "")
 # SMTP — free-tier email delivery per the client brief ("smtp is free
 # we can prefer it"). Any standard SMTP provider works (Gmail app
 # password, SendGrid free tier, etc.) — nothing Twilio-specific here.
-SMTP_HOST       = os.environ.get("SMTP_HOST", "")
-SMTP_PORT       = int(os.environ.get("SMTP_PORT", "587"))
-SMTP_USERNAME   = os.environ.get("SMTP_USERNAME", "")
-SMTP_PASSWORD   = os.environ.get("SMTP_PASSWORD", "")
-SMTP_FROM_EMAIL = os.environ.get("SMTP_FROM_EMAIL", "")
+def _smtp_env(name: str, default: str = "", *, squeeze: bool = False) -> str:
+    """An SMTP setting with the stray whitespace that pasting into a host's
+    environment form often adds (a trailing newline, a non-breaking space).
+    squeeze=True removes every whitespace character, for Gmail app passwords,
+    which Google displays in four groups of four."""
+    value = os.environ.get(name, default)
+    return "".join(value.split()) if squeeze else value.strip()
+
+
+SMTP_HOST       = _smtp_env("SMTP_HOST")
+SMTP_PORT       = int(_smtp_env("SMTP_PORT", "587") or "587")
+SMTP_USERNAME   = _smtp_env("SMTP_USERNAME")
+SMTP_PASSWORD   = _smtp_env("SMTP_PASSWORD", squeeze="gmail" in SMTP_HOST.lower())
+SMTP_FROM_EMAIL = _smtp_env("SMTP_FROM_EMAIL")
 SMTP_USE_TLS    = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
 
 # ── Reminders Engine (PROJ-395) ─────────────────────────────────

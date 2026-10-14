@@ -33,6 +33,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
+from app.web_ui import branding
 from app.web_ui.routes import router
 from app.web_ui.auth_routes import router as auth_router
 from app.web_ui.receptionist_routes import router as receptionist_router
@@ -169,28 +170,28 @@ async def serve_index():
     """Serve the main chat interface."""
     index = os.path.join(_STATIC_DIR, "index.html")
     if os.path.exists(index):
-        return FileResponse(index, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
+        return branding.page(index, dashboard=True, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
     return {"message": "Agent Factory API is running. Static files not found."}
 
 
 # ── /literature — serve the dedicated literature search page ────
 @app.get("/forgot-password", include_in_schema=False)
 async def serve_forgot():
-    return FileResponse(os.path.join(_STATIC_DIR, "forgot-password.html"))
+    return branding.page(os.path.join(_STATIC_DIR, "forgot-password.html"))
 
 
 @app.get("/reset-password", include_in_schema=False)
 async def serve_reset():
-    return FileResponse(os.path.join(_STATIC_DIR, "reset-password.html"))
+    return branding.page(os.path.join(_STATIC_DIR, "reset-password.html"))
 
 
 @app.get("/login", include_in_schema=False)
 async def serve_login():
-    return FileResponse(os.path.join(_STATIC_DIR, "login.html"))
+    return branding.page(os.path.join(_STATIC_DIR, "login.html"))
 
 @app.get("/register", include_in_schema=False)
 async def serve_register():
-    return FileResponse(os.path.join(_STATIC_DIR, "register.html"))
+    return branding.page(os.path.join(_STATIC_DIR, "register.html"))
 
 @app.get("/literature", include_in_schema=False)
 async def serve_literature():

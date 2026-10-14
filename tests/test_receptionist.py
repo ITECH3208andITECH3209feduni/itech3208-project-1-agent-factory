@@ -244,3 +244,82 @@ def test_appointment_booking_success_without_contact_info_skips_reminder(
     )
     assert result["booked"] is True
     assert "reminder" not in result["answer"].lower()
+
+
+def _log(receptionist_module):
+    with open(receptionist_module.ESCALATION_LOG, encoding="utf-8") as fh:
+        return [json.loads(line) for line in fh]
+
+
+def test_emergency_is_flagged_urgent_even_with_a_faq_present(receptionist, tmp_path, monkeypatch):
+    import agent.receptionist as module
+    from agent import faq
+
+    path = tmp_path / "faq.json"
+    path.write_text(json.dumps([{"question": "Do you handle dental emergencies?", "answer": "faq text",
+                                 "tags": ["emergency", "urgent", "toothache"]}]), encoding="utf-8")
+    monkeypatch.setattr("agent.faq.FAQ_DATA_PATH", str(path))
+    faq.reload_faq()
+
+    result = receptionist.handle("I have a terrible toothache", session_id="bob")
+    assert result["intent"] == "escalate" and result["urgent"] is True
+    assert "000" in result["answer"]
+    row = _log(module)[0]
+    assert row["priority"] == "high" and row["reason"].startswith("URGENT:")
+
+
+def test_emergency_booking_still_tries_to_book_and_is_flagged(receptionist):
+    import agent.receptionist as module
+
+    result = receptionist.handle("create me an emergency booking for today at 3pm", session_id="bob")
+    assert result["intent"] == "appointment" and result["urgent"] is True
+    assert result["answer"].startswith("I'm sorry")
+    assert _log(module)[0]["priority"] == "high"
+
+
+def test_not_urgent_is_not_flagged(receptionist):
+    import agent.receptionist as module
+
+    receptionist.handle("it's not urgent, just a check-up", session_id="bob")
+    assert not _log_exists(module)
+
+
+def _log_exists(module):
+    import os
+
+    return os.path.exists(module.ESCALATION_LOG)
+
+
+def test_callback_by_text_uses_the_callers_own_number(receptionist):
+    import agent.receptionist as module
+
+    result = receptionist.handle(
+        "can you book me a call back", session_id="s1", contact_channel="sms", contact_address="+15551234567"
+    )
+    assert result["intent"] == "escalate" and "+15551234567" in result["answer"]
+    row = _log(module)[0]
+    assert row["reason"].startswith("CALL BACK:") and row["contact"] == "+15551234567"
+
+
+def test_callback_in_web_chat_asks_for_a_number_then_logs_it(receptionist):
+    import agent.receptionist as module
+
+    first = receptionist.handle("please call me back", session_id="web1")
+    assert first["intent"] == "escalate" and "what number" in first["answer"].lower()
+    assert not _log_exists(module)
+
+    second = receptionist.handle("0412 345 678", session_id="web1")
+    assert second["intent"] == "escalate" and "0412 345 678" in second["answer"]
+    assert _log(module)[0]["contact"] == "0412 345 678"
+
+
+def test_clinic_mode_uses_a_dental_prompt(monkeypatch):
+    from agent.receptionist import _system_prompt
+
+    monkeypatch.setenv("BRAND_MODE", "clinic")
+    monkeypatch.setenv("BRAND_NAME", "Bright Smile Dental")
+    prompt = _system_prompt()
+    assert "Bright Smile Dental" in prompt and "Amazon" not in prompt and "never diagnose" in prompt
+
+    monkeypatch.delenv("BRAND_MODE")
+    assert "Agent Factory" in _system_prompt()

@@ -1135,6 +1135,8 @@ function setVoiceLanguage(lang) {
   localStorage.setItem(_VOICE_LANG_KEY, lang);
   const sel = document.getElementById("voice-lang-select");
   if (sel) sel.value = lang;
+  // The same choice sets the language of the whole interface.
+  if (window.AFI18n) AFI18n.apply(lang);
   // Persist to server — best-effort, ignore failures
   fetch("/twilio/voice/language", {
     method: "POST",
@@ -1148,6 +1150,7 @@ function _restoreVoiceLang() {
   if (!saved) return;
   const sel = document.getElementById("voice-lang-select");
   if (sel) sel.value = saved;
+  if (window.AFI18n) AFI18n.apply(saved);
 }
 
 /* Wire up receptionist input on Enter & initialize Personalisation */
@@ -1428,7 +1431,7 @@ async function submitSendReminder() {
   const message = document.getElementById("rem-message")?.value.trim() || "";
 
   if (!recipient) {
-    alert("Please provide a recipient phone number or email address.");
+    alert(AFI18n.t("Please provide a recipient phone number or email address."));
     return;
   }
 
@@ -1438,9 +1441,10 @@ async function submitSendReminder() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ recipient, channel, reminder_type, message }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      alert(data.detail || "Failed to send reminder.");
+      alert(AFI18n.t(data.detail || `Failed to send reminder (server error ${res.status}).`));
+      loadDeliveryHistory();
       return;
     }
     closeSendReminderModal();
