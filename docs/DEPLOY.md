@@ -46,6 +46,15 @@ Free-plan limits (Render's):
 
 Why `DEMO_PASSWORD` matters: a logged-in user can call `POST /delivery/send`, which sends SMS and email through our Twilio account. On a public URL, never leave the default demo password live. The start script refuses to seed unless `DEMO_PASSWORD` is set.
 
+### Turning email on (PROJ-481)
+
+1. Make a project Gmail account, turn on 2-step verification, then create an **App password** (Google Account → Security → App passwords). Use that 16-character password, never the normal one.
+2. Locally: `./scripts/set_gmail_smtp.sh` writes the `SMTP_*` values into `.env` without the password appearing on screen.
+3. Prove it from your machine: `python scripts/email_smoke.py --to <your address> --reminder`. It sends one direct email, then schedules a real reminder one minute out (in a throwaway store) and runs the reminder bridge until it is sent. Both should print `PASS`. Screenshot the output and the two received emails.
+4. On Render: **Environment** tab → set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USERNAME` and `SMTP_FROM_EMAIL` to the Gmail address, `SMTP_PASSWORD` to the app password, and `APP_BASE_URL` to the `https://<name>.onrender.com` address (reset links use it). Save; Render redeploys.
+5. Password reset on the live site: the demo login (`poster.demo@example.com`) is not a real inbox, so first register an organisation at `/register` with an email you can read. Then open `/forgot-password`, enter that address and follow the link in the email. Only accounts registered with an email can reset; username-only accounts have nowhere to send it.
+6. A reminder on the live site only sends **while the service is awake** (free plan). To film one arriving on time, schedule an email reminder a few minutes out and keep a tab open on the site until it arrives.
+
 ## Option B: Fly.io
 
 Covers PROJ-465 (hosting), PROJ-466 (Twilio webhooks), PROJ-467 (secrets) and

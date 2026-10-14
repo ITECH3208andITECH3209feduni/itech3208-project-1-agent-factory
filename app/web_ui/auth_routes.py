@@ -124,6 +124,55 @@ async def logout(response: Response):
     return {"ok": True}
 
 
+# ── Password recovery (PROJ-408 store, wired in for PROJ-481) ──
+# static/forgot-password.html and reset-password.html already post here;
+# until now nothing answered. Recovery covers the email accounts in
+# auth/db's users table (organisation owners) — the same table the
+# reset-token store and set_password() work on. Username-only accounts
+# have no address to send to.
+class ForgotBody(BaseModel):
+    email: str
+
+
+class ResetBody(BaseModel):
+    token: str
+    new_password: str
+
+
+@router.post("/forgot-password", status_code=202)
+async def forgot_password(body: ForgotBody):
+    """Always the same 202 answer, registered or not — anything else tells
+    a stranger which addresses have accounts."""
+    from auth.db import get_user_by_email
+    from auth.password_reset import create_reset_token, deliver_reset_link
+
+    email = body.email.strip().lower()
+    delivery = None
+    row = get_user_by_email(email) if "@" in email else None
+    if row is not None:
+        delivery = deliver_reset_link(email, create_reset_token(row["id"]))
+    out = {"message": "If that address is registered, a reset link has been sent."}
+    # Only reveals that no mail server is configured, which the page uses to
+    # explain where the link went; the same value for unknown addresses.
+    if delivery == "console" or (delivery is None and not os.getenv("SMTP_HOST")):
+        out["delivery"] = "console"
+    return out
+
+
+@router.post("/reset-password")
+async def reset_password(body: ResetBody):
+    from auth.password_reset import consume_reset_token, set_password
+    from auth.security import hash_password
+
+    if len(body.new_password) < 8:
+        raise HTTPException(status_code=422, detail="Password must be at least 8 characters.")
+    user_id = consume_reset_token(body.token)
+    if user_id is None:
+        raise HTTPException(status_code=400, detail="This reset link is invalid or has expired. Request a new one.")
+    set_password(user_id, hash_password(body.new_password))
+    return {"ok": True}
+
+
 @router.get("/me", response_model=AuthResponse)
 async def me(username: str = Depends(get_current_username)):
     """Return the current logged-in username, or 401 if not logged in.
