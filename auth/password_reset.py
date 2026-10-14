@@ -137,6 +137,8 @@ def _send_via_smtp(to_email: str, reset_url: str) -> bool:
     import smtplib
     from email.message import EmailMessage
 
+    from agent.delivery.email_channel import ehlo_name
+
     port = int(os.getenv("SMTP_PORT", "587"))
     # PROJ-467: config/settings.py, .env.example and the Fly secrets allow-list
     # all use SMTP_USERNAME / SMTP_FROM_EMAIL. This module was the only reader of
@@ -163,7 +165,9 @@ def _send_via_smtp(to_email: str, reset_url: str) -> bool:
     )
 
     try:
-        with smtplib.SMTP(host, port, timeout=15) as smtp:
+        # Same EHLO fix as EmailChannel: a reverse-DNS hostname makes Gmail drop
+        # the connection before login.
+        with smtplib.SMTP(host, port, timeout=15, local_hostname=ehlo_name()) as smtp:
             smtp.starttls()
             if user:
                 smtp.login(user, password)
