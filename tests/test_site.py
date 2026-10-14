@@ -134,3 +134,35 @@ def test_app_shell_main_sits_inside_layout():
     p.feed((Path(__file__).resolve().parent.parent / "static" / "index.html").read_text(encoding="utf-8"))
     assert not p.unbalanced and not p.stack
     assert p.main_parent == "layout"
+
+
+def test_features_page_leads_with_reminders_and_keeps_every_anchor(client):
+    """Features is positioned around reminders and consent; research agents come last.
+    The home page links to these anchors, so none may disappear."""
+    from html.parser import HTMLParser
+
+    html = client.get("/site/features.html").text
+    ids = [a for a in __import__("re").findall(r'id="([^"]+)"', html)]
+    for anchor in ("reminders", "consent", "delivery", "receptionist", "delivery-analytics", "research",
+                   "literature", "amazon", "integrity"):
+        assert anchor in ids, anchor
+    assert ids.index("reminders") < ids.index("consent") < ids.index("receptionist") < ids.index("research")
+    assert "Literature Review Agent" not in html.split('id="research"')[0]
+
+    class Balance(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.depth, self.bad = 0, False
+
+        def handle_starttag(self, tag, attrs):
+            if tag == "div":
+                self.depth += 1
+
+        def handle_endtag(self, tag):
+            if tag == "div":
+                self.depth -= 1
+                self.bad = self.bad or self.depth < 0
+
+    b = Balance()
+    b.feed(html)
+    assert b.depth == 0 and not b.bad
