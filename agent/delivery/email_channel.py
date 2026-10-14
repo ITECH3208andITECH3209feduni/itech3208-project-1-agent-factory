@@ -10,7 +10,9 @@
 
 from __future__ import annotations
 
+import os
 import smtplib
+import socket
 from email.message import EmailMessage
 
 from agent.delivery.base import DeliveryChannel, DeliveryResult
@@ -24,13 +26,35 @@ from config.settings import (
 )
 
 
+def ehlo_name() -> str:
+    """The name we announce to the mail server in EHLO.
+
+    smtplib announces socket.getfqdn(). On some machines (a Mac whose address has
+    no reverse-DNS name, for one) that is a long ip6.arpa string or a bare IP, and
+    Gmail drops the connection ("Connection unexpectedly closed") before login.
+    Use SMTP_LOCAL_HOSTNAME if set, else the machine's name when it looks like a
+    real hostname, else a fixed valid one.
+    """
+    explicit = os.environ.get("SMTP_LOCAL_HOSTNAME", "").strip()
+    if explicit:
+        return explicit
+    name = socket.getfqdn()
+    looks_real = (
+        "." in name
+        and not name.lower().endswith((".arpa", ".in-addr.arpa", ".ip6.arpa"))
+        and not name.replace(".", "").replace(":", "").isdigit()
+        and len(name) <= 64
+    )
+    return name if looks_real else "agentfactory.local"
+
+
 class EmailChannel(DeliveryChannel):
     name = "email"
 
     def __init__(self, smtp_client_factory=None):
         # Injectable for tests — defaults to the real smtplib.SMTP.
         self._smtp_client_factory = smtp_client_factory or (
-            lambda: smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15)
+            lambda: smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15, local_hostname=ehlo_name())
         )
 
     def is_configured(self) -> bool:

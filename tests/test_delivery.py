@@ -313,3 +313,27 @@ def test_email_transient_smtp_error_is_retriable():
     assert result.ok is False
     assert result.retriable is True
     assert result.attempts == 2
+
+
+# ── EHLO name: reverse-DNS style hostnames make Gmail drop the connection ──
+
+def test_ehlo_name_replaces_reverse_dns_hostnames(monkeypatch):
+    import socket
+    from agent.delivery import email_channel
+
+    monkeypatch.delenv("SMTP_LOCAL_HOSTNAME", raising=False)
+    weird = "1.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa"
+    for bad in (weird, "10.0.0.1", "localhost", ""):
+        monkeypatch.setattr(socket, "getfqdn", lambda bad=bad: bad)
+        assert email_channel.ehlo_name() == "agentfactory.local", bad
+
+
+def test_ehlo_name_keeps_a_real_hostname_and_honours_the_override(monkeypatch):
+    import socket
+    from agent.delivery import email_channel
+
+    monkeypatch.delenv("SMTP_LOCAL_HOSTNAME", raising=False)
+    monkeypatch.setattr(socket, "getfqdn", lambda: "mini.example.org")
+    assert email_channel.ehlo_name() == "mini.example.org"
+    monkeypatch.setenv("SMTP_LOCAL_HOSTNAME", "relay.test")
+    assert email_channel.ehlo_name() == "relay.test"
