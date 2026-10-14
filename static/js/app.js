@@ -1183,8 +1183,22 @@ async function loadAnalyticsDashboard() {
     const elInflight = document.getElementById("kpi-inflight");
     const elSuppressed = document.getElementById("kpi-suppressed-count");
 
-    if (elDeliveryRate) elDeliveryRate.textContent = `${sum.delivery_rate_pct ?? 100}%`;
-    if (elResponseRate) elResponseRate.textContent = `${sum.response_rate_pct ?? 0}%`;
+    // null means "nothing to measure yet": show a dash, never an invented number.
+    const pct = (v) => (v === null || v === undefined ? "—" : `${v}%`);
+    if (elDeliveryRate) elDeliveryRate.textContent = pct(sum.delivery_rate_pct);
+    if (elResponseRate) {
+      elResponseRate.textContent = pct(sum.response_rate_pct);
+      elResponseRate.title = sum.sms_recipients
+        ? `${sum.sms_replied} of ${sum.sms_recipients} people texted replied`
+        : "No texts sent yet";
+    }
+    const elDemoNote = document.getElementById("kpi-demo-note");
+    if (elDemoNote) {
+      elDemoNote.hidden = !sum.demo_records;
+      elDemoNote.textContent = sum.demo_records
+        ? `Includes ${sum.demo_records} sample records from "Seed Demo Data", not live traffic.`
+        : "";
+    }
     if (elTotalSent) elTotalSent.textContent = sum.total_sent ?? 0;
     if (elTotalFailed) elTotalFailed.textContent = (sum.failed ?? 0) + (sum.bounced ?? 0);
     if (elInflight) elInflight.textContent = `In-flight: ${sum.in_flight ?? 0}`;

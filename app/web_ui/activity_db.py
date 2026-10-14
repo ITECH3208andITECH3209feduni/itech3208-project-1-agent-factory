@@ -488,15 +488,35 @@ def get_delivery_analytics(org_id: int | None = None) -> dict:
     bounced = sum(1 for r in rows if r["status"] == "bounced")
     queued_sent = sum(1 for r in rows if r["status"] in ("queued", "sent"))
 
-    delivery_rate = round((delivered / total * 100), 1) if total > 0 else 100.0
-    failure_rate = round(((failed + bounced) / total * 100), 1) if total > 0 else 0.0
+    # With nothing sent there is no rate to report. None (shown as a dash) is the
+    # honest answer; a made-up 100% would read as "everything delivered".
+    delivery_rate = round((delivered / total * 100), 1) if total > 0 else None
+    failure_rate = round(((failed + bounced) / total * 100), 1) if total > 0 else None
 
-    # Activity responses
-    activity_rows = db.execute(f"SELECT channel, timestamp FROM activity WHERE 1=1{clause}", params).fetchall()
-    total_activity = len(activity_rows)
-    response_rate = round((total_activity / max(total, 1) * 100), 1) if total > 0 else (92.5 if total_activity > 0 else 0.0)
-    if response_rate > 100.0:
-        response_rate = 94.2  # normalized engagement score
+    # Reply rate: of the people we texted, how many texted back afterwards.
+    # Only SMS can be answered by SMS, so email and voice are left out of both
+    # sides. Matching is by phone number (our recipient == their inbound caller).
+    sms_first_sent: dict[str, str] = {}
+    for r in db.execute(
+        f"SELECT recipient, sent_at FROM delivery_history WHERE channel = 'sms'{clause}", params
+    ).fetchall():
+        who, when = r["recipient"], r["sent_at"] or ""
+        if who and (who not in sms_first_sent or when < sms_first_sent[who]):
+            sms_first_sent[who] = when
+    inbound = db.execute(
+        f"SELECT caller, timestamp FROM activity WHERE channel = 'sms'{clause}", params
+    ).fetchall()
+    replied = sum(
+        1 for who, sent_at in sms_first_sent.items()
+        if any(a["caller"] == who and (a["timestamp"] or "") >= sent_at for a in inbound)
+    )
+    response_rate = round(replied / len(sms_first_sent) * 100, 1) if sms_first_sent else None
+
+    # Records created by the "Seed Demo Data" button are sample data, not live
+    # traffic; count them so the dashboard can say so.
+    demo_records = db.execute(
+        f"SELECT COUNT(*) AS n FROM delivery_history WHERE metadata LIKE '%\"source\": \"demo_seed\"%'{clause}", params
+    ).fetchone()["n"]
 
     # Breakdown by channel
     channels = {"sms": {"total": 0, "delivered": 0, "failed": 0},
@@ -546,6 +566,9 @@ def get_delivery_analytics(org_id: int | None = None) -> dict:
             "delivery_rate_pct": delivery_rate,
             "failure_rate_pct": failure_rate,
             "response_rate_pct": response_rate,
+            "sms_recipients": len(sms_first_sent),
+            "sms_replied": replied,
+            "demo_records": demo_records,
             "suppressed_emails_count": len(get_email_suppressions()),
         },
         "channels": channels,
