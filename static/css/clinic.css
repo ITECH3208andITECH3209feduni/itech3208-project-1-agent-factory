@@ -1,0 +1,45 @@
+/* Dental-clinic look, loaded only when BRAND_MODE=clinic (app/web_ui/branding.py). */
+:root {
+  --violet: #0d9488;
+  --violet2: #5eead4;
+  --sky: #14b8a6;
+  --sky2: #5eead4;
+  --accent: #14b8a6;
+}
+
+/* Only the receptionist is part of the clinic product. */
+html[data-brand="clinic"] .nav-item[data-tab="shopping"],
+html[data-brand="clinic"] .nav-item[data-tab="integrity"],
+html[data-brand="clinic"] .wb-card-amazon,
+html[data-brand="clinic"] .wb-card-lit,
+html[data-brand="clinic"] .model-badge,
+html[data-brand="clinic"] .wb-footer > :nth-child(-n + 4) {
+  display: none !important;
+}
+
+/* A tooth in place of the brain mark. */
+html[data-brand="clinic"] .brain-svg,
+html[data-brand="clinic"] .wb-logo svg {
+  display: none;
+}
+html[data-brand="clinic"] .logo-circle::before,
+html[data-brand="clinic"] .wb-logo::before {
+  content: "🦷";
+  font-size: 26px;
+  line-height: 1;
+}
+html[data-brand="clinic"] .wb-logo::before {
+  font-size: 44px;
+}
+html[data-brand="clinic"] .logo-circle,
+html[data-brand="clinic"] .wb-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Sign-in, register and password pages. */
+html[data-brand="clinic"] body { background: #0b1214; }
+html[data-brand="clinic"] .card { border-color: rgba(20, 184, 166, 0.25); }
+html[data-brand="clinic"] button { background: #0d9488; }
+html[data-brand="clinic"] input:focus { border-color: #14b8a6; }
