@@ -120,3 +120,118 @@ def test_book_appointment_network_error(monkeypatch, fake_google_auth):
     )
     assert result["ok"] is False
     assert "Network error" in result["error"]
+
+
+def test_book_appointment_returns_event_id_and_stores_contact_key(
+    monkeypatch, fake_google_auth
+):
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "id": "event-123",
+                "htmlLink": "https://calendar.google.com/event?eid=abc123",
+            }
+
+    def fake_post(url, headers, json, timeout):
+        captured["body"] = json
+        return FakeResponse()
+
+    monkeypatch.setattr("requests.post", fake_post)
+
+    result = calendar_client.book_appointment(
+        "Consultation",
+        "2026-10-20T14:00:00",
+        "2026-10-20T14:30:00",
+        contact_channel="sms",
+        contact_address="+61400000000",
+    )
+
+    assert result["ok"] is True
+    assert result["event_id"] == "event-123"
+    private = captured["body"]["extendedProperties"]["private"]
+    assert private["agent_factory_contact_key"]
+    assert "+61400000000" not in str(private)
+
+
+def test_find_upcoming_appointments_uses_caller_identity(
+    monkeypatch, fake_google_auth
+):
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "items": [
+                    {
+                        "id": "event-123",
+                        "summary": "Consultation",
+                        "start": {"dateTime": "2026-10-20T14:00:00+11:00"},
+                        "end": {"dateTime": "2026-10-20T14:30:00+11:00"},
+                    }
+                ]
+            }
+
+    def fake_get(url, headers, params, timeout):
+        captured["params"] = params
+        return FakeResponse()
+
+    monkeypatch.setattr("requests.get", fake_get)
+
+    result = calendar_client.find_upcoming_appointments(
+        "sms", "+61400000000"
+    )
+
+    assert result["ok"] is True
+    assert len(result["events"]) == 1
+    assert result["events"][0]["id"] == "event-123"
+    assert "agent_factory_contact_key=" in captured["params"]["privateExtendedProperty"]
+
+
+def test_update_appointment_patches_existing_event(
+    monkeypatch, fake_google_auth
+):
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "id": "event-123",
+                "htmlLink": "https://calendar.google.com/event?eid=updated",
+            }
+
+    def fake_patch(url, headers, json, timeout):
+        captured["url"] = url
+        captured["body"] = json
+        return FakeResponse()
+
+    monkeypatch.setattr("requests.patch", fake_patch)
+
+    result = calendar_client.update_appointment(
+        "event-123",
+        "2026-10-23T10:00:00",
+        "2026-10-23T10:30:00",
+    )
+
+    assert result["ok"] is True
+    assert result["event_id"] == "event-123"
+    assert captured["url"].endswith("/events/event-123")
+    assert captured["body"]["start"]["dateTime"] == "2026-10-23T10:00:00"
+    assert captured["body"]["end"]["dateTime"] == "2026-10-23T10:30:00"
+
+
+
+def test_contact_key_matches_sms_and_voice_for_same_phone():
+    sms_key = calendar_client._contact_key("sms", "+61 400-000-000")
+    voice_key = calendar_client._contact_key("voice", "+61400000000")
+    email_key = calendar_client._contact_key("email", "+61400000000")
+
+    assert sms_key == voice_key
+    assert sms_key != email_key

@@ -107,7 +107,7 @@ def test_appointment_booking_failure_includes_ics_fallback_link(
     monkeypatch.setattr(
         receptionist_module,
         "book_appointment",
-        lambda summary, start_iso, end_iso, timezone: {
+        lambda summary, start_iso, end_iso, timezone, **kwargs: {
             "ok": False,
             "error": "Calendar API error 403: forbidden",
         },
@@ -142,7 +142,7 @@ def test_appointment_booking_success_also_includes_ics_link(
     monkeypatch.setattr(
         receptionist_module,
         "book_appointment",
-        lambda summary, start_iso, end_iso, timezone: {
+        lambda summary, start_iso, end_iso, timezone, **kwargs: {
             "ok": True,
             "event_url": "https://calendar.google.com/event?eid=xyz",
         },
@@ -180,7 +180,7 @@ def test_appointment_booking_success_schedules_reminder_when_contact_known(
     monkeypatch.setattr(
         receptionist_module,
         "book_appointment",
-        lambda summary, start_iso, end_iso, timezone: {
+        lambda summary, start_iso, end_iso, timezone, **kwargs: {
             "ok": True,
             "event_url": "https://calendar.google.com/event?eid=xyz",
         },
@@ -226,7 +226,7 @@ def test_appointment_booking_success_without_contact_info_skips_reminder(
     monkeypatch.setattr(
         receptionist_module,
         "book_appointment",
-        lambda summary, start_iso, end_iso, timezone: {"ok": True, "event_url": None},
+        lambda summary, start_iso, end_iso, timezone, **kwargs: {"ok": True, "event_url": None},
     )
     fake_anthropic_reply(
         _json.dumps(
