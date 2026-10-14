@@ -16,8 +16,10 @@ from datetime import datetime, timezone
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, Field
 
+from agent.delivery import EmailChannel, SMSChannel, VoiceChannel
 from auth.rbac import require_admin, require_org_member
 
 from app.web_ui.activity_db import (
@@ -118,14 +120,30 @@ async def retry_delivery(delivery_id: str, identity: dict = Depends(require_admi
     return {"status": "retrying", "record": updated}
 
 
+_CHANNELS = {"sms": SMSChannel, "email": EmailChannel, "voice": VoiceChannel}
+
+
+def _channel_for(name: str):
+    """The real delivery adapter for a channel name (tests replace this)."""
+    return _CHANNELS[name]()
+
+
 @router.post("/send")
 async def send_reminder(payload: SendReminderRequest, identity: dict = Depends(require_admin)):
     """
-    Trigger or schedule an outbound reminder delivery across SMS, Email, or Voice.
-    Validates suppressions for email, logs delivery record, and returns tracking message_id.
+    Send a reminder now over SMS, email or voice, and record what really happened.
+
+    The history row is "sent" only when the provider accepted the message, and
+    "failed" (with the provider's error) when it did not. SMS and voice rows use
+    the Twilio SID as their id so the status callback can later move them to
+    "delivered". Email is handed to the SMTP server, which gives no delivery
+    receipt, so it stays "sent" unless a bounce arrives.
     """
     channel = payload.channel.lower().strip()
     recipient = payload.recipient.strip()
+
+    if channel not in _CHANNELS:
+        raise HTTPException(status_code=400, detail="Channel must be sms, email or voice.")
 
     if channel == "email" and is_email_suppressed(recipient):
         raise HTTPException(
@@ -133,28 +151,41 @@ async def send_reminder(payload: SendReminderRequest, identity: dict = Depends(r
             detail=f"Recipient email '{recipient}' is suppressed due to previous bounce or spam report."
         )
 
-    msg_id = f"{channel[:2].upper()}-{uuid.uuid4().hex[:12].upper()}"
+    message = payload.message.strip() or "Reminder from Agent Factory"
+    kwargs = {"subject": "Reminder"} if channel == "email" else {}
+    result = await run_in_threadpool(_channel_for(channel).send, recipient, message, **kwargs)
+
+    msg_id = result.provider_id or f"{channel[:2].upper()}-{uuid.uuid4().hex[:12].upper()}"
     meta = payload.metadata or {}
-    meta["message"] = payload.message[:500]
+    meta["message"] = message[:500]
+    meta["attempts"] = result.attempts
 
     record = log_delivery_event(
         message_id=msg_id,
         recipient=recipient,
         channel=channel,
         reminder_type=payload.reminder_type,
-        status="sent",
+        status="sent" if result.ok else "failed",
         metadata=meta,
         org_id=identity["org_id"],
     )
+    if not result.ok:
+        update_delivery_status(msg_id, "failed", error_message=result.error or "Delivery failed")
 
     log_activity(
         channel=channel,
         caller=recipient,
         intent=f"reminder_{payload.reminder_type}",
-        summary=f"Sent {payload.reminder_type} reminder to {recipient} [{msg_id}]",
+        summary=(
+            f"Sent {payload.reminder_type} reminder to {recipient} [{msg_id}]"
+            if result.ok
+            else f"Could not send {payload.reminder_type} reminder to {recipient}: {(result.error or '')[:100]}"
+        ),
         org_id=identity["org_id"],
     )
 
+    if not result.ok:
+        raise HTTPException(status_code=502, detail=f"Not sent: {result.error or 'delivery failed'}")
     return {"status": "sent", "message_id": msg_id, "record": record}
 
 

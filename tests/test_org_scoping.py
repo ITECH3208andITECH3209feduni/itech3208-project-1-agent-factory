@@ -95,7 +95,15 @@ def test_retry_cannot_touch_another_organisations_delivery(db, client):
     assert ok.status_code == 200 and ok.json()["record"]["retry_count"] == 1
 
 
-def test_send_records_the_senders_organisation(db, client):
+def test_send_records_the_senders_organisation(db, client, monkeypatch):
+    from agent.delivery import DeliveryResult
+    from app.web_ui import delivery_routes
+
+    class Fake:
+        def send(self, to, message, **kw):
+            return DeliveryResult(ok=True, channel="sms", to=to, provider_id="SMfake42")
+
+    monkeypatch.setattr(delivery_routes, "_channel_for", lambda name: Fake())
     r = client.post(
         "/delivery/send",
         headers={"x-org": "2"},
