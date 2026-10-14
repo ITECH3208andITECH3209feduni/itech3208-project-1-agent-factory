@@ -935,6 +935,32 @@ function switchReceptTab(tabName) {
   if (tabName === "calendar")    loadReceptCalendar();
 }
 
+/* MyAI answers how-do-I questions about the dashboard; the patient preview talks to the
+   receptionist exactly as a patient would. */
+let chatMode = "myai";
+
+function setChatMode(mode) {
+  chatMode = mode === "patient" ? "patient" : "myai";
+  document.querySelectorAll(".chat-mode-btn").forEach(b => b.classList.toggle("active", b.dataset.mode === chatMode));
+  const area = document.getElementById("receptionist-area");
+  if (area) {
+    area.querySelectorAll(".chat-msg").forEach(m => m.remove());
+    document.getElementById("welcome-myai").style.display = chatMode === "myai" ? "" : "none";
+    document.getElementById("welcome-patient").style.display = chatMode === "patient" ? "" : "none";
+  }
+  const inp = document.getElementById("receptionist-input");
+  if (inp) inp.placeholder = chatMode === "myai" ? "Ask MyAI how to use the dashboard…" : "Ask the receptionist anything…";
+  const hint = document.getElementById("chat-hint");
+  if (hint) hint.textContent = chatMode === "myai"
+    ? "Dashboard help · Contacts · Reminders · Delivery · Calendar"
+    : "Web chat · SMS · Voice · Calendar booking";
+}
+
+function prefillChat(text) {
+  const inp = document.getElementById("receptionist-input");
+  if (inp) { inp.value = text; inp.focus(); }
+}
+
 function prefillReceptionist(text) {
   const inp = document.getElementById("receptionist-input");
   if (inp) { inp.value = text; inp.focus(); }
@@ -951,8 +977,9 @@ async function sendReceptionistQuery() {
   appendReceptMsg("assistant", "…", "recept-thinking");
   const clearThinking = () => { const t = msgs.querySelector(".recept-thinking"); if (t) t.remove(); };
   try {
-    // The receptionist (FAQ, urgent and call-back handling, booking), not the research agent.
-    const res = await fetch("/receptionist", {
+    // MyAI explains the dashboard; the patient preview is the receptionist (FAQ, urgent and
+    // call-back handling, booking), not the research agent.
+    const res = await fetch(chatMode === "myai" ? "/myai" : "/receptionist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message: query }),
@@ -960,9 +987,11 @@ async function sendReceptionistQuery() {
     const data = await res.json().catch(() => ({}));
     clearThinking();
     appendReceptMsg("assistant", data.answer || data.detail || `Something went wrong (error ${res.status}).`);
-    if (data.intent === "escalate") loadReceptEscalations();
-    if (data.booked) loadReceptCalendar();
-    loadReceptStats();
+    if (chatMode === "patient") {
+      if (data.intent === "escalate") loadReceptEscalations();
+      if (data.booked) loadReceptCalendar();
+      loadReceptStats();
+    }
   } catch (e) {
     clearThinking();
     appendReceptMsg("assistant", "Could not reach the receptionist: " + e.message);

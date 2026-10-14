@@ -41,5 +41,5 @@ html[data-brand="clinic"] .wb-logo {
 /* Sign-in, register and password pages. */
 html[data-brand="clinic"] body { background: #0b1214; }
 html[data-brand="clinic"] .card { border-color: rgba(20, 184, 166, 0.25); }
-html[data-brand="clinic"] button { background: #0d9488; }
+html[data-brand="clinic"] .card button { background: #0d9488; }
 html[data-brand="clinic"] input:focus { border-color: #14b8a6; }

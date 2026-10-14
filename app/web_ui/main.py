@@ -37,6 +37,7 @@ from app.web_ui import branding
 from app.web_ui.routes import router
 from app.web_ui.auth_routes import router as auth_router
 from app.web_ui.receptionist_routes import router as receptionist_router
+from app.web_ui.myai_routes import router as myai_router
 from app.web_ui.calendar_routes import router as calendar_router
 from app.web_ui.kb_routes import router as kb_router
 from app.web_ui.twilio_routes import router as twilio_router
@@ -92,6 +93,7 @@ app.include_router(org_router)           # /orgs — PROJ-406 organisation regis
 app.include_router(api_keys_router)      # /orgs/api-keys — PROJ-473 organisation API keys
 app.include_router(router)               # /query, /literature, /amazon, /integrity, /seller, /export, /history, /status
 app.include_router(receptionist_router)  # /receptionist (POST)
+app.include_router(myai_router)          # /myai (POST) — dashboard help assistant
 app.include_router(calendar_router)      # /calendar/ics
 app.include_router(kb_router)            # /kb/upload, /kb/list, /kb/{id}, /kb/search
 app.include_router(twilio_router)        # /twilio/sms, /twilio/voice, /twilio/voice/reply, /twilio/status-callback
