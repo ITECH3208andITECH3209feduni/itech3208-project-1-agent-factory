@@ -28,6 +28,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from app.web.store import DEFAULT_ORG_ID, table
 
@@ -41,6 +42,8 @@ MERGE_FIELDS: dict[str, tuple[str, str]] = {
     "date": ("Send date, e.g. Monday 3 November", ""),
     "time": ("Send time, e.g. 9:30am", ""),
     "org": ("Your organisation's name", "us"),
+    "org_name": ("Your organisation's name", "us"),
+    "appointment_date": ("Appointment date", ""),
 }
 
 _PLACEHOLDER = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
@@ -80,7 +83,8 @@ def _fmt_time(dt: datetime) -> str:
 
 
 def merge_values(contact: dict[str, Any] | None, send_at: datetime | None,
-                 org_name: str | None, tz_name: str | None = None) -> dict[str, str]:
+                 org_name: str | None, tz_name: str | None = None,
+                 appointment_date: datetime | None = None) -> dict[str, str]:
     """The value of every merge field for one send. `send_at` is shown in
     tz_name when given (the zone the reminder was scheduled in), otherwise
     in the offset it carries."""
@@ -89,25 +93,53 @@ def merge_values(contact: dict[str, Any] | None, send_at: datetime | None,
         "name": name,
         "first_name": name.split()[0] if name else "",
         "org": (org_name or "").strip(),
+        "org_name": (org_name or "").strip(),
         "date": "",
+        "appointment_date": "",
         "time": "",
     }
     if send_at is not None:
         local = send_at
         if tz_name:
-            from zoneinfo import ZoneInfo
-
-            local = send_at.astimezone(ZoneInfo(tz_name))
+            zone = ZoneInfo(tz_name)
+            if local.tzinfo is None:
+                local = local.replace(tzinfo=zone)
+            else:
+                local = local.astimezone(zone)
         values["date"] = _fmt_date(local)
         values["time"] = _fmt_time(local)
+
+    if appointment_date is not None:
+        local_appointment = appointment_date
+        if tz_name:
+            if local_appointment.tzinfo is None:
+                local_appointment = local_appointment.replace(
+                    tzinfo=ZoneInfo(tz_name)
+                )
+            else:
+                local_appointment = local_appointment.astimezone(
+                    ZoneInfo(tz_name)
+                )
+        values["appointment_date"] = _fmt_date(local_appointment)
+
     return {k: (v or MERGE_FIELDS[k][1]) for k, v in values.items()}
 
 
 def render(body: str, values: dict[str, str]) -> str:
-    """Replace known placeholders; leave everything else untouched."""
-    return _PLACEHOLDER.sub(
-        lambda m: values[m.group(1)] if m.group(1) in values else m.group(0), body or ""
-    )
+    """Render merge fields safely; double braces escape placeholders."""
+    open_token = "\\x00AF_OPEN_BRACE\\x00"
+    close_token = "\\x00AF_CLOSE_BRACE\\x00"
+    text = (body or "").replace("{{", open_token).replace("}}", close_token)
+
+    def replace_field(match):
+        field = match.group(1)
+        if field not in MERGE_FIELDS:
+            return match.group(0)
+        fallback = MERGE_FIELDS[field][1]
+        return values.get(field) or fallback
+
+    text = _PLACEHOLDER.sub(replace_field, text)
+    return text.replace(close_token, "}").replace(open_token, "{")
 
 
 def org_name(org_id: int = DEFAULT_ORG_ID) -> str | None:
@@ -121,8 +153,14 @@ def org_name(org_id: int = DEFAULT_ORG_ID) -> str | None:
 
 
 def render_for(body: str, contact: dict[str, Any] | None, send_at: datetime | None,
-               org_id: int = DEFAULT_ORG_ID, tz_name: str | None = None) -> str:
-    return render(body, merge_values(contact, send_at, org_name(org_id), tz_name))
+               org_id: int = DEFAULT_ORG_ID, tz_name: str | None = None,
+               appointment_date: datetime | None = None) -> str:
+    return render(
+        body,
+        merge_values(
+            contact, send_at, org_name(org_id), tz_name, appointment_date
+        ),
+    )
 
 
 # ── Store and CRUD (the PROJ-484 part) ────────────────────────

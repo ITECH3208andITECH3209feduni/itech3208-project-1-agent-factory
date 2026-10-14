@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime
 
 from agent.delivery import EmailChannel, SMSChannel, VoiceChannel
 from agent.reminders.store import Reminder, ReminderStore
@@ -49,6 +50,53 @@ class ReminderScheduler:
             results.append(self._send_one(reminder))
         return results
 
+    def _render_message(self, reminder: Reminder) -> str:
+        """Personalise a reminder immediately before its delivery attempt."""
+        from app.web import message_templates
+
+        contact = None
+        try:
+            from auth import tenancy
+
+            if reminder.contact_channel == "email":
+                row = tenancy.get_contact_by_email(
+                    reminder.org_id, reminder.contact_address
+                )
+            else:
+                row = tenancy.get_contact_by_phone(
+                    reminder.org_id, reminder.contact_address
+                )
+            contact = dict(row) if row is not None else None
+        except Exception:
+            # Missing contact data must not prevent an otherwise valid send.
+            logger.warning(
+                "Could not load contact details for reminder %s",
+                reminder.id,
+                exc_info=True,
+            )
+
+        try:
+            send_at = datetime.fromisoformat(reminder.scheduled_at_utc)
+        except (TypeError, ValueError):
+            send_at = None
+
+        try:
+            appointment_date = (
+                datetime.fromisoformat(reminder.appointment_date)
+                if reminder.appointment_date else None
+            )
+        except (TypeError, ValueError):
+            appointment_date = None
+
+        return message_templates.render_for(
+            reminder.message,
+            contact,
+            send_at,
+            reminder.org_id,
+            reminder.contact_timezone,
+            appointment_date,
+        )
+
     def _send_one(self, reminder: Reminder) -> dict:
         if not self.store.claim(reminder.id):
             # Another tick/process claimed it first — not an error,
@@ -60,8 +108,9 @@ class ReminderScheduler:
             self.store.mark_failed(reminder.id, f"no channel registered for {reminder.contact_channel!r}")
             return {"reminder_id": reminder.id, "ok": False, "error": "unknown channel"}
 
+        message = self._render_message(reminder)
         kwargs = {"subject": reminder.subject} if reminder.contact_channel == "email" else {}
-        result = channel.send(reminder.contact_address, reminder.message, **kwargs)
+        result = channel.send(reminder.contact_address, message, **kwargs)
 
         if result.ok:
             self.store.mark_sent(reminder.id, result.provider_id)
