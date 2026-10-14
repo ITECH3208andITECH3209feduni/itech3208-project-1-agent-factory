@@ -125,3 +125,18 @@ def fake_anthropic_reply(monkeypatch):
 
     _set_reply.holder = holder
     return _set_reply
+
+
+# PROJ-473 RBAC: /crm and the delivery and settings routes need an account that
+# belongs to an organisation and has a role. The auto-login test user ("pytest",
+# see create_session_token above) exists only in the cookie, not in any users
+# table, so give it org 1 and the admin role. Every other username goes through
+# the real lookup, so the RBAC acceptance tests still exercise the real rules.
+@pytest.fixture(autouse=True)
+def _pytest_user_is_org_admin(monkeypatch):
+    import agent.auth as session_auth
+    import auth.rbac as rbac
+
+    real_org, real_role = session_auth.get_user_org_id, rbac._get_session_role
+    monkeypatch.setattr(session_auth, "get_user_org_id", lambda u: 1 if u == "pytest" else real_org(u))
+    monkeypatch.setattr(rbac, "_get_session_role", lambda u: "admin" if u == "pytest" else real_role(u))
