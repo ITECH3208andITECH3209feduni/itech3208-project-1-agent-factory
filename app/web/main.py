@@ -19,6 +19,7 @@ Endpoints:
 
 import logging
 import os
+import re
 import time
 from typing import Any
 
@@ -62,6 +63,28 @@ def get_orchestrator():
 
         _orchestrator = Orchestrator()
     return _orchestrator
+
+
+# ── Mounted-prefix rewrite ───────────────────────────────────
+# The page modules write absolute URLs ("/api/stats", "/contacts", ...) as if
+# this app lived at the site root. Mounted at /crm (app/web_ui/main.py) those
+# all 404, so when Starlette reports a root_path, prefix them. Standalone
+# (root_path == "") this does nothing.
+_MOUNT_URL = re.compile(
+    r"""(["'`])/(api|dashboard|contacts|reminders|templates|ui|skills|docs|health|query|openapi\.json)\b"""
+)
+
+
+@app.middleware("http")
+async def prefix_mounted_urls(request: Request, call_next):
+    response = await call_next(request)
+    root = request.scope.get("root_path", "").rstrip("/")
+    if not root or "text/html" not in response.headers.get("content-type", ""):
+        return response
+    body = b"".join([chunk async for chunk in response.body_iterator]).decode("utf-8")
+    body = _MOUNT_URL.sub(lambda m: f"{m.group(1)}{root}/{m.group(2)}", body)
+    headers = {k: v for k, v in response.headers.items() if k.lower() != "content-length"}
+    return Response(content=body, status_code=response.status_code, headers=headers)
 
 
 # ── Models ────────────────────────────────────────────────────
@@ -210,20 +233,20 @@ def ui() -> HTMLResponse:
 
 
 # ── Dashboard (PROJ-437) ──────────────────────────────────────
-def current_user() -> dict | None:
+def current_user(request: Request | None = None) -> dict | None:
     """
-    Auth seam for the dashboard.
-
-    PROJ-399 calls for an *authenticated* landing page, but accounts and
-    sessions are PROJ-392 (Accounts & Multi-tenancy), which has not landed.
-    Rather than fake a login — which would be worse than none, because it
-    would look like access control — this returns None and the dashboard
-    renders a visible "not authenticated" banner.
-
-    When PROJ-392 lands, enforce it here: this is the single place the
-    dashboard and /api/stats consult.
+    Auth seam for the dashboard: the logged-in user from the session cookie,
+    or None. Accounts and sessions have landed (agent/auth.py), and when this
+    app is mounted at /crm the parent app's login check runs first. Standalone,
+    with no cookie, it stays None and the dashboard shows its sign-in banner.
     """
-    return None
+    if request is None:
+        return None
+    from agent.auth import verify_session_token
+
+    token = request.cookies.get("af_session")
+    username = verify_session_token(token) if token else None
+    return {"username": username} if username else None
 
 
 @app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
@@ -487,9 +510,55 @@ def update_reminder(reminder_id: int, payload: dict) -> dict:
         row = reminders.update_reminder(reminder_id, payload)
     except reminders.ValidationError as exc:
         return JSONResponse(status_code=422, content={"errors": exc.errors})
+    except reminders.TransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if row is None:
         raise HTTPException(status_code=404, detail="reminder not found")
     return row
+
+
+def _reminder_action(action, reminder_id: int, *args: Any) -> dict:
+    """Shared shape for pause/resume/cancel/reschedule: 404 if missing, 409 if
+    the reminder's status does not allow it, 422 for a bad send_at."""
+    from app.web import reminders
+
+    try:
+        row = action(reminder_id, *args)
+    except reminders.ValidationError as exc:
+        return JSONResponse(status_code=422, content={"errors": exc.errors})
+    except reminders.TransitionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="reminder not found")
+    return row
+
+
+@app.post("/api/reminders/{reminder_id}/pause")
+def pause_reminder(reminder_id: int) -> dict:
+    from app.web import reminders
+
+    return _reminder_action(reminders.pause_reminder, reminder_id)
+
+
+@app.post("/api/reminders/{reminder_id}/resume")
+def resume_reminder(reminder_id: int) -> dict:
+    from app.web import reminders
+
+    return _reminder_action(reminders.resume_reminder, reminder_id)
+
+
+@app.post("/api/reminders/{reminder_id}/cancel")
+def cancel_reminder(reminder_id: int) -> dict:
+    from app.web import reminders
+
+    return _reminder_action(reminders.cancel_reminder, reminder_id)
+
+
+@app.post("/api/reminders/{reminder_id}/reschedule")
+def reschedule_reminder(reminder_id: int, payload: dict) -> dict:
+    from app.web import reminders
+
+    return _reminder_action(reminders.reschedule_reminder, reminder_id, payload.get("send_at"))
 
 
 @app.delete("/api/reminders/{reminder_id}", status_code=204)
@@ -498,6 +567,96 @@ def delete_reminder(reminder_id: int) -> Response:
 
     if not reminders.delete_reminder(reminder_id):
         raise HTTPException(status_code=404, detail="reminder not found")
+    return Response(status_code=204)
+
+
+# ── Message templates (PROJ-480; store per PROJ-484, merge fields per PROJ-485) ──
+@app.get("/templates", response_class=HTMLResponse, include_in_schema=False)
+def templates_page() -> HTMLResponse:
+    from app.web.templates_ui import TEMPLATES_HTML
+
+    return HTMLResponse(content=TEMPLATES_HTML)
+
+
+@app.get("/api/templates")
+def list_templates() -> dict:
+    from app.web import message_templates as mt
+
+    items = mt.list_templates()
+    return {
+        "count": len(items),
+        "templates": items,
+        "merge_fields": [{"name": k, "description": d} for k, (d, _) in mt.MERGE_FIELDS.items()],
+    }
+
+
+@app.post("/api/templates/preview")
+def preview_template(payload: dict) -> dict:
+    """Render a message against a contact and send time, as the bridge will at
+    send time. Used by the reminder form's live preview."""
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    from app.web import contacts, message_templates as mt, reminders
+
+    body = str(payload.get("body") or "")
+    contact = None
+    try:
+        contact = contacts.get_contact(int(payload.get("contact_id")))
+    except (TypeError, ValueError):
+        pass
+    try:
+        send_at = reminders.parse_dt(str(payload.get("send_at") or ""))
+    except ValueError:
+        send_at = None
+    tz = payload.get("tz") or None
+    try:
+        if tz:
+            ZoneInfo(str(tz))
+    except (ZoneInfoNotFoundError, ValueError):
+        tz = None   # an unknown zone falls back to the offset send_at carries
+    rendered = mt.render_for(body, contact, send_at, tz_name=tz)
+    return {"rendered": rendered, "unknown": mt.unknown_placeholders(body), "length": len(rendered)}
+
+
+@app.get("/api/templates/{template_id}")
+def get_template(template_id: int) -> dict:
+    from app.web import message_templates as mt
+
+    item = mt.get_template(template_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="template not found")
+    return item
+
+
+@app.post("/api/templates", status_code=201)
+def create_template(payload: dict) -> dict:
+    from app.web import message_templates as mt
+
+    try:
+        return mt.create_template(payload)
+    except mt.ValidationError as exc:
+        return JSONResponse(status_code=422, content={"errors": exc.errors})
+
+
+@app.patch("/api/templates/{template_id}")
+def update_template(template_id: int, payload: dict) -> dict:
+    from app.web import message_templates as mt
+
+    try:
+        row = mt.update_template(template_id, payload)
+    except mt.ValidationError as exc:
+        return JSONResponse(status_code=422, content={"errors": exc.errors})
+    if row is None:
+        raise HTTPException(status_code=404, detail="template not found")
+    return row
+
+
+@app.delete("/api/templates/{template_id}", status_code=204)
+def delete_template(template_id: int) -> Response:
+    from app.web import message_templates as mt
+
+    if not mt.delete_template(template_id):
+        raise HTTPException(status_code=404, detail="template not found")
     return Response(status_code=204)
 
 
@@ -513,7 +672,7 @@ def reminder_dispatch_check(reminder_id: int) -> dict:
 
 
 @app.get("/api/stats")
-def api_stats() -> dict:
+def api_stats(request: Request) -> dict:
     """
     Metrics behind the dashboard's KPI row.
 
@@ -524,7 +683,7 @@ def api_stats() -> dict:
     from app.web import stats
 
     payload = stats.summary()
-    payload["authenticated"] = current_user() is not None
+    payload["authenticated"] = current_user(request) is not None
     return payload
 
 

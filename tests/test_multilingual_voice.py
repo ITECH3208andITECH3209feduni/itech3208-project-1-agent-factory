@@ -181,3 +181,15 @@ class TestVoiceGreetingMultiLang:
     def test_greeting_hindi(self):
         resp = self.client.post("/twilio/voice?lang=hi-IN", data={"CallSid": "CATEST004"})
         assert "Polly.Aditi" in resp.text
+
+
+# ── The operator controls sit under the public /twilio/ prefix ─────────────
+
+def test_language_controls_require_login():
+    from fastapi.testclient import TestClient
+    from app.web_ui.main import app
+
+    anon = TestClient(app)
+    anon.cookies.clear()  # conftest signs test clients in by default
+    assert anon.get("/twilio/voice/languages").status_code == 401
+    assert anon.post("/twilio/voice/language", json={"language": "es-US"}).status_code == 401

@@ -54,6 +54,13 @@ def main() -> int:
     for name in ("contacts", "reminders", "consent_events"):
         store.set_table(name, store.JsonTable(tmp / f"{name}.json", name))
 
+    # Contacts live in the org-scoped SQLite table now; give this run its own DB.
+    from auth import db as auth_db, tenancy
+
+    auth_db.DB_PATH = str(tmp / "auth_users.db")
+    auth_db.init_db()
+    tenancy.init_tenancy()
+
     client = TestClient(app)
 
     try:
@@ -88,8 +95,8 @@ def main() -> int:
         check("has exactly one filter row", html.count('class="filters"') == 1)
         for f in ('id="q"', 'id="status"', 'id="contact"', 'id="sort"'):
             check(f"filter row has {f}", f in html)
-        check("status options match the contract",
-              "blocked" in html and "cancelled" not in html)
+        check("status options include blocked, paused and cancelled (PROJ-479)",
+              all(f'value="{s}"' in html for s in ("blocked", "paused", "cancelled")))
         check("distinguishes the two empty states",
               "No reminders yet" in html and "Nothing matches these filters" in html)
         check("calls out overdue scheduled rows", "Overdue" in html)
@@ -120,7 +127,7 @@ def main() -> int:
         d = client.get("/api/reminders?status=blocked,failed").json()
         check("comma-separated statuses work", d["total"] == 2, str(d["total"]))
         r = client.get("/api/reminders?status=cancelled")
-        check("the removed 'cancelled' status is now a 422", r.status_code == 422)
+        check("'cancelled' is a real status again (PROJ-479)", r.status_code == 200)
         r = client.get("/api/reminders?status=schedulled")
         check("misspelled status is 422, not ignored", r.status_code == 422)
         check("error names the bad value", "schedulled" in str(r.json()["errors"]))

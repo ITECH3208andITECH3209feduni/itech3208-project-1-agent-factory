@@ -1,0 +1,11 @@
+PROJ-481 email delivery evidence. Run 14 October 2026 from Prabhjot's laptop:
+  python scripts/email_smoke.py --to agentfactory47@gmail.com --reminder
+
+SMTP  smtp.gmail.com:587 as agentfactory47@gmail.com
+PASS  direct email to agentfactory47@gmail.com
+WAIT  reminder #1 scheduled for 18:58:00; polling every 5s
+PASS  reminder sent at 2026-10-14T18:58:08.098360+11:00 (8s after its send time)
+
+Screenshots of the two received emails: email_test.jpeg ("Agent Factory: SMTP test")
+and email_reminder.jpeg ("Reminder", with {first_name}/{time}/{date} filled in).
+Times above are the laptop's clock; Gmail shows network time, about a minute earlier.

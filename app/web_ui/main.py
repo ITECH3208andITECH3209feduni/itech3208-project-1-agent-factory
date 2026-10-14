@@ -29,9 +29,9 @@ _PROJECT = os.path.abspath(os.path.join(_HERE, "../.."))
 if _PROJECT not in sys.path:
     sys.path.insert(0, _PROJECT)
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 
 from app.web_ui.routes import router
 from app.web_ui.auth_routes import router as auth_router
@@ -71,12 +71,8 @@ init_db()
 init_tenancy()
 from auth.password_reset import init_reset_table
 init_reset_table()
-# NOTE: the /auth/forgot-password and /auth/reset-password HTTP
-# endpoints that call into this token store live in auth/routes.py's
-# JWT router (PROJ-408), which — like PROJ-409 above — isn't wired in
-# here. The pages below serve, but their submit buttons have nothing
-# to call yet. Same follow-up as PROJ-409: needs the auth-model
-# decision, not a merge-conflict guess.
+# /auth/forgot-password and /auth/reset-password (app/web_ui/auth_routes.py,
+# PROJ-481) use this token store for the email accounts in auth/db.
 from auth.consent import init_consent
 init_consent()
 from auth.consent_audit import init_consent_audit
@@ -121,6 +117,38 @@ from app.web.main import app as crm_app
 app.mount("/crm", crm_app)
 
 
+# ── Default-deny login check ───────────────────────────────────
+# Everything needs a session cookie except this explicit public list. The
+# /crm mount, /delivery/send, /activity and friends previously answered
+# anonymous requests, so a public URL exposed contacts and could send SMS.
+_PUBLIC_EXACT = {
+    "/", "/status", "/status/scheduler", "/login", "/register",
+    "/forgot-password", "/reset-password", "/favicon.ico",
+    "/site", "/showcase", "/orgs/register",
+    "/integrity",  # deliberately public (tests/test_integrity.py)
+}
+_PUBLIC_PREFIXES = (
+    "/static/", "/site-assets/", "/site/",
+    "/auth/",     # login, register, logout, me
+    "/twilio/",   # Twilio webhooks verify their own X-Twilio-Signature
+)
+
+
+@app.middleware("http")
+async def require_login(request: Request, call_next):
+    path = request.url.path
+    if request.method == "OPTIONS" or path in _PUBLIC_EXACT or path.startswith(_PUBLIC_PREFIXES):
+        return await call_next(request)
+    from app.web_ui.auth_routes import get_current_username
+    try:
+        get_current_username(request)
+    except HTTPException:
+        if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+            return RedirectResponse("/login", status_code=303)
+        return JSONResponse({"detail": "Not logged in"}, status_code=401)
+    return await call_next(request)
+
+
 # ── Root — serve the chat UI ───────────────────────────────────
 @app.get("/", include_in_schema=False)
 async def serve_index():
@@ -163,20 +191,30 @@ async def serve_literature():
 @app.get("/showcase", include_in_schema=False)
 @app.get("/site", include_in_schema=False)
 async def serve_showcase():
-    """Serve the static information website home page."""
+    """Serve the information website home page.
+
+    The pages use relative links (css/site.css, features.html) so they also work
+    on GitHub Pages. Served from /showcase or /site those would resolve against
+    the site root, so point them at /site/ with a <base> tag.
+    """
     site_index = os.path.join(_SITE_DIR, "index.html")
-    if os.path.exists(site_index):
-        return FileResponse(site_index, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
-    return {"message": "Showcase site not found."}
+    if not os.path.exists(site_index):
+        return {"message": "Showcase site not found."}
+    with open(site_index, encoding="utf-8") as fh:
+        html = fh.read().replace("<head>", '<head>\n  <base href="/site/">', 1)
+    return HTMLResponse(html, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
 
 
-@app.get("/site/{page_name}", include_in_schema=False)
+@app.get("/site/{page_name:path}", include_in_schema=False)
 async def serve_site_page(page_name: str):
-    """Serve subpages of the information website (features, pricing, about, faq)."""
-    if not page_name.endswith(".html"):
+    """Serve the information website's pages and assets (features, pricing, about, faq, css, js)."""
+    if page_name in ("", "index", "index.html"):
+        return await serve_showcase()
+    if "." not in os.path.basename(page_name):
         page_name += ".html"
-    page_path = os.path.join(_SITE_DIR, page_name)
-    if os.path.exists(page_path):
+    root = os.path.realpath(_SITE_DIR)
+    page_path = os.path.realpath(os.path.join(root, page_name))
+    if page_path.startswith(root + os.sep) and os.path.isfile(page_path):
         return FileResponse(page_path, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
     raise HTTPException(status_code=404, detail=f"Page '{page_name}' not found.")
 

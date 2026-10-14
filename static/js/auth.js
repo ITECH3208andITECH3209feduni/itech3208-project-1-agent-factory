@@ -47,7 +47,10 @@ const Auth = {
       throw new Error(err.detail || "Login failed");
     }
     const data = await res.json();
-    this.save(data.access_token, data.refresh_token);
+    // The server sets an HttpOnly session cookie, which scripts cannot read.
+    // Keep a marker so requireAuth() knows this browser has signed in; the real
+    // check is the cookie, and a 401 sends the user back to /login.
+    this.save(data.access_token || "session", data.refresh_token);
     return data;
   },
 

@@ -6,16 +6,25 @@
 # PROJ-470 (Multi-language voice — Part D optional)
 #
 # Endpoints:
-#   POST /twilio/sms              — receive SMS, reply via MessagingResponse
-#   POST /twilio/voice            — answer call with Polly TTS greeting + Gather
-#   POST /twilio/voice/reply      — process SpeechResult, reply via Polly TTS, loop
-#   GET  /twilio/voice/languages  — list supported languages (PROJ-470)
-#   POST /twilio/voice/language   — set operator default language (PROJ-470)
+#   POST /twilio/sms           — receive SMS, reply via MessagingResponse
+#   POST /twilio/voice         — answer call with Polly TTS greeting + Gather
+#   POST /twilio/voice/reply   — process SpeechResult, reply via Polly TTS, loop
+#   GET  /twilio/voice/languages — list supported languages (PROJ-470)
+#   POST /twilio/voice/language  — set operator default language (PROJ-470)
+#   POST /twilio/status-callback — delivery status updates
+#
+# PROJ-466: every route above verifies the X-Twilio-Signature header once the
+# app is on a public URL. It used to be only /twilio/sms, which left the voice
+# and status-callback routes open to anyone who knew the hostname — forged
+# status callbacks corrupt delivery records, and forged /twilio/voice posts
+# spend Claude tokens on demand.
 # ──────────────────────────────────────────────────────────────
 
+import logging
 import os
 import re
 import sys
+import threading
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
@@ -27,6 +36,7 @@ from twilio.twiml.voice_response import Gather, VoiceResponse
 
 from fastapi.responses import JSONResponse
 
+from agent.call_summary import finalize_call
 from agent.receptionist import Receptionist
 from app.web_ui.activity_db import log_activity, log_delivery_event, update_delivery_status
 from app.web_ui.dashboard_routes import log_escalation
@@ -54,6 +64,63 @@ POLLY_VOICE = "Polly.Joanna"  # kept for SMS/status-callback references
 POLLY_LANG = DEFAULT_LANG      # kept for non-voice paths
 GOODBYE_WORDS = {"goodbye", "bye", "hang up", "end call", "that's all", "no thanks"}
 
+log = logging.getLogger("agent_factory.twilio")
+
+
+def _summarise_call_later(call_sid: str, caller: str) -> None:
+    """Tag a finished call with a summary, sentiment and priority (PROJ-477).
+    Runs in a thread so the Claude call never delays the TwiML reply Twilio is
+    waiting on; any failure is logged and never reaches the caller."""
+    if not call_sid:
+        return
+
+    def _run() -> None:
+        try:
+            finalize_call(call_sid, caller, _receptionist.memory)
+        except Exception:  # noqa: BLE001
+            log.exception("post-call summary failed for %s", call_sid)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+FORBIDDEN = Response(content="Forbidden", status_code=403)
+
+
+async def reject_unsigned(request: Request) -> Response | None:
+    """
+    Verify Twilio's X-Twilio-Signature. Returns a 403 Response to return to the
+    caller, or None when the request may proceed (PROJ-466).
+
+    Off by default so local development and the test suite keep working; set
+    TWILIO_VALIDATE_SIGNATURE=true in any environment reachable from the
+    internet. fly.toml sets it.
+
+    Validation hashes the exact URL Twilio signed, so the app must see the
+    public https:// URL rather than the proxy's internal http:// one — hence
+    --proxy-headers in deploy/start.sh. A mismatch here looks like every
+    request being rejected.
+    """
+    if os.getenv("TWILIO_VALIDATE_SIGNATURE", "false").lower() != "true":
+        return None
+
+    token = os.getenv("TWILIO_AUTH_TOKEN", "")
+    if not token:
+        # Fail closed. Validation was explicitly asked for and cannot be done,
+        # which is a misconfiguration, not a reason to accept the request.
+        log.error("TWILIO_VALIDATE_SIGNATURE is on but TWILIO_AUTH_TOKEN is unset; rejecting.")
+        return FORBIDDEN
+
+    from twilio.request_validator import RequestValidator
+
+    # Starlette caches the parsed form, so reading it here does not consume the
+    # body the route's own Form(...) parameters depend on.
+    form = await request.form()
+    signature = request.headers.get("X-Twilio-Signature", "")
+    if not RequestValidator(token).validate(str(request.url), dict(form), signature):
+        log.warning("Rejected unsigned/invalid Twilio request to %s", request.url.path)
+        return FORBIDDEN
+
+    return None
+
 
 def _strip_markdown(text: str) -> str:
     """Remove Markdown syntax for plain-text channels (SMS, Voice)."""
@@ -64,6 +131,21 @@ def _strip_markdown(text: str) -> str:
     text = re.sub(r"^[-*•]\s+", "", text, flags=re.MULTILINE)  # bullets
     text = re.sub(r"\n{3,}", "\n\n", text)
     return text.strip()
+
+
+# Pictographs, dingbats, arrows, flags and the joiners that glue emoji together.
+# Polly reads these aloud by name ("smiling face with smiling eyes"), so voice
+# replies drop them. SMS keeps them.
+_EMOJI_RE = re.compile(
+    "[\U0001F000-\U0001FAFF\U00002190-\U000021FF\U00002300-\U000023FF"
+    "\U00002600-\U000027BF\U00002B00-\U00002BFF\U0000FE0F\U0000200D\U000020E3]"
+)
+
+
+def _speakable(text: str) -> str:
+    """Plain text for text-to-speech: no Markdown, no emoji."""
+    text = _EMOJI_RE.sub("", _strip_markdown(text))
+    return re.sub(r"[ \t]{2,}", " ", text).strip()
 
 
 # ── SMS ────────────────────────────────────────────────────────
@@ -85,16 +167,9 @@ async def sms_webhook(
     orchestrator ever sees the message — a STOP must never be treated
     as a query, cost an API call, or reach a skill.
     """
-    validate = os.getenv("TWILIO_VALIDATE_SIGNATURE", "false").lower() == "true"
-    if validate:
-        from twilio.request_validator import RequestValidator
-        token = os.getenv("TWILIO_AUTH_TOKEN", "")
-        validator = RequestValidator(token)
-        url = str(request.url)
-        form = await request.form()
-        sig = request.headers.get("X-Twilio-Signature", "")
-        if not validator.validate(url, dict(form), sig):
-            return Response(content="Forbidden", status_code=403)
+    denied = await reject_unsigned(request)
+    if denied:
+        return denied
 
     consent_reply = handle_inbound(Body, From, To)
     if consent_reply is not None:
@@ -122,9 +197,19 @@ async def sms_webhook(
 
 # ── Voice language helpers (PROJ-470) ──────────────────────────
 
+def _require_operator(request: Request) -> None:
+    """These two routes sit under /twilio/ (a public prefix because the real
+    Twilio webhooks verify their own signature), but they are operator
+    controls, not webhooks, so they need a logged-in session."""
+    from app.web_ui.auth_routes import get_current_username
+
+    get_current_username(request)  # raises 401 when not signed in
+
+
 @router.get("/twilio/voice/languages")
-async def list_voice_languages():
+async def list_voice_languages(request: Request):
     """Return supported voice languages for the language selector (PROJ-470)."""
+    _require_operator(request)
     return {
         "languages": list_supported_languages(),
         "default": _operator_default_lang,
@@ -135,6 +220,7 @@ async def list_voice_languages():
 async def set_voice_language(request: Request):
     """Operator sets the default voice language for new calls (PROJ-470)."""
     global _operator_default_lang
+    _require_operator(request)
     try:
         body = await request.json()
         from app.web_ui.voice_languages import VOICE_MAP
@@ -157,6 +243,10 @@ async def voice_greeting(request: Request) -> Response:
     query param ?lang= or falls back to operator default (PROJ-470).
     PROJ-384
     """
+    denied = await reject_unsigned(request)
+    if denied:
+        return denied
+
     lang_param = request.query_params.get("lang", "").strip() or _operator_default_lang
     voice, lang = resolve_voice(lang_param)
     # Note CallSid isn't available at greeting-time on inbound, so we use
@@ -215,6 +305,10 @@ async def voice_reply(
     Twilio resends the call's From on every webhook for that call, so
     it's available here even though the call started at /twilio/voice.
     """
+    denied = await reject_unsigned(request)
+    if denied:
+        return denied
+
     query = SpeechResult.strip()
 
     # PROJ-470: Detect language from speech or fall back to stored/operator default
@@ -260,6 +354,7 @@ async def voice_reply(
             del _call_lang[CallSid]
         resp.say(goodbye_phrases.get(lang_code, goodbye_phrases["en-AU"]), voice=voice, language=lang)
         resp.hangup()
+        _summarise_call_later(CallSid, From)
         return Response(content=str(resp), media_type="application/xml")
 
     # Empty transcript fallback
@@ -280,7 +375,7 @@ async def voice_reply(
         query, session_id=CallSid,
         contact_channel="voice", contact_address=From,
     )
-    reply = _strip_markdown(result["answer"])
+    reply = _speakable(result["answer"])
 
     log_activity(
         channel="voice",
@@ -332,7 +427,16 @@ async def twilio_status_callback(
     Handle Twilio status callbacks for SMS and Voice messages.
     Updates delivery tracking record, records errors, and logs status transitions.
     PROJ-432
+
+    PROJ-466: this route writes to the delivery log from an unauthenticated
+    public URL, so it is signature-checked like the others. Note that Twilio
+    signs form-encoded parameters; the JSON branch below is for our own tooling
+    and cannot satisfy validation, so it only works with validation off.
     """
+    denied = await reject_unsigned(request)
+    if denied:
+        return denied
+
     # Fallback to JSON payload if Content-Type is application/json
     content_type = request.headers.get("content-type", "")
     if "application/json" in content_type:
@@ -388,6 +492,11 @@ async def twilio_status_callback(
             intent="delivery_failure",
             summary=f"Delivery failed for {msg_id}: {ErrorMessage or ErrorCode or status}",
         )
+
+    # A completed inbound call that never said goodbye (caller just hung up)
+    # still gets its post-call summary (PROJ-477).
+    if channel == "voice" and status.lower() == "completed":
+        _summarise_call_later(CallSid or msg_id, From or To)
 
     return Response(content="<Response/>", media_type="application/xml")
 

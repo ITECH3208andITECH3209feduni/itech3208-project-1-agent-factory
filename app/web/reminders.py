@@ -28,6 +28,18 @@ Three consequences worth knowing:
 
 Nothing sends: the Reminders Engine is PROJ-395. mark_sent/mark_blocked are the
 transitions that engine will drive.
+
+PROJ-479 (client brief A4) brings the dashboard up to what the engine in
+agent/reminders/store.py already supports:
+
+  - `recurrence`: {"freq": "none"|"daily"|"weekly"|"custom", "interval_days": n}.
+    When the bridge sends a recurring reminder it calls
+    schedule_next_occurrence(), which adds a new 'scheduled' row for the next
+    one — the same series model the engine store uses.
+  - 'paused' and 'cancelled' statuses, set only through pause()/resume()/
+    cancel(), never through PATCH. 'cancelled' is a person changing their
+    mind and is kept so the history shows it; 'blocked' still means consent
+    or policy stopped it. Delete still exists for removing a row outright.
 """
 
 from __future__ import annotations
@@ -35,18 +47,26 @@ from __future__ import annotations
 import csv
 import io
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.web.store import DEFAULT_ORG_ID, table
 
 log = logging.getLogger("agent_factory.reminders")
 
-STATUSES = ("scheduled", "sent", "blocked", "failed")
-# Only 'scheduled' is client-settable. 'sent', 'blocked' and 'failed' are
-# outcomes the engine records; accepting them from a client would let the UI
-# claim a delivery that never happened.
+STATUSES = ("scheduled", "paused", "sent", "blocked", "failed", "cancelled")
+# Only 'scheduled' is client-settable through PATCH. 'sent', 'blocked' and
+# 'failed' are outcomes the engine records; accepting them from a client would
+# let the UI claim a delivery that never happened. 'paused' and 'cancelled'
+# have their own endpoints so each transition can check where it starts from.
 CLIENT_SETTABLE_STATUSES = ("scheduled",)
+# Statuses a person can still change. Once the engine has acted, or the
+# reminder was cancelled, it is history.
+EDITABLE_STATUSES = ("scheduled", "paused")
+
+FREQUENCIES = ("none", "daily", "weekly", "custom")
+INTERVAL_DAYS_MAX = 365
 
 MESSAGE_MAX = 1600          # per the contract — one SMS segment budget
 SORTS = ("send_at_asc", "send_at_desc", "created_desc", "message_asc")
@@ -83,6 +103,76 @@ def parse_dt(value: str) -> datetime:
     return dt.replace(tzinfo=_now().tzinfo) if dt.tzinfo is None else dt
 
 
+def _clean_recurrence(raw: Any) -> dict[str, Any] | None:
+    """Normalise a recurrence payload. Returns None for a one-off reminder;
+    raises ValueError with a user-facing message otherwise."""
+    if raw in (None, "", "none"):
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError("Recurrence must be an object with a 'freq'.")
+    freq = str(raw.get("freq") or "none").strip().lower()
+    if freq not in FREQUENCIES:
+        raise ValueError(f"Unknown repeat. Expected one of: {', '.join(FREQUENCIES)}.")
+    if freq == "none":
+        return None
+    clean: dict[str, Any] = {"freq": freq}
+    if freq == "custom":
+        try:
+            days = int(raw.get("interval_days"))
+        except (TypeError, ValueError):
+            raise ValueError("Enter how many days between reminders.") from None
+        if not 1 <= days <= INTERVAL_DAYS_MAX:
+            raise ValueError(f"Repeat every 1 to {INTERVAL_DAYS_MAX} days.")
+        clean["interval_days"] = days
+    tz = raw.get("tz")
+    if tz:
+        try:
+            ZoneInfo(str(tz))
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError(f"Unknown timezone: {tz!r}.") from None
+        clean["tz"] = str(tz)
+    return clean
+
+
+def next_occurrence(send_at: str, recurrence: dict[str, Any]) -> str:
+    """
+    The next fire time after send_at. The interval is added to local wall-clock
+    time, not to the instant, so "every day at 9am" stays 9am across a daylight
+    saving change — the same rule as agent/reminders/store.py. The wall clock
+    is the one in recurrence["tz"] (the browser's zone, sent by the form), or
+    the server's zone if none was given.
+    """
+    freq = recurrence.get("freq")
+    if freq == "daily":
+        step = timedelta(days=1)
+    elif freq == "weekly":
+        step = timedelta(weeks=1)
+    elif freq == "custom":
+        step = timedelta(days=int(recurrence.get("interval_days", 1)))
+    else:
+        raise ValueError(f"not a recurring frequency: {freq!r}")
+    tz_name = recurrence.get("tz")
+    if tz_name:
+        zone = ZoneInfo(tz_name)
+        local_wall = parse_dt(send_at).astimezone(zone).replace(tzinfo=None)
+        return (local_wall + step).replace(tzinfo=zone).isoformat()
+    local_wall = parse_dt(send_at).astimezone().replace(tzinfo=None)
+    # A naive datetime's astimezone() reads it in the local zone, picking the
+    # offset that applies on that date.
+    return (local_wall + step).astimezone().isoformat()
+
+
+def _next_future_occurrence(send_at: str, recurrence: dict[str, Any]) -> str:
+    """Step forward until the time is in the future. Used when a series was
+    paused, or the bridge was down, through one or more due times — those are
+    skipped rather than all sent at once."""
+    now = _now()
+    nxt = next_occurrence(send_at, recurrence)
+    while parse_dt(nxt) <= now:
+        nxt = next_occurrence(nxt, recurrence)
+    return nxt
+
+
 # ── Validation ────────────────────────────────────────────────
 def validate(payload: dict[str, Any], *, creating: bool,
              existing: dict[str, Any] | None = None,
@@ -108,7 +198,7 @@ def validate(payload: dict[str, Any], *, creating: bool,
             errors["send_at"] = str(exc) if "required" in str(exc) else "Enter a valid date and time."
         else:
             target = str(payload.get("status") or (existing or {}).get("status") or "scheduled")
-            if target == "scheduled" and when <= _now():
+            if target in EDITABLE_STATUSES and when <= _now():
                 errors["send_at"] = "Pick a time in the future — a past reminder will never send."
             else:
                 clean["send_at"] = when.isoformat()
@@ -146,7 +236,14 @@ def validate(payload: dict[str, Any], *, creating: bool,
         else:
             clean["status"] = status
 
-    allowed = {"message", "send_at", "contact_id", "status"}
+    # ── recurrence (PROJ-479) ────────────────────────────────
+    if "recurrence" in payload:
+        try:
+            clean["recurrence"] = _clean_recurrence(payload.get("recurrence"))
+        except ValueError as exc:
+            errors["recurrence"] = str(exc)
+
+    allowed = {"message", "send_at", "contact_id", "status", "recurrence"}
     unknown = set(payload) - allowed
     if unknown:
         errors["_"] = f"Unexpected field(s): {', '.join(sorted(unknown))}."
@@ -176,6 +273,7 @@ def create_reminder(payload: dict[str, Any], org_id: int = DEFAULT_ORG_ID) -> di
             "send_at": clean["send_at"],
             "sent_at": None,
             "status": clean.get("status", "scheduled"),
+            "recurrence": clean.get("recurrence"),
             "created_at": _now().isoformat(),
             "updated_at": _now().isoformat(),
         },
@@ -183,11 +281,26 @@ def create_reminder(payload: dict[str, Any], org_id: int = DEFAULT_ORG_ID) -> di
     )
 
 
+class TransitionError(ValueError):
+    """The reminder exists but is in a status the action cannot start from.
+    Routes turn this into a 409."""
+
+
+def _require_editable(existing: dict[str, Any], action: str) -> None:
+    status = existing.get("status")
+    if status not in EDITABLE_STATUSES:
+        raise TransitionError(
+            f"Cannot {action} a reminder that is {status}. "
+            f"Only scheduled or paused reminders can change."
+        )
+
+
 def update_reminder(reminder_id: int, payload: dict[str, Any],
                     org_id: int = DEFAULT_ORG_ID) -> dict[str, Any] | None:
     existing = get_reminder(reminder_id, org_id)
     if existing is None:
         return None
+    _require_editable(existing, "edit")
     clean = validate(payload, creating=False, existing=existing, org_id=org_id)
     clean["updated_at"] = _now().isoformat()
     return reminders_table().update(reminder_id, clean, org_id=org_id)
@@ -195,6 +308,96 @@ def update_reminder(reminder_id: int, payload: dict[str, Any],
 
 def delete_reminder(reminder_id: int, org_id: int = DEFAULT_ORG_ID) -> bool:
     return reminders_table().delete(reminder_id, org_id)
+
+
+# ── Pause / resume / cancel / reschedule (PROJ-479) ───────────
+def _set_status(reminder_id: int, status: str, org_id: int,
+                **extra: Any) -> dict[str, Any] | None:
+    return reminders_table().update(
+        reminder_id, {"status": status, "updated_at": _now().isoformat(), **extra}, org_id=org_id,
+    )
+
+
+def pause_reminder(reminder_id: int, org_id: int = DEFAULT_ORG_ID) -> dict[str, Any] | None:
+    """scheduled -> paused. The bridge only sends 'scheduled', so a paused
+    reminder simply stops being picked up."""
+    existing = get_reminder(reminder_id, org_id)
+    if existing is None:
+        return None
+    if existing.get("status") != "scheduled":
+        raise TransitionError(f"Only a scheduled reminder can be paused (this one is {existing.get('status')}).")
+    return _set_status(reminder_id, "paused", org_id)
+
+
+def resume_reminder(reminder_id: int, org_id: int = DEFAULT_ORG_ID) -> dict[str, Any] | None:
+    """
+    paused -> scheduled. If the send time passed while it was paused, a
+    recurring reminder moves on to its next future occurrence; a one-off cannot
+    guess a new time, so it has to be rescheduled — resuming it as-is would
+    fire it the moment the bridge next ticks.
+    """
+    existing = get_reminder(reminder_id, org_id)
+    if existing is None:
+        return None
+    if existing.get("status") != "paused":
+        raise TransitionError(f"Only a paused reminder can be resumed (this one is {existing.get('status')}).")
+    extra: dict[str, Any] = {}
+    if parse_dt(existing["send_at"]) <= _now():
+        if not existing.get("recurrence"):
+            raise ValidationError({"send_at": "Its send time passed while paused. Reschedule it to resume."})
+        extra["send_at"] = _next_future_occurrence(existing["send_at"], existing["recurrence"])
+    return _set_status(reminder_id, "scheduled", org_id, **extra)
+
+
+def cancel_reminder(reminder_id: int, org_id: int = DEFAULT_ORG_ID) -> dict[str, Any] | None:
+    """scheduled|paused -> cancelled. Kept rather than deleted so the history
+    shows that someone stopped it, and when."""
+    existing = get_reminder(reminder_id, org_id)
+    if existing is None:
+        return None
+    _require_editable(existing, "cancel")
+    return _set_status(reminder_id, "cancelled", org_id)
+
+
+def reschedule_reminder(reminder_id: int, send_at: Any,
+                        org_id: int = DEFAULT_ORG_ID) -> dict[str, Any] | None:
+    """Move the send time. Works on paused reminders too, and keeps the status
+    — rescheduling a paused reminder does not quietly resume it."""
+    existing = get_reminder(reminder_id, org_id)
+    if existing is None:
+        return None
+    _require_editable(existing, "reschedule")
+    clean = validate({"send_at": send_at}, creating=False, existing=existing, org_id=org_id)
+    return reminders_table().update(
+        reminder_id, {"send_at": clean["send_at"], "updated_at": _now().isoformat()}, org_id=org_id,
+    )
+
+
+def schedule_next_occurrence(reminder: dict[str, Any],
+                             org_id: int = DEFAULT_ORG_ID) -> dict[str, Any] | None:
+    """
+    After a recurring reminder is handled, add the next one in the series as a
+    new row, so each send keeps its own sent/blocked/failed record. Returns
+    None for a one-off. Mirrors ReminderStore.schedule_next_occurrence.
+    """
+    recurrence = reminder.get("recurrence")
+    if not recurrence or recurrence.get("freq") in (None, "none"):
+        return None
+    now = _now().isoformat()
+    return reminders_table().insert(
+        {
+            "contact_id": reminder["contact_id"],
+            "message": reminder["message"],
+            "send_at": _next_future_occurrence(reminder["send_at"], recurrence),
+            "sent_at": None,
+            "status": "scheduled",
+            "recurrence": recurrence,
+            "series_of": reminder.get("series_of") or reminder["id"],
+            "created_at": now,
+            "updated_at": now,
+        },
+        org_id=org_id,
+    )
 
 
 # ── Engine transitions (PROJ-395 will drive these) ────────────

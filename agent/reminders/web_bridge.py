@@ -23,6 +23,7 @@ import time
 
 from agent.delivery import EmailChannel, SMSChannel
 from app.web.store import DEFAULT_ORG_ID
+from agent.reminders.heartbeat import beat
 from config.settings import REMINDER_POLL_INTERVAL_SECONDS
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,20 @@ class WebReminderBridge:
         return results
 
     def _send_one(self, reminder: dict, org_id: int) -> dict:
-        from app.web import contacts, reminders
+        from app.web import reminders
+
+        result = self._deliver(reminder, org_id)
+        # PROJ-479: a recurring reminder continues whatever happened to this
+        # occurrence — each one is its own row with its own outcome, so one
+        # blocked or failed send must not silently end the series.
+        try:
+            reminders.schedule_next_occurrence(reminder, org_id)
+        except (ValueError, KeyError) as exc:
+            logger.error("Failed to schedule next occurrence for %s: %s", reminder["id"], exc)
+        return result
+
+    def _deliver(self, reminder: dict, org_id: int) -> dict:
+        from app.web import contacts, message_templates, reminders
 
         reminder_id = reminder["id"]
         decision = reminders.dispatch_check(reminder_id, org_id)
@@ -76,8 +90,14 @@ class WebReminderBridge:
             reminders.mark_failed(reminder_id, reason, org_id)
             return {"reminder_id": reminder_id, "ok": False, "error": reason}
 
+        # PROJ-480/485: fill {first_name}, {date} and friends now, not when
+        # the reminder was saved, so each occurrence of a series is correct.
+        text = message_templates.render_for(
+            reminder["message"], contact, reminders.parse_dt(reminder["send_at"]), org_id,
+            (reminder.get("recurrence") or {}).get("tz"),
+        )
         kwargs = {"subject": "Reminder"} if preferred == "email" else {}
-        result = channel.send(address, reminder["message"], **kwargs)
+        result = channel.send(address, text, **kwargs)
 
         if result.ok:
             reminders.mark_sent(reminder_id, org_id)
@@ -92,6 +112,7 @@ class WebReminderBridge:
         interval = poll_interval or REMINDER_POLL_INTERVAL_SECONDS
         logger.info("Web reminder bridge starting, polling every %ss", interval)
         while True:
+            beat()
             try:
                 results = self.tick(org_id)
                 sent = sum(1 for r in results if r.get("ok"))

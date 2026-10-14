@@ -21,6 +21,7 @@ tabulate>=0.10.0           # Formatted tables for demo scripts and CLI output
 
 # ── Utils ─────────────────────────────────────────────────────
 python-dotenv>=1.0.0       # Support for .env files
+tzdata>=2024.1             # IANA timezones for zoneinfo on Windows / minimal images
 
 # ── AI Receptionist — Calendar booking (PROJ-209-218) ──────────
 google-auth>=2.35.0        # Service-account auth for Google Calendar (agent/calendar_client.py)

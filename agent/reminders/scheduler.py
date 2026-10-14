@@ -21,6 +21,7 @@ import time
 
 from agent.delivery import EmailChannel, SMSChannel, VoiceChannel
 from agent.reminders.store import Reminder, ReminderStore
+from agent.reminders.heartbeat import beat
 from config.settings import REMINDER_POLL_INTERVAL_SECONDS
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,7 @@ class ReminderScheduler:
         interval = poll_interval or REMINDER_POLL_INTERVAL_SECONDS
         logger.info("Reminder scheduler starting, polling every %ss", interval)
         while True:
+            beat()
             try:
                 results = self.tick()
                 sent = sum(1 for r in results if r.get("ok"))

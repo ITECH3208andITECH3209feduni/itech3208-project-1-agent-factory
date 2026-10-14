@@ -15,6 +15,11 @@ Design points carried over from the first version, still true:
 
 New here: a `blocked` row shows *why* it was blocked, and an overdue
 `scheduled` row is called out as stuck rather than upcoming.
+
+PROJ-479: rows show how a reminder repeats, and carry Pause / Resume / Cancel
+/ Reschedule actions. Each action posts to its own endpoint and the server
+decides whether it applies, so the list cannot offer a transition the store
+would refuse and then quietly do nothing.
 """
 
 from app.web.contacts_ui import ESC_JS, STYLE
@@ -27,18 +32,15 @@ LIST_HTML = """<!DOCTYPE html>
   <div class="crumb"><a href="/dashboard">&larr; Dashboard</a></div>
   <div class="head">
     <div><h1>Reminders</h1><div class="sub" id="count">Loading…</div></div>
-    <div style="display:flex;gap:.5rem">
+    <div class="row-actions"><a class="btn ghost" href="/templates">Templates</a>
       <a class="btn ghost" href="/api/reminders/export.csv">Export CSV</a>
-      <a class="btn" href="/reminders/new">New reminder</a>
-    </div>
+      <a class="btn" href="/reminders/new">New reminder</a></div>
   </div>
 
   <div class="banner">
-    <span class="ico" aria-hidden="true">!</span>
-    <div><b>Nothing sends yet.</b> The Reminders Engine is <b>PROJ-395</b>, so
-    no reminder will reach <i>sent</i>. Consent is still enforced at send time
-    (<b>PROJ-441</b>) — a reminder can already be seen as blocked before its
-    send time arrives.</div>
+    <span class="ico" aria-hidden="true">i</span>
+    <div><b>Consent is enforced at send time.</b> Contacts who have not opted in, or
+    who have opted out, are blocked automatically and the reminder shows as blocked.</div>
   </div>
 
   <div class="filters" role="search">
@@ -48,9 +50,11 @@ LIST_HTML = """<!DOCTYPE html>
       <select id="status">
         <option value="">All</option>
         <option value="scheduled">Scheduled</option>
+        <option value="paused">Paused</option>
         <option value="sent">Sent</option>
         <option value="blocked">Blocked</option>
         <option value="failed">Failed</option>
+        <option value="cancelled">Cancelled</option>
       </select></div>
     <div class="fgroup"><label for="contact">Contact</label>
       <select id="contact"><option value="">All</option></select></div>
@@ -64,10 +68,66 @@ LIST_HTML = """<!DOCTYPE html>
     <button type="button" class="btn ghost" id="clear">Clear</button>
   </div>
 
+  <div id="actionstatus" role="status" aria-live="polite" class="sub" style="margin:0 0 8px"></div>
   <div class="card" id="card"><div class="empty">Loading…</div></div>
 </div>
 <script>__ESC__
-const STATUS_LABEL = {scheduled:"Scheduled", sent:"Sent", blocked:"Blocked", failed:"Failed"};
+const STATUS_LABEL = {scheduled:"Scheduled", paused:"Paused", sent:"Sent", blocked:"Blocked",
+  failed:"Failed", cancelled:"Cancelled"};
+
+function repeatLabel(rec) {
+  if (!rec || !rec.freq || rec.freq === "none") return "";
+  if (rec.freq === "daily") return "Repeats daily";
+  if (rec.freq === "weekly") return "Repeats weekly";
+  if (rec.freq === "custom") return `Repeats every ${rec.interval_days} days`;
+  return "";
+}
+
+function actions(r) {
+  const id = esc(String(r.id));
+  const edit = "/reminders/" + encodeURIComponent(r.id) + "/edit";
+  const out = [];
+  if (r.status === "scheduled" || r.status === "paused") out.push(`<a href="${edit}">Edit</a>`);
+  if (r.status === "scheduled") out.push(`<button type="button" class="linkbtn" data-act="pause" data-id="${id}">Pause</button>`);
+  if (r.status === "paused") out.push(`<button type="button" class="linkbtn" data-act="resume" data-id="${id}">Resume</button>`);
+  if (r.status === "scheduled" || r.status === "paused") {
+    out.push(`<button type="button" class="linkbtn" data-act="reschedule" data-id="${id}">Reschedule</button>`);
+    out.push(`<button type="button" class="linkbtn" data-act="cancel" data-id="${id}">Cancel</button>`);
+  }
+  if (!out.length) out.push(`<a href="${edit}">View</a>`);
+  return out.join(" · ");
+}
+
+function setActionStatus(t) { document.getElementById("actionstatus").textContent = t; }
+
+async function runAction(act, id) {
+  let body;
+  if (act === "cancel" && !confirm("Cancel this reminder? It stays in the list as cancelled and will not send.")) return;
+  if (act === "reschedule") {
+    const when = prompt("New send time (YYYY-MM-DD HH:MM, your local time):");
+    if (!when) return;
+    const dt = new Date(when.trim().replace(" ", "T"));
+    if (isNaN(dt)) { setActionStatus("That is not a date and time I can read."); return; }
+    body = JSON.stringify({send_at: dt.toISOString()});
+  }
+  setActionStatus("Working…");
+  const r = await fetch("/api/reminders/" + encodeURIComponent(id) + "/" + act, {
+    method: "POST", headers: body ? {"Content-Type": "application/json"} : {}, body,
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    const why = d.detail || Object.values(d.errors || {}).join(" ") || ("HTTP " + r.status);
+    setActionStatus(`Could not ${act}: ${why}`);
+    return;
+  }
+  setActionStatus({pause: "Paused.", resume: "Resumed.", cancel: "Cancelled.", reschedule: "Rescheduled."}[act]);
+  load();
+}
+// One delegated listener: the table is re-rendered on every load.
+document.getElementById("card").addEventListener("click", e => {
+  const b = e.target.closest("button[data-act]");
+  if (b) runAction(b.dataset.act, b.dataset.id);
+});
 const els = {
   q: document.getElementById("q"), status: document.getElementById("status"),
   contact: document.getElementById("contact"), sort: document.getElementById("sort"),
@@ -113,9 +173,11 @@ function row(r) {
   const who = c ? (c.name || c.phone_number) : `#${r.contact_id}`;
   const overdue = r.status === "scheduled" && new Date(r.send_at) < new Date();
   const edit = "/reminders/" + encodeURIComponent(r.id) + "/edit";
+  const rep = repeatLabel(r.recurrence);
   return `<tr>
     <td><a href="${edit}">${esc((r.message || "").slice(0, 80))}${
-      (r.message || "").length > 80 ? "…" : ""}</a></td>
+      (r.message || "").length > 80 ? "…" : ""}</a>${
+      rep ? `<div class="sub">↻ ${esc(rep)}</div>` : ""}</td>
     <td>${c ? `<a href="/contacts/${esc(String(c.id))}">${esc(who)}</a>` : esc(who)}</td>
     <td class="num">${fmt(r.send_at)}${
       overdue ? `<div class="sub" style="color:var(--text-primary)">
@@ -124,7 +186,7 @@ function row(r) {
       esc(STATUS_LABEL[r.status] || r.status)}</span>${
       r.blocked_reason ? `<div class="sub">${esc(r.blocked_reason)}</div>` : ""}${
       r.sent_at ? `<div class="sub">${fmt(r.sent_at)}</div>` : ""}</td>
-    <td class="actions"><a href="${edit}">Edit</a></td></tr>`;
+    <td class="actions">${actions(r)}</td></tr>`;
 }
 
 function renderEmpty(unfilteredTotal) {

@@ -1,0 +1,31 @@
+# Agent Factory web app + reminder loops on one machine, free and local.
+# Used by scripts/demo_up.sh. One container because the SQLite files need a
+# single writer; they live in the `agent_factory_data` volume.
+services:
+  web:
+    build:
+      context: .
+      dockerfile: app/web_ui/Dockerfile
+    command: ["sh", "deploy/start.sh"]
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: ${ENV_FILE:-.env}
+        required: false
+    environment:
+      AUTH_DB_PATH: /data/auth_users.db
+      AUTH_DB: /data/auth.db
+      MEMORY_DB: /data/memory.db
+      REMINDERS_DB: /data/reminders.db
+      KB_DB: /data/kb.db
+      ESCALATION_LOG: /data/escalations.jsonl
+      SCHEDULER_HEARTBEAT: /data/scheduler.heartbeat
+      CRM_STORE_DIR: /data/store
+      # Only meaningful once TWILIO_AUTH_TOKEN is set; enabled by demo_up.sh.
+      TWILIO_VALIDATE_SIGNATURE: ${TWILIO_VALIDATE_SIGNATURE:-false}
+    volumes:
+      - agent_factory_data:/data
+    restart: unless-stopped
+
+volumes:
+  agent_factory_data:

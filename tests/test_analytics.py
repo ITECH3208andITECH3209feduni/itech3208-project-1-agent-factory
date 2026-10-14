@@ -87,6 +87,7 @@ def test_analytics_seed_demo_data(authed_client):
 
 def test_analytics_seed_demo_data_requires_login(client):
     """Unauthenticated callers cannot pollute live delivery/analytics data (PROJ-491)."""
+    client.cookies.clear()  # conftest signs test clients in by default
     resp = client.post("/analytics/seed-demo-data?count=10")
     assert resp.status_code == 401
 

@@ -33,6 +33,12 @@ COPY config/ ./config/
 COPY static/ ./static/
 COPY skills/ ./skills/
 COPY components/ ./components/
+COPY auth/ ./auth/
+COPY contracts/ ./contracts/
+COPY integrations/ ./integrations/
+COPY deploy/ ./deploy/
+COPY site/ ./site/
+COPY scripts/seed_demo.py ./scripts/seed_demo.py
 
 # Runtime data directory (SQLite DBs — see config/settings.py) lives
 # under outputs/, created on first write; declared here so it's

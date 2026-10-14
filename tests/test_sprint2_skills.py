@@ -23,10 +23,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 import pytest
 
 # Skip Claude-dependent tests when no API key is available
-_HAS_API_KEY = (
-    os.environ.get("ANTHROPIC_API_KEY", "YOUR_API_KEY_HERE") != "YOUR_API_KEY_HERE"
-    and bool(os.environ.get("ANTHROPIC_API_KEY"))
-)
+_PLACEHOLDER_KEYS = {"YOUR_API_KEY_HERE", "test-key-not-a-real-key"}
+_HAS_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "") not in _PLACEHOLDER_KEYS | {""}
 requires_claude = pytest.mark.skipif(
     not _HAS_API_KEY,
     reason="ANTHROPIC_API_KEY not set — skipping Claude-dependent test"

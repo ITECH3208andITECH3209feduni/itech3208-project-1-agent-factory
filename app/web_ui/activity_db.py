@@ -26,6 +26,16 @@ CREATE TABLE IF NOT EXISTS activity (
 );
 CREATE INDEX IF NOT EXISTS idx_activity_ts ON activity (timestamp);
 
+CREATE TABLE IF NOT EXISTS call_summaries (
+    call_sid  TEXT PRIMARY KEY,
+    timestamp TEXT NOT NULL,
+    caller    TEXT NOT NULL DEFAULT '',
+    summary   TEXT NOT NULL DEFAULT '',
+    sentiment TEXT NOT NULL DEFAULT 'neutral',   -- 'positive', 'neutral', 'negative'
+    priority  TEXT NOT NULL DEFAULT 'normal',    -- 'low', 'normal', 'high'
+    turns     INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS delivery_history (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     message_id    TEXT NOT NULL UNIQUE,
@@ -108,17 +118,69 @@ def _notify_ws(event_type: str, data: dict):
         pass
 
 
+def save_call_summary(
+    call_sid: str, caller: str, summary: str, sentiment: str, priority: str, turns: int = 0
+) -> None:
+    """Store the post-call summary once per call (PROJ-477). A second call with
+    the same SID is ignored, so the goodbye path and the status callback can
+    both fire it."""
+    db = _get_db()
+    db.execute(
+        "INSERT OR IGNORE INTO call_summaries"
+        " (call_sid, timestamp, caller, summary, sentiment, priority, turns)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (
+            call_sid,
+            datetime.now(timezone.utc).isoformat(),
+            caller or "",
+            (summary or "")[:300],
+            sentiment,
+            priority,
+            turns,
+        ),
+    )
+    db.commit()
+
+
+def get_call_summary(call_sid: str) -> dict | None:
+    row = _get_db().execute(
+        "SELECT * FROM call_summaries WHERE call_sid = ?", (call_sid,)
+    ).fetchone()
+    return dict(row) if row else None
+
+
 def get_recent(limit: int = 50) -> list[dict]:
-    """Return the last `limit` interactions, newest first, with human time."""
+    """Return the last `limit` interactions, newest first, with human time.
+
+    A voice call logs one row per turn. Once a call has a post-call summary
+    (PROJ-477) its turns collapse into a single row carrying the summary, a
+    sentiment and a priority; calls still in progress keep their per-turn rows.
+    """
     db = _get_db()
     rows = db.execute(
-        "SELECT * FROM activity ORDER BY id DESC LIMIT ?", (limit,)
+        "SELECT * FROM activity ORDER BY id DESC LIMIT ?", (limit * 3,)
     ).fetchall()
+    summaries = {
+        r["call_sid"]: dict(r)
+        for r in db.execute("SELECT * FROM call_summaries").fetchall()
+    }
     result = []
+    seen_calls: set[str] = set()
     for r in rows:
         d = dict(r)
+        call = summaries.get(d["caller"]) if d["channel"] == "voice" else None
+        if call:
+            if d["caller"] in seen_calls:
+                continue
+            seen_calls.add(d["caller"])
+            d["summary"] = call["summary"]
+            d["sentiment"] = call["sentiment"]
+            d["priority"] = call["priority"]
+            d["call_summary"] = True
         d["time"] = _time_ago(d["timestamp"])
         result.append(d)
+        if len(result) >= limit:
+            break
     return result
 
 

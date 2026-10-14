@@ -123,9 +123,13 @@ _tables: dict[str, JsonTable] = {}
 def table(name: str) -> JsonTable:
     """Get (or lazily create) a table. Paths resolve from the project root."""
     if name not in _tables:
+        import os
+
         from config.settings import PROJECT_ROOT
 
-        _tables[name] = JsonTable(Path(PROJECT_ROOT) / "store" / f"{name}.json", name)
+        # CRM_STORE_DIR lets a deployment put these files on a persistent volume.
+        base = os.environ.get("CRM_STORE_DIR") or str(Path(PROJECT_ROOT) / "store")
+        _tables[name] = JsonTable(Path(base) / f"{name}.json", name)
     return _tables[name]
 
 
