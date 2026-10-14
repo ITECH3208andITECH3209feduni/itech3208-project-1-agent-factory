@@ -58,7 +58,7 @@ Load demo data for the poster session (fictional contacts, reminders 8+ days out
 DEMO_PASSWORD='choose-a-new-password-here' python3 scripts/seed_demo.py
 ```
 
-The demo login is `poster.demo@example.com` with the password you just chose. **Always
+The analytics tab starts empty and fills from real traffic (add `--with-sample-analytics` to the command if you want sample records, which the dashboard labels as sample data). The demo login is `poster.demo@example.com` with the password you just chose. **Always
 set `DEMO_PASSWORD`.** Without it the script uses the default written in the public
 repo, and anyone who finds your Funnel URL could sign in and send texts and email
 through your Twilio account.
