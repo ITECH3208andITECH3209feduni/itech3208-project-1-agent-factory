@@ -16,7 +16,7 @@ Client: Zakir Ullah Shah, Federation University (ITECH3208). Product: Agent Fact
 | 6 | Live demo | https://agent-factory-fvtq.onrender.com (open `/status` first; the free host sleeps) | ✅ running |
 | 7 | **Client's written feedback** | `docs/handover/client_feedback.pdf` (save the email or signed note here) | ❌ **blocked: ask the client** |
 | 8 | Test and CI results | Section "Test results" below; add a screenshot of the green GitHub Actions run on `main` | ⏳ CI screenshot after merge |
-| 9 | Email delivery evidence | `python scripts/email_smoke.py --to <you> --reminder` output, plus screenshots of both received emails and a password-reset email | ⏳ needs the Gmail app password (PROJ-481) |
+| 9 | Email delivery evidence | [`handover/email_smoke_output.txt`](handover/email_smoke_output.txt), [`email_test.jpeg`](handover/email_test.jpeg), [`email_reminder.jpeg`](handover/email_reminder.jpeg) (14 Oct, reminder sent 8 s after its time) | ✅ local; ⏳ password-reset email on the live site after Render has the SMTP values |
 | 10 | SMS / voice evidence | `python scripts/sms_status.py` output; [`docs/SMS_DELIVERY.md`](SMS_DELIVERY.md); recording of the receptionist call | ⏳ needs Twilio credentials (PROJ-482) |
 | 11 | Known limitations and descoped items | Section below | ✅ |
 | 12 | Video demo | Uploaded with the final product (PROJ-497) | ⏳ Dilraj |
