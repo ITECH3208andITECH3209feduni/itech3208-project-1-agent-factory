@@ -1,25 +1,14 @@
-# auth/org_routes.py
-# ──────────────────────────────────────────────────────────────
-# Organisation registration (PROJ-406) + profile (PROJ-409)
+﻿# auth/org_routes.py
+# Organisation registration and profile routes.
 #
-# Registration creates an organisation and its first user in a
-# single transaction. If either half fails, neither is written —
-# an orphaned org with no owner would be unreachable, and a user
-# with no org_id would break the scoping rule in PROJ-410.
+# Authentication compatibility bridge:
+# - Session-cookie users are stored in agent.auth.
+# - Email-registered organisation owners are stored in auth.db.
+# - Both account types can access their own organisation profile.
 #
-# Auth model resolution: PROJ-409's GET/PATCH /orgs/me originally
-# needed a `current_user` dependency resolving org_id from a JWT
-# (auth/routes.py, PROJ-339) that was never wired into
-# app/web_ui/main.py — it would have collided with Sprint 3's
-# existing, working session-cookie /auth/login. Rather than build
-# against a token flow with no way to issue a token, /orgs/me below
-# is built on get_current_username (app/web_ui/auth_routes.py) — the
-# auth that's actually live — plus a lightweight org_id column added
-# to agent/auth.py's own users table (agent.auth.get_user_org_id /
-# set_user_org_id). A Sprint-3-authenticated user claims an org via
-# /orgs/claim, the same way /orgs/register creates one for a fresh
-# JWT-style signup.
-# ──────────────────────────────────────────────────────────────
+# The authentication stores are not yet consolidated. This module
+# resolves each authenticated identity to its organisation without
+# allowing a client to choose another organisation's ID.
 
 import sqlite3
 
@@ -28,7 +17,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from agent.auth import get_user_org_id, set_user_org_id
 from app.web_ui.auth_routes import get_current_username
 from auth import tenancy
-from auth.db import DB_PATH, get_user_by_email
+from auth import db as auth_db
+
+# Backward-compatible alias for existing tests
+DB_PATH = auth_db.DB_PATH
 from auth.security import hash_password
 from contracts.schemas import (
     OrgOut,
@@ -51,99 +43,186 @@ def _row_to_org(row: sqlite3.Row) -> OrgOut:
     )
 
 
-@router.post("/register", response_model=RegistrationOut, status_code=201)
+def _get_authenticated_org_id(username: str) -> int | None:
+    """
+    Resolve an organisation for either supported login type.
+
+    Session-cookie accounts use agent.auth's organisation mapping.
+    Email-registered organisation owners use the org_id stored with
+    their account in auth.db.
+    """
+    # First check the existing session-cookie user store.
+    org_id = get_user_org_id(username)
+    if org_id is not None:
+        return org_id
+
+    # Email-based login uses the email address as the session username.
+    email_user = auth_db.get_user_by_email(username)
+    if email_user is not None:
+        org_id = email_user["org_id"]
+        return int(org_id) if org_id is not None else None
+
+    return None
+
+
+def _require_org(username: str) -> int:
+    org_id = _get_authenticated_org_id(username)
+    if org_id is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "You're not part of an organisation yet â€” create one with POST /orgs/claim.",
+        )
+    return org_id
+
+
+@router.post(
+    "/register",
+    response_model=RegistrationOut,
+    status_code=status.HTTP_201_CREATED,
+)
 def register_org(body: OrgRegistration):
     """
     Create an organisation and its owner user atomically.
 
-    Done with an explicit transaction rather than the usual
-    get_conn() helper, because two inserts must succeed or fail
-    together.
+    If either database insert fails, neither insert is committed.
     """
-    if get_user_by_email(body.email) is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
+    if auth_db.get_user_by_email(str(body.email)) is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Email already registered",
+        )
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(auth_db.DB_PATH)
     conn.row_factory = sqlite3.Row
+
     try:
         cur = conn.execute(
-            "INSERT INTO organisations (name, contact_email, timezone) VALUES (?, ?, ?)",
+            """
+            INSERT INTO organisations (name, contact_email, timezone)
+            VALUES (?, ?, ?)
+            """,
             (body.org_name.strip(), str(body.email), body.timezone),
         )
         org_id = cur.lastrowid
 
         cur = conn.execute(
-            "INSERT INTO users (email, password_hash, org_id, role) VALUES (?, ?, ?, ?)",
-            (str(body.email).lower().strip(), hash_password(body.password), org_id, "owner"),
+            """
+            INSERT INTO users (email, password_hash, org_id, role)
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                str(body.email).lower().strip(),
+                hash_password(body.password),
+                org_id,
+                "owner",
+            ),
         )
         user_id = cur.lastrowid
 
         org_row = conn.execute(
-            "SELECT * FROM organisations WHERE id = ?", (org_id,)
+            "SELECT * FROM organisations WHERE id = ?",
+            (org_id,),
         ).fetchone()
 
         conn.commit()
+
     except sqlite3.IntegrityError as exc:
         conn.rollback()
-        raise HTTPException(status.HTTP_409_CONFLICT, f"Registration failed: {exc}") from exc
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Registration failed: {exc}",
+        ) from exc
+
     except Exception:
         conn.rollback()
         raise
+
     finally:
         conn.close()
 
-    return RegistrationOut(org=_row_to_org(org_row), user_id=user_id, role="owner")
+    return RegistrationOut(
+        org=_row_to_org(org_row),
+        user_id=user_id,
+        role="owner",
+    )
 
 
-def _require_org(username: str) -> int:
-    org_id = get_user_org_id(username)
-    if org_id is None:
+@router.post(
+    "/claim",
+    response_model=OrgOut,
+    status_code=status.HTTP_201_CREATED,
+)
+def claim_org(
+    body: OrgRegistration,
+    username: str = Depends(get_current_username),
+):
+    """
+    Create an organisation for a logged-in session-cookie user.
+
+    Email-registered owners already receive an organisation during
+    registration. Do not create a second organisation for those users.
+    """
+    email_user = auth_db.get_user_by_email(username)
+    if email_user is not None:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            "You're not part of an organisation yet — create one with POST /orgs/claim.",
+            "Email-registered accounts use the organisation created during registration.",
         )
-    return org_id
 
-
-@router.post("/claim", response_model=OrgOut, status_code=201)
-def claim_org(body: OrgRegistration, username: str = Depends(get_current_username)):
-    """
-    Create an organisation owned by the logged-in Sprint 3 user.
-
-    Same shape as /orgs/register, but for a caller who already has a
-    session-cookie login (agent/auth.py) rather than signing up fresh —
-    password/email on the body are accepted for org contact details
-    but a new login identity is not created, this one is just linked
-    to the new org.
-    """
     if get_user_org_id(username) is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "You already belong to an organisation.")
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "You already belong to an organisation.",
+        )
 
-    org_id = tenancy.create_org(body.org_name, str(body.email), body.timezone)
+    org_id = tenancy.create_org(
+        body.org_name,
+        str(body.email),
+        body.timezone,
+    )
     set_user_org_id(username, org_id)
-    return _row_to_org(tenancy.get_org(org_id))
+
+    row = tenancy.get_org(org_id)
+    return _row_to_org(row)
 
 
 @router.get("/me", response_model=OrgOut)
 def get_my_org(username: str = Depends(get_current_username)):
-    """Return the caller's own organisation. org_id comes from the
-    logged-in session, not a client-supplied parameter, so a user
-    can't read another org by changing one (PROJ-409)."""
+    """Return the authenticated user's own organisation."""
     org_id = _require_org(username)
     row = tenancy.get_org(org_id)
+
     if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Organisation not found")
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "Organisation not found",
+        )
+
     return _row_to_org(row)
 
 
 @router.patch("/me", response_model=OrgOut)
-def update_my_org(body: OrgUpdate, username: str = Depends(get_current_username)):
-    """Update the caller's organisation."""
+def update_my_org(
+    body: OrgUpdate,
+    username: str = Depends(get_current_username),
+):
+    """Update only the organisation belonging to the authenticated user."""
     org_id = _require_org(username)
+
     tenancy.update_org(
         org_id,
         name=body.name,
-        contact_email=str(body.contact_email) if body.contact_email else None,
+        contact_email=(
+            str(body.contact_email) if body.contact_email else None
+        ),
         timezone=body.timezone,
     )
-    return _row_to_org(tenancy.get_org(org_id))
+
+    row = tenancy.get_org(org_id)
+    if row is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "Organisation not found",
+        )
+
+    return _row_to_org(row)
