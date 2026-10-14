@@ -500,7 +500,10 @@ body {
 .recept-subnav {
   display: flex; gap: 4px; padding: 10px 20px 0;
   border-bottom: 1px solid var(--border);
+  overflow-x: auto;
 }
+.recept-tab { white-space: nowrap; }
+.crm-frame { flex: 1; width: 100%; border: 0; background: var(--bg); }
 .recept-tab {
   padding: 6px 14px; border-radius: 8px 8px 0 0; font-size: 12px;
   font-weight: 600; color: var(--text2); cursor: pointer;

@@ -915,6 +915,19 @@ function switchReceptTab(tabName) {
   if (btn) btn.classList.add("active");
   const panel = document.getElementById(`rtab-${tabName}`);
   if (panel) panel.style.display = "flex";
+  // Contacts and Reminders are the CRM pages; load each the first time it is opened.
+  const frame = panel && panel.querySelector("iframe[data-src]");
+  if (frame && !frame.getAttribute("src")) {
+    // The CRM pages have their own "← Dashboard" link; inside the dashboard it is redundant.
+    frame.addEventListener("load", () => {
+      try {
+        frame.contentDocument.querySelectorAll("a").forEach(a => {
+          if (a.textContent.trim().startsWith("←")) a.style.display = "none";
+        });
+      } catch (_) { /* cross-origin: leave it */ }
+    });
+    frame.setAttribute("src", frame.dataset.src);
+  }
   if (tabName === "activity")    loadReceptActivity();
   if (tabName === "analytics")   loadAnalyticsDashboard();
   if (tabName === "delivery")    loadDeliveryHistory();
@@ -936,21 +949,33 @@ async function sendReceptionistQuery() {
   inp.value = "";
   appendReceptMsg("user", query);
   appendReceptMsg("assistant", "…", "recept-thinking");
+  const clearThinking = () => { const t = msgs.querySelector(".recept-thinking"); if (t) t.remove(); };
   try {
-    const res = await fetch("/query", {
+    // The receptionist (FAQ, urgent and call-back handling, booking), not the research agent.
+    const res = await fetch("/receptionist", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify({ message: query }),
     });
-    const data = await res.json();
-    const thinking = msgs.querySelector(".recept-thinking");
-    if (thinking) thinking.remove();
-    appendReceptMsg("assistant", data.response || data.error || "No response");
+    const data = await res.json().catch(() => ({}));
+    clearThinking();
+    appendReceptMsg("assistant", data.answer || data.detail || `Something went wrong (error ${res.status}).`);
+    if (data.intent === "escalate") loadReceptEscalations();
+    if (data.booked) loadReceptCalendar();
+    loadReceptStats();
   } catch (e) {
-    const thinking = msgs.querySelector(".recept-thinking");
-    if (thinking) thinking.remove();
-    appendReceptMsg("assistant", "Error: " + e.message);
+    clearThinking();
+    appendReceptMsg("assistant", "Could not reach the receptionist: " + e.message);
   }
+}
+
+/* Escape first, then allow only **bold**, [text](https://link) and line breaks. */
+function renderChatText(text) {
+  const esc = String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return esc
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\n/g, "<br>");
 }
 
 function appendReceptMsg(role, text, extraClass) {
@@ -958,7 +983,7 @@ function appendReceptMsg(role, text, extraClass) {
   if (!msgs) return;
   const div = document.createElement("div");
   div.className = `chat-msg ${role}${extraClass ? " " + extraClass : ""}`;
-  div.textContent = text;
+  div.innerHTML = renderChatText(text);
   msgs.appendChild(div);
   msgs.scrollTop = msgs.scrollHeight;
 }
@@ -1161,6 +1186,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   /* PROJ-469: Live WebSocket replaces 30s polling */
   loadReceptStats();
+  loadReceptActivity();
   initDashboardWebSocket();
 
   /* PROJ-470: Restore saved language preference */

@@ -21,7 +21,7 @@
 import json
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import anthropic
 
@@ -328,9 +328,13 @@ class Receptionist:
         priority: str = "normal",
         contact: str | None = None,
     ) -> None:
-        reason = message if not label else f"{label}: {message}" + (f" (call {contact})" if contact else "")
+        reason = message
+        if label:
+            reason = f"{label}: {message}"
+            if contact and contact not in message:
+                reason += f" (call {contact})"
         entry = {
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),  # the dashboard reads this as UTC
             "session_id": session_id or "unknown",
             "message": message,
             "reason": reason,

@@ -314,20 +314,23 @@
 
       <!-- Sub-nav -->
       <div class="recept-subnav">
-        <div class="recept-tab active" data-rtab="chat" onclick="switchReceptTab('chat')">💬 Chat</div>
-        <div class="recept-tab" data-rtab="activity" onclick="switchReceptTab('activity')">⚡ Activity</div>
+        <div class="recept-tab active" data-rtab="activity" onclick="switchReceptTab('activity')">⚡ Activity</div>
+        <div class="recept-tab" data-rtab="contacts" onclick="switchReceptTab('contacts')">👥 Contacts</div>
+        <div class="recept-tab" data-rtab="reminders" onclick="switchReceptTab('reminders')">⏰ Reminders</div>
         <div class="recept-tab" data-rtab="analytics" onclick="switchReceptTab('analytics')">📊 Analytics</div>
         <div class="recept-tab" data-rtab="delivery" onclick="switchReceptTab('delivery')">📬 Delivery History</div>
         <div class="recept-tab" data-rtab="escalations" onclick="switchReceptTab('escalations')">🚨 Escalations</div>
         <div class="recept-tab" data-rtab="calendar" onclick="switchReceptTab('calendar')">📅 Calendar</div>
+        <div class="recept-tab" data-rtab="chat" onclick="switchReceptTab('chat')">💬 Test Chat</div>
       </div>
 
       <!-- Chat panel -->
-      <div class="recept-panel" id="rtab-chat">
+      <div class="recept-panel" id="rtab-chat" style="display:none">
         <div class="messages" id="receptionist-area">
           <div class="welcome">
             <div class="welcome-heading">AI Receptionist</div>
             <div class="welcome-sub">Your 24/7 virtual receptionist — answers calls and SMS, books appointments, and handles enquiries via voice or text.</div>
+            <div class="welcome-sub">This is a preview of what patients get on web chat, SMS and calls.</div>
             <div class="chips">
               <div class="chip" onclick="prefillReceptionist('What are your opening hours?')">🕐 Opening Hours</div>
               <div class="chip" onclick="prefillReceptionist('I would like to book an appointment')">📅 Book Appointment</div>
@@ -349,10 +352,18 @@
       </div>
 
       <!-- Activity panel -->
-      <div class="recept-panel" id="rtab-activity" style="display:none">
+      <div class="recept-panel" id="rtab-activity">
         <div class="recept-feed" id="activity-feed">
           <div class="recept-empty">Loading activity…</div>
         </div>
+      </div>
+
+      <!-- Contacts and Reminders: the CRM screens, loaded on first open -->
+      <div class="recept-panel" id="rtab-contacts" style="display:none">
+        <iframe class="crm-frame" data-src="/crm/contacts" title="Contacts"></iframe>
+      </div>
+      <div class="recept-panel" id="rtab-reminders" style="display:none">
+        <iframe class="crm-frame" data-src="/crm/reminders" title="Reminders"></iframe>
       </div>
 
       <!-- Analytics panel (PROJ-436) -->
@@ -468,8 +479,8 @@
 
 <script src="/static/js/auth.js"></script>
 <script>requireAuth();</script>
-<script src="/static/js/i18n.js?v=2"></script>
-<script src="/static/js/app.js?v=14"></script>
+<script src="/static/js/i18n.js?v=3"></script>
+<script src="/static/js/app.js?v=16"></script>
 
 <!-- ══ WELCOME OVERLAY ══ -->
 <div id="welcome-overlay">

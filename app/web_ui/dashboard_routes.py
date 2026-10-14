@@ -23,11 +23,12 @@ from fastapi import APIRouter, Depends
 from auth.rbac import require_org_member
 
 from app.web_ui.activity_db import get_recent, get_stats_today, start_of_today_utc
-from config.settings import OUTPUT_DIR
+from config.settings import ESCALATION_LOG
 
 router = APIRouter()
 
-_ESCALATIONS_FILE = os.path.join(OUTPUT_DIR, "escalations.jsonl")
+# The same file the receptionist writes to (settings.ESCALATION_LOG).
+_ESCALATIONS_FILE = ESCALATION_LOG
 
 
 # ── PROJ-390 — Stats ───────────────────────────────────────────
@@ -190,7 +191,7 @@ def _time_ago(ts: str) -> str:
 
 def log_escalation(session_id: str, reason: str, priority: str = "normal") -> None:
     """Write one escalation record to outputs/escalations.jsonl."""
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(os.path.dirname(_ESCALATIONS_FILE), exist_ok=True)
     record = {
         "timestamp":  datetime.now(timezone.utc).isoformat(),
         "session_id": session_id,
