@@ -55,11 +55,13 @@ permanent URL and the three Twilio webhook URLs. Paste those into the Twilio con
 Load demo data for the poster session (fictional contacts, reminders 8+ days out):
 
 ```bash
-python3 scripts/seed_demo.py
+DEMO_PASSWORD='choose-a-new-password-here' python3 scripts/seed_demo.py
 ```
 
-The demo login is printed by that script, and is defined at the top of
-`scripts/seed_demo.py`.
+The demo login is `poster.demo@example.com` with the password you just chose. **Always
+set `DEMO_PASSWORD`.** Without it the script uses the default written in the public
+repo, and anyone who finds your Funnel URL could sign in and send texts and email
+through your Twilio account.
 
 ## 6. Start automatically at login (optional)
 
