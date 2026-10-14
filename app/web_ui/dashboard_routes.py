@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from fastapi import APIRouter
 
-from app.web_ui.activity_db import get_recent, get_stats_today
+from app.web_ui.activity_db import get_recent, get_stats_today, start_of_today_utc
 from config.settings import OUTPUT_DIR
 
 router = APIRouter()
@@ -110,11 +110,23 @@ def _read_escalations(limit: int) -> list[dict]:
 
 
 def _count_escalations_today() -> int:
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    return sum(
-        1 for i in _read_escalations(500)
-        if (i.get("timestamp") or "").startswith(today)
-    )
+    """Escalations since local midnight in the configured timezone.
+
+    Timestamps without an offset (written by agent/receptionist.py inside a
+    UTC container) are read as UTC.
+    """
+    start = datetime.fromisoformat(start_of_today_utc())
+    count = 0
+    for i in _read_escalations(500):
+        try:
+            ts = datetime.fromisoformat((i.get("timestamp") or "").replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        if ts >= start:
+            count += 1
+    return count
 
 
 def _fetch_google_calendar() -> list[dict]:

@@ -9,11 +9,12 @@ import json
 import os
 import sqlite3
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from config.settings import MEMORY_DB
+from config.settings import MEMORY_DB, TIMEZONE
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS activity (
@@ -169,12 +170,25 @@ def get_recent(limit: int = 50) -> list[dict]:
     return result
 
 
+def start_of_today_utc() -> str:
+    """ISO timestamp (UTC) of local midnight in the configured timezone.
+
+    The dashboard's "today" has to be the organisation's day. Using the UTC date
+    counted a Sydney morning's calls as yesterday's, so the tiles read 0.
+    """
+    try:
+        tz = ZoneInfo(TIMEZONE)
+    except Exception:  # noqa: BLE001 - bad TIMEZONE value: fall back to UTC
+        tz = timezone.utc
+    midnight = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    return midnight.astimezone(timezone.utc).isoformat()
+
+
 def get_stats_today() -> dict:
-    """Return today's call / SMS / booked counts."""
+    """Return today's call / SMS / booked counts (today in the configured timezone)."""
     db = _get_db()
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     rows = db.execute(
-        "SELECT channel, intent FROM activity WHERE timestamp >= ?", (today,)
+        "SELECT channel, intent FROM activity WHERE timestamp >= ?", (start_of_today_utc(),)
     ).fetchall()
     calls   = sum(1 for r in rows if r["channel"] == "voice")
     sms     = sum(1 for r in rows if r["channel"] == "sms")
