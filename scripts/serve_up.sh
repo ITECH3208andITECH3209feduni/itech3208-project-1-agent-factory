@@ -3,7 +3,12 @@
 # and publish it at a PERMANENT free URL with Tailscale Funnel.
 #
 # Usage: ./scripts/serve_up.sh [env-file]     (default: .env)
-#        ./scripts/serve_up.sh --down         (stop the app and the Funnel)
+#        ./scripts/serve_up.sh --down         (stop the app and the tunnel)
+#
+# Tunnel choice (default is unchanged): TUNNEL=tailscale (Funnel, the default).
+# Opt in to ngrok's free static domain with
+#        TUNNEL=ngrok NGROK_DOMAIN=<name>.ngrok-free.app ./scripts/serve_up.sh
+# ngrok is never started unless TUNNEL=ngrok is set explicitly.
 #
 # One-time Tailscale setup is in docs/MAC_MINI.md. Unlike scripts/demo_up.sh
 # (quick tunnel, new URL every run), the URL here never changes, so the Twilio
@@ -12,13 +17,35 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 COMPOSE="docker compose -f docker-compose.web.yml"
+TUNNEL="${TUNNEL:-tailscale}"
+NGROK_PID_FILE="${TMPDIR:-/tmp}/agentfactory-ngrok.pid"
+NGROK_LOG="${TMPDIR:-/tmp}/agentfactory-ngrok.log"
 
-TS="$(command -v tailscale || true)"
-[ -n "$TS" ] || TS="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
-[ -x "$TS" ] || { echo "Tailscale not found. See docs/MAC_MINI.md step 3." >&2; exit 1; }
+case "$TUNNEL" in
+  tailscale)
+    TS="$(command -v tailscale || true)"
+    [ -n "$TS" ] || TS="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
+    [ -x "$TS" ] || { echo "Tailscale not found. See docs/MAC_MINI.md step 3." >&2; exit 1; }
+    ;;
+  ngrok)
+    NGROK="$(command -v ngrok || true)"
+    [ -n "$NGROK" ] || NGROK="$HOME/bin/ngrok"
+    [ -x "$NGROK" ] || { echo "ngrok not found. See docs/MAC_MINI.md (ngrok option)." >&2; exit 1; }
+    if [ "${1:-}" != "--down" ]; then
+      [ -n "${NGROK_DOMAIN:-}" ] || { echo "Set NGROK_DOMAIN to your free static domain, e.g. NGROK_DOMAIN=name.ngrok-free.app" >&2; exit 1; }
+    fi
+    ;;
+  *)
+    echo "Unknown TUNNEL='$TUNNEL' (use tailscale or ngrok)." >&2; exit 1
+    ;;
+esac
 
 if [ "${1:-}" = "--down" ]; then
-  "$TS" funnel reset || true
+  if [ "$TUNNEL" = "ngrok" ]; then
+    if [ -f "$NGROK_PID_FILE" ]; then kill "$(cat "$NGROK_PID_FILE")" 2>/dev/null || true; rm -f "$NGROK_PID_FILE"; fi
+  else
+    "$TS" funnel reset || true
+  fi
   $COMPOSE down
   echo "Stopped."
   exit 0
@@ -42,9 +69,25 @@ for _ in $(seq 1 60); do
 done
 curl -sf http://localhost:8000/status >/dev/null || { echo "App did not come up:" >&2; $COMPOSE logs --tail 30 >&2; exit 1; }
 
-"$TS" funnel --bg 8000 >/dev/null
-URL="$("$TS" funnel status 2>/dev/null | grep -oE 'https://[A-Za-z0-9.-]+\.ts\.net' | head -1 || true)"
-[ -n "$URL" ] || { echo "Funnel did not start. Is Funnel enabled for this tailnet? See docs/MAC_MINI.md." >&2; "$TS" funnel status >&2 || true; exit 1; }
+if [ "$TUNNEL" = "ngrok" ]; then
+  # Replace a previous tunnel of ours, then start the new one in the background.
+  if [ -f "$NGROK_PID_FILE" ]; then kill "$(cat "$NGROK_PID_FILE")" 2>/dev/null || true; fi
+  nohup "$NGROK" http --url="$NGROK_DOMAIN" 8000 --log=stdout >"$NGROK_LOG" 2>&1 &
+  echo $! >"$NGROK_PID_FILE"
+  URL=""
+  for _ in $(seq 1 20); do
+    if ! kill -0 "$(cat "$NGROK_PID_FILE")" 2>/dev/null; then break; fi
+    if grep -q "started tunnel" "$NGROK_LOG" 2>/dev/null; then URL="https://${NGROK_DOMAIN}"; break; fi
+    sleep 1
+  done
+  [ -n "$URL" ] || { echo "ngrok did not start. Is the authtoken set (ngrok config add-authtoken ...)?" >&2; tail -5 "$NGROK_LOG" >&2 || true; exit 1; }
+  STOP_HINT="Stop everything with: TUNNEL=ngrok ./scripts/serve_up.sh --down"
+else
+  "$TS" funnel --bg 8000 >/dev/null
+  URL="$("$TS" funnel status 2>/dev/null | grep -oE 'https://[A-Za-z0-9.-]+\.ts\.net' | head -1 || true)"
+  [ -n "$URL" ] || { echo "Funnel did not start. Is Funnel enabled for this tailnet? See docs/MAC_MINI.md." >&2; "$TS" funnel status >&2 || true; exit 1; }
+  STOP_HINT="Stop everything with: ./scripts/serve_up.sh --down"
+fi
 
 cat <<MSG
 
@@ -58,5 +101,5 @@ Paste these into the Twilio console ONCE (HTTP POST):
   Voice webhook       $URL/twilio/voice
   Status callback     $URL/twilio/status-callback
 
-Stop everything with: ./scripts/serve_up.sh --down
+$STOP_HINT
 MSG

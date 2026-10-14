@@ -31,6 +31,29 @@ comes back by itself after a reboot.
 
 Your URL will look like `https://<mac-mini-name>.<tailnet>.ts.net` and never changes.
 
+## 3b. Optional: use ngrok instead of Tailscale Funnel
+
+Funnel is the default and nothing below changes it. If Funnel's public address does
+not work for Twilio, `serve_up.sh` can use ngrok's free static domain instead. ngrok is
+**off unless you ask for it**; it never starts by itself, at login or otherwise.
+
+1. Install ngrok (the official build from ngrok.com) so `ngrok` is on your PATH or in `~/bin`.
+2. Sign up at dashboard.ngrok.com, open **Domains** and create the free static domain
+   (it looks like `name.ngrok-free.app`).
+3. Give ngrok your authtoken, typing it yourself in Terminal (never in chat or in git):
+   `ngrok config add-authtoken <token>`
+4. Start the app with the tunnel:
+
+```bash
+TUNNEL=ngrok NGROK_DOMAIN=name.ngrok-free.app ./scripts/serve_up.sh
+```
+
+The script prints the three Twilio webhook URLs for that domain. Stop it with
+`TUNNEL=ngrok ./scripts/serve_up.sh --down`. Check the address from outside the Mac mini
+(a phone on mobile data, not Wi-Fi) before pointing Twilio at it. Notes: the free plan shows
+a warning page to browsers on first visit (Twilio's calls are not affected), and the
+tunnel does not restart by itself after a reboot, so run the command again.
+
 ## 4. Get the code and your secrets onto the Mac mini
 
 ```bash
