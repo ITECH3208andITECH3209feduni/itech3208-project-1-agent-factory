@@ -250,12 +250,13 @@ def main() -> int:
         check("client cannot claim 'sent'", r.status_code == 422)
         check("message points at the engine", "PROJ-395" in str(r.json()["errors"]))
 
-        # 'cancelled' is gone from the contract.
+        # 'cancelled' is a status again (PROJ-479), but only the cancel
+        # endpoint can set it — a client cannot create one already cancelled.
         r = client.post("/api/reminders", json={
             "contact_id": jane["id"], "message": "x", "send_at": soon(days=1), "status": "cancelled"})
-        check("'cancelled' is no longer a valid status", r.status_code == 422)
+        check("'cancelled' cannot be set by POST", r.status_code == 422)
         check("blocked is in the status set", "blocked" in reminders.STATUSES)
-        check("cancelled is not", "cancelled" not in reminders.STATUSES)
+        check("cancelled is distinct from blocked", "cancelled" in reminders.STATUSES)
 
         # Dispatch check surfaces the consent decision.
         dd = client.get(f"/api/reminders/{rem['id']}/dispatch-check").json()

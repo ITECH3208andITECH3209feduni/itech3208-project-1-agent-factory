@@ -242,6 +242,7 @@ INDEX_HTML = """<!DOCTYPE html>
     <a href="/contacts/import">Import CSV</a>
     <a href="/reminders/new">New reminder</a>
     <a href="/reminders">Reminders</a>
+    <a href="/templates">Templates</a>
     <a href="/contacts">Preferences</a>
 
     <div class="navsec">Agent</div>
@@ -390,7 +391,8 @@ async function load() {
 
 // ── Panels (PROJ-438) ───────────────────────────────────────
 const STATUS_LABEL = {
-  scheduled: "Scheduled", sent: "Sent", blocked: "Blocked", failed: "Failed",
+  scheduled: "Scheduled", paused: "Paused", sent: "Sent", blocked: "Blocked",
+  failed: "Failed", cancelled: "Cancelled",
 };
 
 function fmtDue(iso) {

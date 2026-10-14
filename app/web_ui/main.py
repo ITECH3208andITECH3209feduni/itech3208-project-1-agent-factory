@@ -70,12 +70,8 @@ init_db()
 init_tenancy()
 from auth.password_reset import init_reset_table
 init_reset_table()
-# NOTE: the /auth/forgot-password and /auth/reset-password HTTP
-# endpoints that call into this token store live in auth/routes.py's
-# JWT router (PROJ-408), which — like PROJ-409 above — isn't wired in
-# here. The pages below serve, but their submit buttons have nothing
-# to call yet. Same follow-up as PROJ-409: needs the auth-model
-# decision, not a merge-conflict guess.
+# /auth/forgot-password and /auth/reset-password (app/web_ui/auth_routes.py,
+# PROJ-481) use this token store for the email accounts in auth/db.
 from auth.consent import init_consent
 init_consent()
 from auth.consent_audit import init_consent_audit

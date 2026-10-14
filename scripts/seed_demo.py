@@ -47,6 +47,12 @@ REMINDERS = [
     (0, "Hi Alex, don't forget to complete your intake form before your visit.", 14),
 ]
 
+TEMPLATE = {
+    "name": "Appointment reminder",
+    "body": "Hi {first_name}, a reminder of your appointment on {date} at {time}. "
+            "Reply STOP to opt out. - {org}",
+}
+
 jar = http.cookiejar.CookieJar()
 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
 
@@ -106,6 +112,12 @@ def main():
             sys.exit(f"Could not create reminder ({s}): {r}")
         made += 1
     print(f"reminders created: {made} (all 8+ days out, none can send during the demo)")
+
+    # One message template, so the template picker has something to show (PROJ-480).
+    s, existing_t = call("GET", "/crm/api/templates")
+    if s == 200 and not any(t["name"] == TEMPLATE["name"] for t in existing_t.get("templates", [])):
+        s, _ = call("POST", "/crm/api/templates", TEMPLATE)
+    print(f"template: {'ready' if s in (200, 201) else f'skipped ({s})'}")
 
     s, r = call("POST", "/analytics/seed-demo-data?count=40")
     print(f"analytics demo data: {'loaded' if s == 200 else f'skipped ({s})'}")
