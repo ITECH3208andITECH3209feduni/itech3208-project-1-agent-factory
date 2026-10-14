@@ -447,6 +447,18 @@ def list_reminders(
     }
 
 
+@app.get("/api/reminders/export.csv", include_in_schema=False)
+def api_reminders_export_csv() -> Response:
+    """Reminder history (sent/blocked/failed) as a downloadable CSV (PROJ-492)."""
+    from app.web import reminders
+
+    return Response(
+        content=reminders.history_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=reminder-history.csv"},
+    )
+
+
 @app.get("/api/reminders/{reminder_id}")
 def get_reminder(reminder_id: int) -> dict:
     from app.web import reminders

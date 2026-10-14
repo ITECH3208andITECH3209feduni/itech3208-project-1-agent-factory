@@ -32,6 +32,8 @@ transitions that engine will drive.
 
 from __future__ import annotations
 
+import csv
+import io
 import logging
 from datetime import datetime
 from typing import Any
@@ -328,3 +330,39 @@ def sent_count(org_id: int = DEFAULT_ORG_ID) -> int:
 
 def blocked_count(org_id: int = DEFAULT_ORG_ID) -> int:
     return sum(1 for r in list_reminders(org_id) if r.get("status") == "blocked")
+
+
+# ── CSV export (PROJ-492) ──────────────────────────────────────
+EXPORT_COLUMNS = ("id", "contact_name", "contact_phone", "message", "status",
+                   "send_at", "sent_at", "blocked_reason", "failed_reason",
+                   "created_at", "updated_at")
+
+
+def history_csv(org_id: int = DEFAULT_ORG_ID) -> str:
+    """Every reminder something has happened to (sent, blocked, or failed), as
+    CSV — newest update first. Mirrors recent_history's status filter but with
+    no count cap, since an export should be the full record, not a preview."""
+    from app.web import contacts
+
+    rows = [r for r in list_reminders(org_id) if r.get("status") in ("sent", "blocked", "failed")]
+    rows.sort(key=lambda r: r.get("updated_at", ""), reverse=True)
+
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=EXPORT_COLUMNS, extrasaction="ignore")
+    writer.writeheader()
+    for r in rows:
+        contact = contacts.get_contact(r["contact_id"], org_id=org_id) if r.get("contact_id") else None
+        writer.writerow({
+            "id": r.get("id"),
+            "contact_name": (contact or {}).get("name") or "",
+            "contact_phone": (contact or {}).get("phone_number") or "",
+            "message": r.get("message", ""),
+            "status": r.get("status", ""),
+            "send_at": r.get("send_at", ""),
+            "sent_at": r.get("sent_at") or "",
+            "blocked_reason": r.get("blocked_reason", ""),
+            "failed_reason": r.get("failed_reason", ""),
+            "created_at": r.get("created_at", ""),
+            "updated_at": r.get("updated_at", ""),
+        })
+    return buf.getvalue()

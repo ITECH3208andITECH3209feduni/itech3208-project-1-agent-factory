@@ -7,9 +7,8 @@
 
 from __future__ import annotations
 
-import json
 import pytest
-from unittest.mock import patch, MagicMock, AsyncMock
+from unittest.mock import patch, AsyncMock
 
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
@@ -60,13 +59,10 @@ class TestDashboardConnectionManager:
     @pytest.mark.asyncio
     async def test_broadcast_reaches_all_connections(self):
         ws1, ws2 = AsyncMock(), AsyncMock()
-        with patch("app.web_ui.ws_routes.get_stats_today", return_value={}), \
-             patch("app.web_ui.ws_routes.get_delivery_analytics", return_value={"summary": {}}):
-            await self.mgr.connect(ws1)
-            await self.mgr.connect(ws2)
-        # Reset mock call counts so only the broadcast call is measured
-        ws1.send_json.reset_mock()
-        ws2.send_json.reset_mock()
+        # Patch out the initial-state send so we only count broadcast calls
+        with patch.object(self.mgr, "connect", wraps=None) as _:
+            self.mgr.active_connections.append(ws1)
+            self.mgr.active_connections.append(ws2)
         await self.mgr.broadcast("test_event", {"key": "val"})
         ws1.send_json.assert_awaited_once()
         ws2.send_json.assert_awaited_once()
@@ -81,14 +77,12 @@ class TestDashboardConnectionManager:
         """A send error on one client must not crash the whole broadcast."""
         good = AsyncMock()
         bad  = AsyncMock()
-
-        with patch("app.web_ui.ws_routes.get_stats_today", return_value={}), \
-             patch("app.web_ui.ws_routes.get_delivery_analytics", return_value={"summary": {}}):
-            await self.mgr.connect(good)
-            await self.mgr.connect(bad)
-        good.send_json.reset_mock()
-        bad.send_json.reset_mock()
         bad.send_json.side_effect = RuntimeError("connection gone")
+
+        # Add directly (bypass connect's initial-state send)
+        self.mgr.active_connections.append(good)
+        self.mgr.active_connections.append(bad)
+
         # Should not raise
         await self.mgr.broadcast("event", {})
         good.send_json.assert_awaited_once()

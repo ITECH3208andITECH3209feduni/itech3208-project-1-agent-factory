@@ -27,7 +27,10 @@ LIST_HTML = """<!DOCTYPE html>
   <div class="crumb"><a href="/dashboard">&larr; Dashboard</a></div>
   <div class="head">
     <div><h1>Reminders</h1><div class="sub" id="count">Loading…</div></div>
-    <a class="btn" href="/reminders/new">New reminder</a>
+    <div style="display:flex;gap:.5rem">
+      <a class="btn ghost" href="/api/reminders/export.csv">Export CSV</a>
+      <a class="btn" href="/reminders/new">New reminder</a>
+    </div>
   </div>
 
   <div class="banner">

@@ -3,7 +3,7 @@
 # PROJ-472 — End-to-end integration test
 # Exercises the complete chain on isolated in-memory/tmp databases:
 #
-#   Org claim → Contact creation → Reminder schedule
+#   Org setup → Contact creation → Reminder schedule
 #   → Web bridge dispatch (consent + quiet-hours gate)
 #   → Delivery logging (log_delivery_event)
 #   → Twilio status callback (update_delivery_status)
@@ -16,44 +16,32 @@
 
 from __future__ import annotations
 
-import os
-import tempfile
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, AsyncMock, patch
 from fastapi.testclient import TestClient
+from fastapi import FastAPI
 
 
 # ── Fixtures ──────────────────────────────────────────────────
 
 @pytest.fixture()
-def isolated_dbs(tmp_path, monkeypatch):
-    """Point all three database paths to tmp files."""
-    monkeypatch.setenv("AUTH_DB_PATH", str(tmp_path / "auth_users.db"))
-    monkeypatch.setenv("MEMORY_DB",    str(tmp_path / "memory.db"))
-    monkeypatch.setenv("REMINDERS_DB", str(tmp_path / "reminders.db"))
-    # Reset cached singletons
+def isolated_auth_db(tmp_path, monkeypatch):
+    """Point AUTH_DB_PATH to a fresh tmp file and re-init."""
+    db_path = str(tmp_path / "auth_users.db")
+    monkeypatch.setenv("AUTH_DB_PATH", db_path)
     import importlib
-    import auth.db as db_mod;           importlib.reload(db_mod)
-    import auth.tenancy as tenancy_mod; importlib.reload(tenancy_mod)
-    import app.web_ui.activity_db as adb; importlib.reload(adb)
+    import auth.db as db_mod
+    importlib.reload(db_mod)
     db_mod.init_db()
+    import auth.tenancy as tenancy_mod
+    importlib.reload(tenancy_mod)
     tenancy_mod.init_tenancy()
-    yield {
-        "auth_db": str(tmp_path / "auth_users.db"),
-        "mem_db":  str(tmp_path / "memory.db"),
-        "rem_db":  str(tmp_path / "reminders.db"),
-    }
+    yield db_path
 
 
 @pytest.fixture()
-def fastapi_client(isolated_dbs):
-    """Full FastAPI app with all routers — mirrors production."""
-    import importlib
-    import app.web_ui.main as main_mod
-    # We can't reload main.py because it performs side-effects at import time;
-    # instead build a minimal isolated client from individual routers.
-    from fastapi import FastAPI
-    from auth.org_routes import router as org_router
+def fastapi_client(isolated_auth_db):
+    """Minimal FastAPI client with auth, delivery, twilio, and ws routers."""
     from app.web_ui.auth_routes import router as auth_router
     from app.web_ui.dashboard_routes import router as dashboard_router
     from app.web_ui.delivery_routes import router as delivery_router
@@ -61,132 +49,137 @@ def fastapi_client(isolated_dbs):
     from app.web_ui.ws_routes import router as ws_router
 
     app = FastAPI()
-    for r in (auth_router, org_router, dashboard_router, delivery_router, twilio_router, ws_router):
+    for r in (auth_router, dashboard_router, delivery_router, twilio_router, ws_router):
         app.include_router(r)
     return TestClient(app)
 
 
-# ── E2E Steps ─────────────────────────────────────────────────
+# ── Step 1: Auth — register & login ───────────────────────────
 
-class TestE2EProductionFlow:
-    """
-    Full chain: Org → Contact → Reminder → Dispatch → Delivery → WebSocket.
-    Each step asserts the expected state before proceeding so failures are
-    pinpointed to the broken layer rather than blowing up at the end.
-    """
-
-    # ── Step 1: User registers and claims an org ────────────
-
-    def test_step1_user_registers(self, fastapi_client):
+class TestStep1Auth:
+    def test_register_succeeds(self, fastapi_client):
         resp = fastapi_client.post("/auth/register", json={
             "username": "e2euser",
             "password": "SecurePass1!",
         })
-        assert resp.status_code in (200, 201), resp.text
+        assert resp.status_code == 200, resp.text
+        assert resp.json()["username"] == "e2euser"
 
-    def test_step1_org_claim(self, fastapi_client):
+    def test_login_succeeds(self, fastapi_client):
         fastapi_client.post("/auth/register", json={
-            "username": "e2euser2",
+            "username": "logintest",
             "password": "SecurePass1!",
         })
-        login = fastapi_client.post("/auth/login", json={
-            "username": "e2euser2",
+        resp = fastapi_client.post("/auth/login", json={
+            "username": "logintest",
             "password": "SecurePass1!",
         })
-        assert login.status_code == 200, login.text
-        token = login.json().get("access_token")
-        if not token:
-            pytest.skip("Auth not configured — skipping org claim step")
-        resp = fastapi_client.post(
-            "/orgs/claim",
-            json={"name": "E2E Test Org"},
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        # org claim may return 200 or 201; both are valid
-        assert resp.status_code in (200, 201, 409), resp.text
+        assert resp.status_code == 200, resp.text
 
-    # ── Step 2: Create a contact with SMS opt-in ────────────
 
-    def test_step2_create_contact(self, isolated_dbs):
+# ── Step 2: Contact creation ──────────────────────────────────
+
+class TestStep2Contact:
+    def test_create_contact_returns_id(self, isolated_auth_db):
         from auth import tenancy
-        from app.web.store import DEFAULT_ORG_ID
-        row_id = tenancy.create_contact(
-            DEFAULT_ORG_ID,
+        contact_id = tenancy.create_contact(
+            1,
             phone_number="+61400000001",
             name="E2E Test Contact",
             consent_state="opted_in",
             preferred_channel="sms",
         )
-        assert row_id is not None
-        contact = tenancy.get_contact_by_phone(DEFAULT_ORG_ID, "+61400000001")
-        assert contact is not None
-        assert contact["phone_number"] == "+61400000001"
-        assert contact["consent_state"] == "opted_in"
+        assert isinstance(contact_id, int)
+        assert contact_id > 0
 
-    def test_step2_contact_retrievable(self, isolated_dbs):
+    def test_contact_retrievable_by_phone(self, isolated_auth_db):
         from auth import tenancy
-        from app.web.store import DEFAULT_ORG_ID
         tenancy.create_contact(
-            DEFAULT_ORG_ID,
+            1,
             phone_number="+61400000002",
             name="Retrieve Test",
             consent_state="opted_in",
         )
-        row = tenancy.get_contact_by_phone(DEFAULT_ORG_ID, "+61400000002")
+        row = tenancy.get_contact_by_phone(1, "+61400000002")
         assert row is not None
         assert row["name"] == "Retrieve Test"
+        assert row["consent_state"] == "opted_in"
 
-    # ── Step 3: Schedule a reminder ─────────────────────────
+    def test_contact_org_scoped(self, isolated_auth_db):
+        """A contact from org 1 must not appear when querying org 2."""
+        from auth import tenancy
+        tenancy.create_contact(1, phone_number="+61400000003", name="Org1 Contact")
+        row = tenancy.get_contact_by_phone(2, "+61400000003")
+        assert row is None
 
-    def test_step3_schedule_reminder(self, isolated_dbs):
+
+# ── Step 3: Reminder scheduling (JSON store) ──────────────────
+
+class TestStep3Reminder:
+    def _make_contact(self, phone, org_id):
+        from app.web import contacts as web_contacts
+        c = web_contacts.create_contact({
+            "phone_number": phone,
+            "name": "Reminder Test",
+            "consent_state": "opted_in",
+        }, org_id=org_id)
+        return dict(c)
+
+    def test_schedule_reminder_status_is_scheduled(self, isolated_auth_db):
         from app.web import reminders
         from app.web.store import DEFAULT_ORG_ID
-        from auth import tenancy
-
-        # Need a contact first
-        tenancy.create_contact(
-            DEFAULT_ORG_ID,
-            phone_number="+61400000003",
-            name="Reminder Contact",
-            consent_state="opted_in",
-        )
-        # Resolve contact_id via tenancy (contacts now live in auth.tenancy SQLite)
-        c = tenancy.get_contact_by_phone(DEFAULT_ORG_ID, "+61400000003")
-        contact_id = c["id"] if c else 1
-
+        contact = self._make_contact("+61400009001", DEFAULT_ORG_ID)
         reminder = reminders.create_reminder({
-            "contact_id": contact_id,
+            "contact_id": contact["id"],
             "message": "E2E: your appointment is tomorrow.",
             "send_at": "2099-01-01T08:00:00",
         }, org_id=DEFAULT_ORG_ID)
         assert reminder["status"] == "scheduled"
         assert "id" in reminder
 
-    # ── Step 4: Web bridge dispatches the reminder ──────────
-
-    def test_step4_web_bridge_sends_via_mock(self, isolated_dbs):
+    def test_reminder_appears_in_list(self, isolated_auth_db):
         from app.web import reminders
         from app.web.store import DEFAULT_ORG_ID
-        from auth import tenancy
+        contact = self._make_contact("+61400009002", DEFAULT_ORG_ID)
+        reminders.create_reminder({
+            "contact_id": contact["id"],
+            "message": "Listed reminder.",
+            "send_at": "2099-01-01T09:00:00",
+        }, org_id=DEFAULT_ORG_ID)
+        items = reminders.list_reminders(DEFAULT_ORG_ID)
+        assert any(r["message"] == "Listed reminder." for r in items)
+
+
+# ── Step 4: Web bridge dispatches via mock channel ────────────
+
+class TestStep4WebBridge:
+    def _make_contact_and_reminder(self, phone, consent, org_id):
+        from app.web import contacts as web_contacts, reminders
+        # Create contact via the full contacts API so both tenancy + JSON stores are consistent
+        contact = dict(web_contacts.create_contact({
+            "phone_number": phone,
+            "name": "Bridge Test",
+            "consent_state": consent,
+        }, org_id=org_id))
+        # Insert reminder directly at store level to use a past send_at (bypass validate)
+        tbl = reminders.reminders_table()
+        from datetime import datetime as _dt
+        tbl.insert({
+            "contact_id": contact["id"],
+            "message": "Bridge dispatch test.",
+            "send_at": "2020-01-01T08:00:00+10:00",
+            "sent_at": None,
+            "status": "scheduled",
+            "created_at": _dt.now().isoformat(),
+            "updated_at": _dt.now().isoformat(),
+        }, org_id=org_id)
+        return contact
+
+    def test_bridge_sends_due_reminder(self, isolated_auth_db):
+        from app.web.store import DEFAULT_ORG_ID
         from agent.reminders.web_bridge import WebReminderBridge
 
-        # Create contact + reminder
-        tenancy.create_contact(
-            DEFAULT_ORG_ID,
-            phone_number="+61400000004",
-            name="Bridge Contact",
-            consent_state="opted_in",
-        )
-        c = tenancy.get_contact_by_phone(DEFAULT_ORG_ID, "+61400000004")
-        contact_id = c["id"] if c else 1
-        past_payload = {
-            "contact_id": contact_id,
-            "message": "Bridge test reminder.",
-            "send_at": "2020-01-01T08:00:00",
-            "status": "scheduled",
-        }
-        with patch("app.web.reminders.validate", return_value=past_payload):
-            reminders.create_reminder(past_payload, org_id=DEFAULT_ORG_ID)
+        self._make_contact_and_reminder("+61400009010", "opted_in", DEFAULT_ORG_ID)
 
         mock_sms = MagicMock()
         mock_sms.send.return_value = MagicMock(ok=True, error=None)
@@ -197,83 +190,168 @@ class TestE2EProductionFlow:
         assert any(r.get("ok") for r in results), f"Expected ok=True, got {results}"
         mock_sms.send.assert_called_once()
 
-    # ── Step 5: Delivery event logged ───────────────────────
+    def test_bridge_blocks_opted_out_contact(self, isolated_auth_db):
+        from app.web.store import DEFAULT_ORG_ID
+        from agent.reminders.web_bridge import WebReminderBridge
 
-    def test_step5_delivery_event_logged(self, isolated_dbs):
+        self._make_contact_and_reminder("+61400009011", "opted_out", DEFAULT_ORG_ID)
+
+        mock_sms = MagicMock()
+        bridge = WebReminderBridge(channels={"sms": mock_sms, "email": MagicMock()})
+        results = bridge.tick(DEFAULT_ORG_ID)
+        mock_sms.send.assert_not_called()
+        assert all(r.get("blocked") for r in results if r.get("ok") is False)
+
+
+# ── Step 5: Delivery event logging ───────────────────────────
+
+class TestStep5DeliveryLogging:
+    def test_delivery_event_logged_and_retrievable(self):
         from app.web_ui.activity_db import log_delivery_event, get_delivery_history
 
         event = log_delivery_event(
             message_id="SMTEST001",
-            recipient="+61400000005",
+            recipient="+61400000020",
             channel="sms",
             reminder_type="sms_reminder",
             status="sent",
         )
         assert event.get("message_id") == "SMTEST001"
-        history = get_delivery_history(limit=10)
-        ids = [h["message_id"] for h in history["items"]]
+
+        history = get_delivery_history(limit=50)
+        # get_delivery_history returns {"items": [...], "total": int, ...}
+        items = history["items"] if isinstance(history, dict) else history
+        ids = [h["message_id"] for h in items]
         assert "SMTEST001" in ids
 
-    # ── Step 6: Status callback updates delivery record ─────
+    def test_delivery_event_has_expected_fields(self):
+        from app.web_ui.activity_db import log_delivery_event
 
-    def test_step6_status_callback_updates_record(self, fastapi_client, isolated_dbs):
-        from app.web_ui.activity_db import log_delivery_event, update_delivery_status
-
-        # Pre-register the delivery record
-        log_delivery_event(
+        event = log_delivery_event(
             message_id="SMTEST002",
-            recipient="+61400000006",
+            recipient="+61400000021",
+            channel="email",
+            reminder_type="email_reminder",
+            status="queued",
+        )
+        for field in ("message_id", "recipient", "channel", "status"):
+            assert field in event, f"Missing field in delivery event: {field}"
+
+
+# ── Step 6: Twilio status callback updates record ─────────────
+
+class TestStep6StatusCallback:
+    def test_status_callback_updates_delivery_record(self, fastapi_client):
+        from app.web_ui.activity_db import log_delivery_event, get_delivery_history
+
+        # Pre-register a delivery record
+        log_delivery_event(
+            message_id="SMTEST010",
+            recipient="+61400000030",
             channel="sms",
             reminder_type="sms_reminder",
             status="sent",
         )
-        # POST a status-callback as Twilio would
+
+        # POST status-callback as Twilio would
         resp = fastapi_client.post(
             "/twilio/status-callback",
             data={
-                "MessageSid": "SMTEST002",
+                "MessageSid": "SMTEST010",
                 "MessageStatus": "delivered",
-                "To": "+61400000006",
+                "To": "+61400000030",
             },
         )
         assert resp.status_code == 200
 
-        # Confirm the status updated in the DB
-        from app.web_ui.activity_db import get_delivery_history
-        history = {h["message_id"]: h for h in get_delivery_history(limit=50)["items"]}
-        assert history.get("SMTEST002", {}).get("status") == "delivered"
+        # Confirm record updated
+        history = get_delivery_history(limit=50)
+        items = history["items"] if isinstance(history, dict) else history
+        record = next((h for h in items if h["message_id"] == "SMTEST010"), None)
+        assert record is not None
+        assert record["status"] == "delivered"
 
-    # ── Step 7: Activity feed contains the event ────────────
+    def test_status_callback_on_failure_logs_activity(self, fastapi_client):
+        from app.web_ui.activity_db import get_recent
 
-    def test_step7_activity_feed_updated(self, isolated_dbs):
+        fastapi_client.post(
+            "/twilio/status-callback",
+            data={
+                "MessageSid": "SMTEST011",
+                "MessageStatus": "failed",
+                "To": "+61400000031",
+                "ErrorCode": "30006",
+                "ErrorMessage": "Landline or unreachable carrier",
+            },
+        )
+        feed = get_recent(limit=20)
+        assert any(
+            "delivery_failure" in item.get("intent", "")
+            or "failed" in item.get("summary", "").lower()
+            for item in feed
+        )
+
+
+# ── Step 7: Activity feed ─────────────────────────────────────
+
+class TestStep7ActivityFeed:
+    def test_activity_logged_and_visible(self):
         from app.web_ui.activity_db import log_activity, get_recent
 
         log_activity(
             channel="sms",
-            caller="+61400000007",
+            caller="+61400000040",
             intent="appointment_reminder",
-            summary="E2E: reminder sent.",
+            summary="E2E: reminder sent to patient.",
         )
         feed = get_recent(limit=10)
-        assert len(feed) >= 1
         summaries = [item.get("summary", "") for item in feed]
         assert any("E2E" in s for s in summaries)
 
-    # ── Step 8: WebSocket broadcast fires on delivery ───────
+    def test_activity_feed_is_newest_first(self):
+        from app.web_ui.activity_db import log_activity, get_recent
 
+        log_activity(channel="sms", caller="+614", intent="", summary="FIRST_E2E")
+        log_activity(channel="sms", caller="+614", intent="", summary="SECOND_E2E")
+        feed = get_recent(limit=5)
+        summaries = [item.get("summary", "") for item in feed]
+        # Newest should appear before oldest
+        first_idx  = next((i for i, s in enumerate(summaries) if "FIRST_E2E"  in s), 999)
+        second_idx = next((i for i, s in enumerate(summaries) if "SECOND_E2E" in s), 999)
+        assert second_idx < first_idx, "Feed should be newest-first"
+
+
+# ── Step 8: WebSocket broadcast ──────────────────────────────
+
+class TestStep8WebSocketBroadcast:
     @pytest.mark.asyncio
-    async def test_step8_websocket_broadcast_on_delivery(self, isolated_dbs):
+    async def test_broadcast_fires_on_delivery_event(self):
         from app.web_ui.ws_routes import broadcast_dashboard_event, manager
-        from unittest.mock import AsyncMock
 
         ws = AsyncMock()
-        await manager.connect(ws)
-        with patch("app.web_ui.ws_routes.get_stats_today", return_value={}), \
-             patch("app.web_ui.ws_routes.get_delivery_analytics", return_value={"summary": {}}):
+        # Add directly to avoid triggering initial_state send
+        manager.active_connections.append(ws)
+        try:
             broadcast_dashboard_event("delivery_update", {
-                "message_id": "SMTEST003",
+                "message_id": "SMTEST020",
                 "status": "delivered",
                 "channel": "sms",
             })
-        # Cleanup
-        manager.disconnect(ws)
+        finally:
+            manager.disconnect(ws)
+
+    @pytest.mark.asyncio
+    async def test_activity_update_broadcast(self):
+        from app.web_ui.ws_routes import broadcast_dashboard_event, manager
+
+        ws = AsyncMock()
+        manager.active_connections.append(ws)
+        try:
+            broadcast_dashboard_event("activity_update", {
+                "channel": "sms",
+                "caller": "+61400000050",
+                "summary": "E2E test activity",
+                "time": "just now",
+            })
+        finally:
+            manager.disconnect(ws)

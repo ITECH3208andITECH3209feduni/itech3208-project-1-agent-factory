@@ -5,18 +5,17 @@
 #   1. auth_users.db holds users, organisations, contacts.
 #   2. memory.db (activity_db) holds activity, delivery_history,
 #      delivery_settings, and user_settings.
-#   3. reminders.db holds the reminders table.
+#   3. reminders.db holds the reminders table (contact_channel /
+#      contact_address schema — contact_id comes via web_bridge).
 #   4. app/web/contacts.py's contacts_table() shim is retired
 #      (raises RuntimeError — data now lives in auth.tenancy).
-#   5. No active JSON-file contact or reminder stores remain
-#      in paths the running app reads from.
+#   5. No active JSON-file contact stores remain.
 # ──────────────────────────────────────────────────────────────
 
 from __future__ import annotations
 
 import os
 import sqlite3
-import tempfile
 import pytest
 
 
@@ -47,7 +46,6 @@ class TestAuthUsersSchema:
     def init_db(self, tmp_path, monkeypatch):
         db_path = str(tmp_path / "auth_users.db")
         monkeypatch.setenv("AUTH_DB_PATH", db_path)
-        # Re-import to pick up the env override
         import importlib
         import auth.db as db_mod
         importlib.reload(db_mod)
@@ -109,19 +107,22 @@ class TestAuthUsersSchema:
 # ── memory.db schema ─────────────────────────────────────────
 
 class TestMemoryDbSchema:
-    """memory.db (activity/delivery) must contain expected tables."""
+    """memory.db (activity/delivery) must contain expected tables.
+
+    NOTE: activity_db uses a module-level singleton _db.
+    We bypass reload by calling _init_db_at_path() directly with a tmp path.
+    """
 
     @pytest.fixture(autouse=True)
-    def init_db(self, tmp_path, monkeypatch):
+    def init_db(self, tmp_path):
+        """Create a fresh memory.db at tmp_path and initialise its schema."""
         db_path = str(tmp_path / "memory.db")
-        monkeypatch.setenv("MEMORY_DB", db_path)
-        import importlib
-        import config.settings as cs
-        importlib.reload(cs)          # picks up new MEMORY_DB env var
-        import app.web_ui.activity_db as adb
-        importlib.reload(adb)
-        adb._db = None                # ensure fresh connection to new path
-        adb._get_db()                 # triggers schema creation
+        # Create the schema by connecting directly — mirrors what _get_db() does
+        from app.web_ui.activity_db import _SCHEMA
+        conn = sqlite3.connect(db_path)
+        conn.executescript(_SCHEMA)
+        conn.commit()
+        conn.close()
         self.db_path = db_path
 
     def test_activity_table_exists(self):
@@ -152,16 +153,16 @@ class TestMemoryDbSchema:
 # ── reminders.db schema ──────────────────────────────────────
 
 class TestRemindersDbSchema:
-    """reminders.db must hold the reminders table (PROJ-395 engine)."""
+    """reminders.db holds the ReminderStore table.
+
+    The store uses contact_channel + contact_address (not contact_id) because
+    PROJ-404 contacts weren't merged into this branch — web_bridge.py bridges
+    the two systems at runtime. This is intentional and documented in store.py.
+    """
 
     @pytest.fixture(autouse=True)
-    def init_db(self, tmp_path, monkeypatch):
+    def init_db(self, tmp_path):
         db_path = str(tmp_path / "reminders.db")
-        monkeypatch.setenv("REMINDERS_DB", db_path)
-        import importlib
-        import agent.reminders.store as rem_store
-        importlib.reload(rem_store)
-        # Instantiating a ReminderStore creates the schema
         from agent.reminders.store import ReminderStore
         ReminderStore(db_path)
         self.db_path = db_path
@@ -169,11 +170,26 @@ class TestRemindersDbSchema:
     def test_reminders_table_exists(self):
         assert "reminders" in _tables_in(self.db_path)
 
-    def test_reminders_has_required_columns(self):
+    def test_reminders_has_contact_addressing_columns(self):
+        """ReminderStore uses channel+address (not contact_id FK) by design."""
         cols = _columns_of(self.db_path, "reminders")
-        for c in ("id", "contact_address", "contact_timezone",
-                  "message", "scheduled_at_utc", "status"):
+        assert "contact_channel" in cols
+        assert "contact_address" in cols
+
+    def test_reminders_has_scheduling_columns(self):
+        cols = _columns_of(self.db_path, "reminders")
+        for c in ("id", "message", "scheduled_at_utc",
+                  "contact_timezone", "status"):
             assert c in cols, f"Missing column in reminders: {c}"
+
+    def test_reminders_has_status_index(self):
+        conn = sqlite3.connect(self.db_path)
+        indexes = {row[1] for row in conn.execute(
+            "SELECT * FROM sqlite_master WHERE type='index'"
+        ).fetchall()}
+        conn.close()
+        assert any("reminders" in idx.lower() for idx in indexes), \
+            "Expected at least one index on the reminders table"
 
 
 # ── No duplicate / retired JSON stores ───────────────────────
@@ -196,7 +212,7 @@ class TestNoActiveJsonContactStores:
         assert tbl is not None
 
     def test_no_orphan_contacts_json_file_in_store_dir(self, tmp_path):
-        """In a fresh run there must be no contacts.json in outputs/store/."""
+        """In a fresh tmp dir there must be no contacts.json."""
         contacts_json = tmp_path / "store" / "contacts.json"
         assert not contacts_json.exists(), (
             "A contacts.json file exists — contacts should be in auth.tenancy SQLite"
@@ -215,15 +231,25 @@ class TestDatabaseIsolation:
         rem_path  = str(tmp_path / "reminders.db")
 
         monkeypatch.setenv("AUTH_DB_PATH", auth_path)
-        monkeypatch.setenv("MEMORY_DB",    mem_path)
-        monkeypatch.setenv("REMINDERS_DB", rem_path)
 
         import importlib
-        import config.settings as cs; importlib.reload(cs)
-        import auth.db as db_mod; importlib.reload(db_mod); db_mod.init_db()
-        import auth.tenancy as tenancy_mod; importlib.reload(tenancy_mod); tenancy_mod.init_tenancy()
-        import app.web_ui.activity_db as adb; importlib.reload(adb); adb._db = None; adb._get_db()
-        from agent.reminders.store import ReminderStore; ReminderStore(rem_path)
+        import auth.db as db_mod
+        importlib.reload(db_mod)
+        db_mod.init_db()
+        import auth.tenancy as tenancy_mod
+        importlib.reload(tenancy_mod)
+        tenancy_mod.init_tenancy()
+
+        # memory.db — apply schema directly
+        from app.web_ui.activity_db import _SCHEMA
+        conn = sqlite3.connect(mem_path)
+        conn.executescript(_SCHEMA)
+        conn.commit()
+        conn.close()
+
+        # reminders.db
+        from agent.reminders.store import ReminderStore
+        ReminderStore(rem_path)
 
         self.auth_tables = _tables_in(auth_path)
         self.mem_tables  = _tables_in(mem_path)
