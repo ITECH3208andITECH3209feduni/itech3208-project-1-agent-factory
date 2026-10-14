@@ -1,11 +1,4 @@
-# app/web_ui/settings_routes.py
-# ──────────────────────────────────────────────────────────────
-# Interface Personalisation & Layout Preferences API
-# PROJ-401 (Epic: Interface Personalisation)
-# PROJ-442 (Theme / color customization)
-# PROJ-443 (Layout preferences: widget order/visibility persisted per user)
-# PROJ-444 (Settings persistence + reset to default)
-# ──────────────────────────────────────────────────────────────
+"""User settings routes with organisation-level access control."""
 
 import os
 import sys
@@ -13,59 +6,47 @@ from typing import List, Dict, Optional
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from app.web_ui.activity_db import (
-    DEFAULT_SETTINGS,
     get_user_settings,
     reset_user_settings,
     save_user_settings,
 )
+from auth.rbac import require_admin, require_org_member
 
-router = APIRouter(prefix="/api/user/settings", tags=["Interface Personalisation"])
+router = APIRouter(
+    prefix="/api/user/settings",
+    tags=["Interface Personalisation"],
+)
 
 
 class UpdateSettingsRequest(BaseModel):
-    theme: Optional[str] = Field(default=None, description="'dark', 'light', or 'contrast'")
-    accent_color: Optional[str] = Field(default=None, description="'indigo', 'emerald', 'violet', 'amber', 'rose'")
-    widget_order: Optional[List[str]] = Field(default=None, description="Ordered list of widget keys")
-    widget_visibility: Optional[Dict[str, bool]] = Field(default=None, description="Visibility toggles per widget key")
-
-
-def _resolve_user_id(x_user_id: Optional[str] = Header(default=None)) -> str:
-    """Extract user identifier or fall back to 'default'."""
-    return (x_user_id or "default").strip().lower()
+    theme: Optional[str] = Field(default=None)
+    accent_color: Optional[str] = Field(default=None)
+    widget_order: Optional[List[str]] = Field(default=None)
+    widget_visibility: Optional[Dict[str, bool]] = Field(default=None)
 
 
 @router.get("")
 @router.get("/")
-async def get_settings(x_user_id: Optional[str] = Header(default=None)):
-    """
-    Retrieve user interface preferences:
-    - theme (dark / light / contrast)
-    - accent_color
-    - widget_order
-    - widget_visibility
-    PROJ-443, PROJ-444
-    """
-    uid = _resolve_user_id(x_user_id)
-    return get_user_settings(uid)
+async def get_settings(
+    identity: dict = Depends(require_org_member),
+):
+    """Get the authenticated user's own settings."""
+    return get_user_settings(identity["username"])
 
 
 @router.post("")
 @router.post("/")
 async def update_settings(
     payload: UpdateSettingsRequest,
-    x_user_id: Optional[str] = Header(default=None),
+    identity: dict = Depends(require_admin),
 ):
-    """
-    Persist updated user preferences.
-    PROJ-442, PROJ-443, PROJ-444
-    """
-    uid = _resolve_user_id(x_user_id)
+    """Only organisation admins may change settings."""
     updated = save_user_settings(
-        user_id=uid,
+        user_id=identity["username"],
         theme=payload.theme,
         accent_color=payload.accent_color,
         widget_order=payload.widget_order,
@@ -75,11 +56,9 @@ async def update_settings(
 
 
 @router.post("/reset")
-async def reset_settings(x_user_id: Optional[str] = Header(default=None)):
-    """
-    Reset user interface preferences to default factory configuration.
-    PROJ-444
-    """
-    uid = _resolve_user_id(x_user_id)
-    res = reset_user_settings(uid)
-    return {"status": "reset", "settings": res}
+async def reset_settings(
+    identity: dict = Depends(require_admin),
+):
+    """Only organisation admins may reset settings."""
+    result = reset_user_settings(identity["username"])
+    return {"status": "reset", "settings": result}

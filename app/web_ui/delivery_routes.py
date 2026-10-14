@@ -15,8 +15,10 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+
+from auth.rbac import require_admin
 
 from app.web_ui.activity_db import (
     add_email_suppression,
@@ -87,7 +89,7 @@ async def get_delivery_record(delivery_id: str):
 
 
 @router.post("/retry/{delivery_id}")
-async def retry_delivery(delivery_id: str):
+async def retry_delivery(delivery_id: str, identity: dict = Depends(require_admin)):
     """
     Retry a failed or bounced delivery message.
     Increments retry count and sets status back to queued (PROJ-434).
@@ -113,7 +115,7 @@ async def retry_delivery(delivery_id: str):
 
 
 @router.post("/send")
-async def send_reminder(payload: SendReminderRequest):
+async def send_reminder(payload: SendReminderRequest, identity: dict = Depends(require_admin)):
     """
     Trigger or schedule an outbound reminder delivery across SMS, Email, or Voice.
     Validates suppressions for email, logs delivery record, and returns tracking message_id.
@@ -240,13 +242,13 @@ async def handle_email_bounce(request: Request):
 
 
 @router.get("/email/suppressions")
-async def list_suppressions():
+async def list_suppressions(identity: dict = Depends(require_admin)):
     """List all suppressed email addresses (PROJ-433)."""
     return {"suppressions": get_email_suppressions()}
 
 
 @router.delete("/email/suppressions/{email}")
-async def remove_suppression(email: str):
+async def remove_suppression(email: str, identity: dict = Depends(require_admin)):
     """Remove an email address from suppression list (PROJ-433)."""
     from app.web_ui.activity_db import _get_db
     db = _get_db()

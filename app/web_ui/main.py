@@ -84,9 +84,11 @@ init_send_log()
 
 # Include API routes
 from auth.org_routes import router as org_router
+from auth.api_keys import router as api_keys_router
 
 app.include_router(auth_router)          # /auth/register, /auth/login, /auth/logout, /auth/me
 app.include_router(org_router)           # /orgs — PROJ-406 organisation registration
+app.include_router(api_keys_router)      # /orgs/api-keys — PROJ-473 organisation API keys
 app.include_router(router)               # /query, /literature, /amazon, /integrity, /seller, /export, /history, /status
 app.include_router(receptionist_router)  # /receptionist (POST)
 app.include_router(calendar_router)      # /calendar/ics
@@ -139,6 +141,17 @@ async def require_login(request: Request, call_next):
     path = request.url.path
     if request.method == "OPTIONS" or path in _PUBLIC_EXACT or path.startswith(_PUBLIC_PREFIXES):
         return await call_next(request)
+
+    if path == "/crm" or path.startswith("/crm/"):
+        from auth.rbac import get_current_identity
+        try:
+            get_current_identity(request)
+        except HTTPException as exc:
+            if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+                return RedirectResponse("/login", status_code=303)
+            return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+        return await call_next(request)
+
     from app.web_ui.auth_routes import get_current_username
     try:
         get_current_username(request)
@@ -146,6 +159,7 @@ async def require_login(request: Request, call_next):
         if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
             return RedirectResponse("/login", status_code=303)
         return JSONResponse({"detail": "Not logged in"}, status_code=401)
+
     return await call_next(request)
 
 
