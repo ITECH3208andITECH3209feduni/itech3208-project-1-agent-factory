@@ -578,11 +578,43 @@ def templates_page() -> HTMLResponse:
     return HTMLResponse(content=TEMPLATES_HTML)
 
 
+def _template_org_id(request: Request) -> int:
+    """Resolve the organisation from the authenticated session, never the payload."""
+    identity = current_user(request)
+    if not identity or not identity.get("username"):
+        raise HTTPException(status_code=401, detail="Not logged in")
+
+    username = identity["username"]
+    org_id = None
+
+    # Email-registered organisation accounts use auth.db.
+    if "@" in username:
+        from auth.db import get_user_by_email
+
+        row = get_user_by_email(username)
+        if row is not None and "org_id" in row.keys():
+            org_id = row["org_id"]
+
+    # Existing username accounts use the session-auth database.
+    if org_id is None:
+        from agent.auth import get_user_org_id
+
+        org_id = get_user_org_id(username)
+
+    if org_id is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Your account is not linked to an organisation.",
+        )
+    return int(org_id)
+
+
 @app.get("/api/templates")
-def list_templates() -> dict:
+def list_templates(request: Request) -> dict:
     from app.web import message_templates as mt
 
-    items = mt.list_templates()
+    org_id = _template_org_id(request)
+    items = mt.list_templates(org_id)
     return {
         "count": len(items),
         "templates": items,
@@ -591,17 +623,18 @@ def list_templates() -> dict:
 
 
 @app.post("/api/templates/preview")
-def preview_template(payload: dict) -> dict:
+def preview_template(payload: dict, request: Request) -> dict:
     """Render a message against a contact and send time, as the bridge will at
     send time. Used by the reminder form's live preview."""
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
     from app.web import contacts, message_templates as mt, reminders
 
+    org_id = _template_org_id(request)
     body = str(payload.get("body") or "")
     contact = None
     try:
-        contact = contacts.get_contact(int(payload.get("contact_id")))
+        contact = contacts.get_contact(int(payload.get("contact_id")), org_id)
     except (TypeError, ValueError):
         pass
     try:
@@ -614,36 +647,38 @@ def preview_template(payload: dict) -> dict:
             ZoneInfo(str(tz))
     except (ZoneInfoNotFoundError, ValueError):
         tz = None   # an unknown zone falls back to the offset send_at carries
-    rendered = mt.render_for(body, contact, send_at, tz_name=tz)
+    rendered = mt.render_for(body, contact, send_at, org_id=org_id, tz_name=tz)
     return {"rendered": rendered, "unknown": mt.unknown_placeholders(body), "length": len(rendered)}
 
 
 @app.get("/api/templates/{template_id}")
-def get_template(template_id: int) -> dict:
+def get_template(template_id: int, request: Request) -> dict:
     from app.web import message_templates as mt
 
-    item = mt.get_template(template_id)
+    item = mt.get_template(template_id, _template_org_id(request))
     if item is None:
         raise HTTPException(status_code=404, detail="template not found")
     return item
 
 
 @app.post("/api/templates", status_code=201)
-def create_template(payload: dict) -> dict:
+def create_template(payload: dict, request: Request) -> dict:
     from app.web import message_templates as mt
 
+    org_id = _template_org_id(request)
     try:
-        return mt.create_template(payload)
+        return mt.create_template(payload, org_id)
     except mt.ValidationError as exc:
         return JSONResponse(status_code=422, content={"errors": exc.errors})
 
 
 @app.patch("/api/templates/{template_id}")
-def update_template(template_id: int, payload: dict) -> dict:
+def update_template(template_id: int, payload: dict, request: Request) -> dict:
     from app.web import message_templates as mt
 
+    org_id = _template_org_id(request)
     try:
-        row = mt.update_template(template_id, payload)
+        row = mt.update_template(template_id, payload, org_id)
     except mt.ValidationError as exc:
         return JSONResponse(status_code=422, content={"errors": exc.errors})
     if row is None:
@@ -652,10 +687,11 @@ def update_template(template_id: int, payload: dict) -> dict:
 
 
 @app.delete("/api/templates/{template_id}", status_code=204)
-def delete_template(template_id: int) -> Response:
+def delete_template(template_id: int, request: Request) -> Response:
     from app.web import message_templates as mt
 
-    if not mt.delete_template(template_id):
+    org_id = _template_org_id(request)
+    if not mt.delete_template(template_id, org_id):
         raise HTTPException(status_code=404, detail="template not found")
     return Response(status_code=204)
 
