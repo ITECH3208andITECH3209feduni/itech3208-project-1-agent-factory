@@ -8,3 +8,4 @@ pytest-asyncio>=0.24.0    # Required for `async def test_...` in tests/test_amaz
                            # pytest.ini's asyncio_mode=auto is this package's setting — it was
                            # never actually installed, so it silently no-opped and async tests
                            # failed with "async def functions are not natively supported."
+segno  # scripts/build_poster3.py (QR code)
