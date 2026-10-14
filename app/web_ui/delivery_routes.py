@@ -1,11 +1,11 @@
-﻿# app/web_ui/delivery_routes.py
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# app/web_ui/delivery_routes.py
+# ──────────────────────────────────────────────────────────────
 # Delivery Status & History, Twilio callback and Email Bounce API
 # PROJ-397 (Epic: Delivery Status & History)
 # PROJ-432 (Twilio status callback webhook)
 # PROJ-433 (Email bounce / failure handling)
 # PROJ-434 (Delivery history view per reminder)
-# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ──────────────────────────────────────────────────────────────
 
 import os
 import sys
@@ -36,7 +36,7 @@ from app.web_ui.activity_db import (
 router = APIRouter(prefix="/delivery", tags=["Delivery Status & History"])
 
 
-# â”€â”€ Pydantic Request / Response Models â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Pydantic Request / Response Models ─────────────────────────
 
 class SendReminderRequest(BaseModel):
     recipient: str = Field(..., description="Phone number or email address")
@@ -56,7 +56,7 @@ class EmailBounceWebhookPayload(BaseModel):
     timestamp: Optional[str] = None
 
 
-# â”€â”€ PROJ-434: Delivery History Endpoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── PROJ-434: Delivery History Endpoints ───────────────────────
 
 @router.get("/history")
 async def list_delivery_history(
@@ -152,7 +152,7 @@ async def send_reminder(payload: SendReminderRequest, identity: dict = Depends(r
     return {"status": "sent", "message_id": msg_id, "record": record}
 
 
-# â”€â”€ PROJ-433: Email Bounce & Failure Handling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── PROJ-433: Email Bounce & Failure Handling ──────────────────
 
 @router.post("/email/bounce")
 @router.post("/email/status")

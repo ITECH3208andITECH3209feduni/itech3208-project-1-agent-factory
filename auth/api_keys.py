@@ -1,4 +1,4 @@
-﻿"""Organisation-scoped API keys. Plaintext keys are returned only once."""
+"""Organisation-scoped API keys. Plaintext keys are returned only once."""
 
 import hashlib
 import secrets

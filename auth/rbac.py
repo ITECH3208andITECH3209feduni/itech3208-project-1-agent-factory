@@ -1,4 +1,4 @@
-﻿"""Shared organisation-role checks for authenticated requests."""
+"""Shared organisation-role checks for authenticated requests."""
 
 from fastapi import HTTPException, Request
 
