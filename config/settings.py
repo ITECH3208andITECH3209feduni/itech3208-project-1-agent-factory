@@ -105,7 +105,9 @@ TIMEZONE                 = os.environ.get("TIMEZONE", "Australia/Melbourne")
 # ChromaDB semantic search called for in PROJ-214-218 — swap in real
 # embeddings + vector search once there's a real document corpus to
 # index; a JSON keyword matcher isn't a substitute for that long-term).
-FAQ_DATA_PATH      = os.environ.get("FAQ_DATA_PATH") or os.path.join(_BASE_DIR, "config", "faq_seed.json")
+# BRAND_MODE=clinic (the dental demo) answers from the clinic's own questions.
+_FAQ_FILE          = "faq_clinic.json" if os.environ.get("BRAND_MODE", "").strip().lower() == "clinic" else "faq_seed.json"
+FAQ_DATA_PATH      = os.environ.get("FAQ_DATA_PATH") or os.path.join(_BASE_DIR, "config", _FAQ_FILE)
 FAQ_MIN_SCORE      = 0.3    # Jaccard token-overlap threshold to accept a match
 
 # Human escalation log (PROJ-195: "human escalation")

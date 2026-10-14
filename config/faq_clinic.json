@@ -1,0 +1,186 @@
+[
+  {
+    "question": "What are your opening hours?",
+    "answer": "Bright Smile Dental is open Monday to Friday 8:30am–5:30pm, and Saturday 9am–1pm (AEST). We are closed on Sundays and public holidays. This receptionist answers calls, texts and web chat 24/7, so you can book or ask a question at any hour.",
+    "tags": [
+      "hours",
+      "open",
+      "opening",
+      "available",
+      "time",
+      "closed",
+      "when",
+      "saturday",
+      "sunday",
+      "weekend"
+    ]
+  },
+  {
+    "question": "How do I book an appointment?",
+    "answer": "Just tell me the day, the time and what it is for, for example \"book me in for a check-up next Tuesday at 2pm\", and I will add it to the calendar and send you a reminder beforehand.",
+    "tags": [
+      "book",
+      "appointment",
+      "schedule",
+      "reserve",
+      "booking",
+      "visit",
+      "check-up",
+      "checkup"
+    ]
+  },
+  {
+    "question": "How do I cancel or reschedule an appointment?",
+    "answer": "To move an appointment, say \"reschedule my appointment\" and give me the new day and time, and I will update the booking and your reminders. To cancel, ask to speak with a person and our team will confirm it. Please give us at least 24 hours' notice where you can.",
+    "tags": [
+      "cancel",
+      "reschedule",
+      "change",
+      "move",
+      "appointment",
+      "postpone"
+    ]
+  },
+  {
+    "question": "What services do you offer?",
+    "answer": "We offer check-ups and cleans, fillings, teeth whitening, children's dentistry, emergency dental care, and consultations for braces and clear aligners. Ask me about any of them or book a visit.",
+    "tags": [
+      "services",
+      "offer",
+      "provide",
+      "do",
+      "help",
+      "treatment",
+      "treatments",
+      "clean",
+      "cleaning",
+      "whitening",
+      "filling",
+      "braces",
+      "dentist"
+    ]
+  },
+  {
+    "question": "How do I get in touch?",
+    "answer": "You can call or text the number on your reminder at any time and this receptionist will answer, or use this web chat. If you would rather speak to a person, just say so and our team will follow up on the next working day.",
+    "tags": [
+      "contact",
+      "touch",
+      "phone",
+      "call",
+      "email",
+      "reach",
+      "number",
+      "get"
+    ]
+  },
+  {
+    "question": "Do you handle dental emergencies?",
+    "answer": "Yes. For a toothache, a broken or knocked-out tooth, or swelling, say \"I'd like to talk to a person\" and I will flag your message for our team, or book the earliest time you can see in the calendar. If you have severe swelling affecting your breathing or swallowing, or heavy bleeding, call 000 now.",
+    "tags": [
+      "emergency",
+      "urgent",
+      "pain",
+      "toothache",
+      "broken",
+      "knocked",
+      "swelling",
+      "bleeding",
+      "hurts"
+    ]
+  },
+  {
+    "question": "How much does a check-up cost?",
+    "answer": "Fees depend on the treatment, so our team confirms the price before anything is done. Ask for a person if you would like a quote, and tell us if you have private health cover so we can check what you can claim.",
+    "tags": [
+      "cost",
+      "price",
+      "pricing",
+      "pay",
+      "fee",
+      "fees",
+      "insurance",
+      "cover",
+      "health",
+      "claim",
+      "quote",
+      "much"
+    ]
+  },
+  {
+    "question": "What should I bring to my first visit?",
+    "answer": "Please bring photo ID, your private health fund card if you have one, and a list of any medicines you take. Arriving ten minutes early lets us set up your record. Your reminder message lists anything specific to your booking.",
+    "tags": [
+      "bring",
+      "first",
+      "new",
+      "patient",
+      "prepare",
+      "preparation",
+      "documents",
+      "need",
+      "before",
+      "id",
+      "card"
+    ]
+  },
+  {
+    "question": "Do you see children?",
+    "answer": "Yes, we welcome children, and a first visit is a gentle check and a chat. Book a time and mention your child's age so we can allow enough time.",
+    "tags": [
+      "child",
+      "children",
+      "kids",
+      "kid",
+      "baby",
+      "toddler",
+      "family",
+      "son",
+      "daughter"
+    ]
+  },
+  {
+    "question": "Where can I park?",
+    "answer": "There is street parking nearby. Your booking confirmation and reminder include the clinic address and any parking information for your appointment.",
+    "tags": [
+      "parking",
+      "park",
+      "car",
+      "carpark",
+      "directions",
+      "address",
+      "where",
+      "location"
+    ]
+  },
+  {
+    "question": "How do I talk to a human?",
+    "answer": "Just ask. Say something like \"I'd like to talk to a person\" and I will flag this conversation for our team to follow up.",
+    "tags": [
+      "human",
+      "person",
+      "representative",
+      "agent",
+      "escalate",
+      "talk",
+      "speak",
+      "staff",
+      "receptionist"
+    ]
+  },
+  {
+    "question": "How do I stop receiving reminders?",
+    "answer": "Reply STOP to any text reminder and we will stop sending them straight away.",
+    "tags": [
+      "stop",
+      "unsubscribe",
+      "opt",
+      "out",
+      "reminders",
+      "reminder",
+      "texts",
+      "messages",
+      "spam"
+    ]
+  }
+]

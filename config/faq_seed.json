@@ -2,7 +2,13 @@
   {
     "question": "What are your hours?",
     "answer": "This web chat and our phone/SMS receptionist are available 24/7. Our human team responds Monday to Friday, 9am–5pm AEST.",
-    "tags": ["hours", "open", "available", "time", "closed"]
+    "tags": [
+      "hours",
+      "open",
+      "available",
+      "time",
+      "closed"
+    ]
   },
   {
     "question": "How do I book an appointment?",
@@ -18,7 +24,7 @@
   },
   {
     "question": "How do I cancel or reschedule an appointment?",
-    "answer": "I can't cancel or move existing bookings yet — email us or ask to speak with a human and our team will sort it out for you.",
+    "answer": "To move an appointment, say \"reschedule my appointment\" and give me the new day and time, and I will update the booking and your reminders. To cancel, ask to speak with a person and our team will confirm it.",
     "tags": [
       "cancel",
       "reschedule",
