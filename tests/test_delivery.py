@@ -147,6 +147,21 @@ def test_sms_send_success():
     assert fake_messages.calls[0]["from_"] == "+15550000000"
 
 
+def test_sms_asks_twilio_for_status_callbacks_on_a_public_url(monkeypatch):
+    # PROJ-482: delivery evidence needs Twilio to report back.
+    monkeypatch.setenv("APP_BASE_URL", "https://agent-factory.example/")
+    fake_messages = _FakeMessages()
+    SMSChannel(client=_FakeSMSClient(fake_messages)).send("+15551234567", "Hi", sleep=lambda s: None)
+    assert fake_messages.calls[0]["status_callback"] == "https://agent-factory.example/twilio/status-callback"
+
+
+def test_sms_skips_status_callback_for_local_urls(monkeypatch):
+    monkeypatch.setenv("APP_BASE_URL", "http://localhost:8000")
+    fake_messages = _FakeMessages()
+    SMSChannel(client=_FakeSMSClient(fake_messages)).send("+15551234567", "Hi", sleep=lambda s: None)
+    assert "status_callback" not in fake_messages.calls[0]
+
+
 def test_sms_non_retriable_twilio_error_does_not_retry():
     exc = TwilioRestException(status=400, uri="/Messages", msg="invalid number", code=21211)
     fake_messages = _FakeMessages(side_effect=exc)
