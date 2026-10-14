@@ -189,3 +189,57 @@ def test_delivery_retry_action(client):
     retried_record = retry_resp.json()["record"]
     assert retried_record["status"] == "queued"
     assert retried_record["retry_count"] >= 1
+
+
+def _fake_channel(monkeypatch, result):
+    from app.web_ui import delivery_routes
+
+    calls = []
+
+    class Fake:
+        def send(self, to, message, **kw):
+            calls.append((to, message, kw))
+            return result
+
+    monkeypatch.setattr(delivery_routes, "_channel_for", lambda name: Fake())
+    return calls
+
+
+def test_send_really_hands_the_message_to_the_channel(client, monkeypatch):
+    """POST /delivery/send must call the provider, not only write a history row."""
+    from agent.delivery import DeliveryResult
+
+    calls = _fake_channel(monkeypatch, DeliveryResult(ok=True, channel="email", to="a@example.com"))
+    resp = client.post(
+        "/delivery/send",
+        json={"recipient": "a@example.com", "channel": "email", "message": "See you Friday"},
+    )
+    assert resp.status_code == 200, resp.text
+    assert calls and calls[0][0] == "a@example.com" and calls[0][1] == "See you Friday"
+    assert get_delivery_by_id(resp.json()["message_id"])["status"] == "sent"
+
+
+def test_send_failure_is_recorded_as_failed_and_reported(client, monkeypatch):
+    from agent.delivery import DeliveryResult
+
+    _fake_channel(
+        monkeypatch,
+        DeliveryResult(ok=False, channel="email", to="a@example.com", error="535 bad credentials"),
+    )
+    resp = client.post(
+        "/delivery/send",
+        json={"recipient": "a@example.com", "channel": "email", "message": "x"},
+    )
+    assert resp.status_code == 502
+    assert "535 bad credentials" in resp.json()["detail"]
+    row = client.get("/delivery/history?status=failed&search=a@example.com").json()["items"][0]
+    assert row["status"] == "failed" and "535" in row["error_message"]
+
+
+def test_sms_history_row_uses_the_twilio_sid(client, monkeypatch):
+    """So the Twilio status callback can later mark the same row delivered."""
+    from agent.delivery import DeliveryResult
+
+    _fake_channel(monkeypatch, DeliveryResult(ok=True, channel="sms", to="+15555550101", provider_id="SM123abc"))
+    resp = client.post("/delivery/send", json={"recipient": "+15555550101", "channel": "sms", "message": "x"})
+    assert resp.json()["message_id"] == "SM123abc"
