@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agent Factory — Autonomous Research & Operational AI</title>
-  <meta name="description" content="Agent Factory is an autonomous multi-agent platform combining academic literature research, Amazon commerce intelligence, and a 24/7 AI voice receptionist.">
+  <title>Agent Factory — AI Receptionist & Reminders</title>
+  <meta name="description" content="Agent Factory is a 24/7 AI receptionist and reminder system for clinics, salons, and trades — it answers calls and SMS, books appointments, and follows up, backed by a multi-agent research platform.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
@@ -26,7 +26,8 @@
       <ul class="nav-links" id="nav-links">
         <li><a href="index.html" class="nav-link active">Home</a></li>
         <li><a href="features.html" class="nav-link">Features</a></li>
-        <li><a href="pricing.html" class="nav-link">Architecture & Tiers</a></li>
+        <li><a href="architecture.html" class="nav-link">Architecture & Privacy</a></li>
+        <li><a href="pricing.html" class="nav-link">Deployment Tiers</a></li>
         <li><a href="about.html" class="nav-link">About Project</a></li>
         <li><a href="faq.html" class="nav-link">FAQ</a></li>
       </ul>
@@ -45,30 +46,30 @@
     <!-- Hero Section -->
     <section class="hero">
       <div class="badge">ITECH3208 / 3209 • Capstone Project</div>
-      <h1>Next-Generation <span class="gradient-text">Autonomous AI Agents</span> for Research & Operations</h1>
+      <h1>The <span class="gradient-text">AI Receptionist</span> That Never Misses a Call</h1>
       <p>
-        An enterprise-grade multi-agent platform featuring Claude synthesis, multi-source academic paper retrieval, Amazon commercial intelligence, and an automated 24/7 Voice/SMS Receptionist.
+        Agent Factory answers your phone and SMS 24/7, books the appointment, sends the reminder, and follows up — so a missed call never becomes a missed booking. Built for clinics, salons, and trades, backed by a research-grade multi-agent platform.
       </p>
 
       <div class="hero-cta">
-        <a href="features.html" class="btn btn-primary" id="hero-features-btn">Explore Capabilities</a>
-        <a href="pricing.html" class="btn btn-secondary" id="hero-pricing-btn">Architecture & Specs</a>
+        <a href="architecture.html" class="btn btn-primary" id="hero-pilot-btn">Start a Pilot</a>
+        <a href="features.html" class="btn btn-secondary" id="hero-features-btn">Explore Capabilities</a>
         <a href="faq.html" class="btn btn-secondary" id="hero-faq-btn">Read FAQ</a>
       </div>
 
       <!-- Live Metric Strip -->
       <div class="stats-strip">
         <div class="stat-box">
+          <div class="stat-number" data-target="24" data-suffix="/7">24/7</div>
+          <div class="stat-label">Voice & SMS Receptionist Availability</div>
+        </div>
+        <div class="stat-box">
           <div class="stat-number" data-target="98.5" data-suffix="%">0%</div>
-          <div class="stat-label">Delivery & Reach Rate</div>
+          <div class="stat-label">Reminder Delivery & Reach Rate</div>
         </div>
         <div class="stat-box">
           <div class="stat-number" data-target="3" data-suffix=" APIs">0</div>
           <div class="stat-label">Live Literature Sources (arXiv, Semantic Scholar, PubMed)</div>
-        </div>
-        <div class="stat-box">
-          <div class="stat-number" data-target="24" data-suffix="/7">24/7</div>
-          <div class="stat-label">Voice & SMS Receptionist Availability</div>
         </div>
         <div class="stat-box">
           <div class="stat-number" data-target="100" data-suffix="%">0%</div>
@@ -77,16 +78,76 @@
       </div>
     </section>
 
+    <!-- Who it's for -->
+    <section class="section">
+      <div class="section-header">
+        <div class="badge">Built for Front Desks</div>
+        <h2>Wherever a Missed Call Costs You a Booking</h2>
+        <p>Three kinds of businesses where the phone rings while someone's hands are full — and every unanswered call is a customer who tries the next number.</p>
+      </div>
+
+      <div class="cards-grid">
+        <div class="card">
+          <div class="card-icon">🩺</div>
+          <span class="card-tag">Clinics</span>
+          <h3>Appointment Reminders That Reduce No-Shows</h3>
+          <p>Patients get an SMS or call confirming their slot and a reminder before it, while reception stays free to handle who's in front of them.</p>
+          <ul>
+            <li>Automatic appointment confirmations and reminders</li>
+            <li>Google Calendar sync, with an .ics fallback</li>
+            <li>Quiet hours respected — no reminder at 11pm</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">💇</div>
+          <span class="card-tag">Salons</span>
+          <h3>Bookings Taken Even Mid-Appointment</h3>
+          <p>A stylist mid-cut can't pick up the phone. The receptionist can — it takes the booking, texts a confirmation, and reminds the client the day before.</p>
+          <ul>
+            <li>Voice and SMS booking, Polly TTS in a natural voice</li>
+            <li>Per-client channel preference (SMS, email)</li>
+            <li>Opt-in consent, honoured from the first message</li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <div class="card-icon">🔧</div>
+          <span class="card-tag">Trades</span>
+          <h3>Never Lose a Job to Voicemail</h3>
+          <p>A tradie on a roof or under a car can't answer. The receptionist takes the enquiry, captures the job, and keeps the follow-up reminder on track.</p>
+          <ul>
+            <li>Inbound call and SMS handling, no missed-call voicemail</li>
+            <li>Delivery tracking so you know a reminder landed</li>
+            <li>Escalates to a human the moment it's asked to</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
     <!-- Core Agent Pillars -->
     <section class="section">
       <div class="section-header">
         <div class="badge">Multi-Agent Ecosystem</div>
-        <h2>Designed for Deep Discovery and Real-World Execution</h2>
-        <p>Three specialized agents work cooperatively to automate research synthesis, market product intelligence, and visitor reception.</p>
+        <h2>One Platform, Three Specialised Agents</h2>
+        <p>Reception and reminders lead — backed by the same platform's research synthesis and market intelligence agents.</p>
       </div>
 
       <div class="cards-grid">
-        <!-- Card 1: Academic Literature Agent -->
+        <!-- Card 1: AI Receptionist -->
+        <div class="card" id="card-receptionist">
+          <div class="card-icon">📞</div>
+          <span class="card-tag">Communication & Ops</span>
+          <h3>24/7 AI Receptionist</h3>
+          <p>Natural conversation engine integrated with Twilio Voice and SMS, Amazon Polly TTS, multi-turn dialog memory, and automatic Google Calendar appointment booking.</p>
+          <ul>
+            <li>Inbound SMS & phone call handling with Polly.Joanna voice</li>
+            <li>ChromaDB vector store RAG semantic search over site knowledge</li>
+            <li>Delivery tracking, email bounce handling, and operator dashboard</li>
+          </ul>
+        </div>
+
+        <!-- Card 2: Academic Literature Agent -->
         <div class="card" id="card-literature">
           <div class="card-icon">📚</div>
           <span class="card-tag">Research Intelligence</span>
@@ -99,7 +160,7 @@
           </ul>
         </div>
 
-        <!-- Card 2: Amazon Commercial Scraper -->
+        <!-- Card 3: Amazon Commercial Scraper -->
         <div class="card" id="card-amazon">
           <div class="card-icon">🛒</div>
           <span class="card-tag">E-Commerce Scraper</span>
@@ -111,19 +172,6 @@
             <li>TTL disk caching to minimize latency and avoid rate limits</li>
           </ul>
         </div>
-
-        <!-- Card 3: AI Receptionist -->
-        <div class="card" id="card-receptionist">
-          <div class="card-icon">📞</div>
-          <span class="card-tag">Communication & Ops</span>
-          <h3>24/7 AI Receptionist</h3>
-          <p>Natural conversation engine integrated with Twilio Voice and SMS, Amazon Polly TTS, multi-turn dialog memory, and automatic Google Calendar appointment booking.</p>
-          <ul>
-            <li>Inbound SMS & phone call handling with Polly.Joanna voice</li>
-            <li>ChromaDB vector store RAG semantic search over site knowledge</li>
-            <li>Delivery tracking, email bounce handling, and operator dashboard</li>
-          </ul>
-        </div>
       </div>
     </section>
 
@@ -132,7 +180,7 @@
       <div class="section-header">
         <div class="badge">System Architecture</div>
         <h2>Modular, Resilient, and Privacy-Focused</h2>
-        <p>Built with FastAPI, SQLite WAL storage, ChromaDB vector search, and containerized Docker isolation.</p>
+        <p>Built with FastAPI, SQLite WAL storage, ChromaDB vector search, and containerized Docker isolation. See the full <a href="architecture.html" style="color: var(--accent-secondary);">architecture &amp; privacy breakdown →</a></p>
       </div>
 
       <div class="architecture-box">
@@ -178,7 +226,8 @@
         <ul>
           <li><a href="index.html">Home</a></li>
           <li><a href="features.html">Features</a></li>
-          <li><a href="pricing.html">Architecture & Tiers</a></li>
+          <li><a href="architecture.html">Architecture & Privacy</a></li>
+          <li><a href="pricing.html">Deployment Tiers</a></li>
           <li><a href="about.html">About Project</a></li>
           <li><a href="faq.html">FAQ</a></li>
         </ul>
@@ -187,9 +236,9 @@
       <div class="footer-links">
         <h4>Agents</h4>
         <ul>
+          <li><a href="features.html#receptionist">AI Receptionist</a></li>
           <li><a href="features.html#literature">Literature Review</a></li>
           <li><a href="features.html#amazon">Amazon Intelligence</a></li>
-          <li><a href="features.html#receptionist">AI Receptionist</a></li>
           <li><a href="features.html#integrity">Academic Integrity</a></li>
         </ul>
       </div>
