@@ -61,19 +61,21 @@ first, for one organisation, and writes them with Python's `csv` module.
   After that, the caller's speech is checked with `detect_language`, and the voice follows.
   It is a simple word and script check, not a trained model, so short or mixed phrases can
   be missed.
-- **Does it scale to many organisations?** Not yet. The dashboard feed and the analytics
-  export are not organisation-scoped (the analytics tables have no organisation column).
-  For one organisation that is fine; for many it would leak counts across them. Say this
-  plainly and describe the fix: add an organisation id to the delivery history.
+- **Does it scale to many organisations?** Yes for the dashboard data now (PROJ-501). Activity,
+  delivery history, call summaries, analytics, CSV exports and the live feed each carry an
+  `org_id`, every read is filtered to the caller's organisation, and inbound Twilio traffic is
+  filed under the organisation that owns the dialled number (`auth/sms_routing`). Rows from before
+  the column existed belong to the default organisation. Known limits: if a Twilio number matches
+  no organisation (two organisations sharing the project's one number) the traffic is treated as
+  the default organisation's, and the escalation list is still a single file.
 - **Is the data safe on the dashboard feed?** Now yes (login required), but it was not
   before we reviewed it. Explain finding 1 above; it shows you understand why middleware
   does not cover WebSockets.
 - **Why is SMS not shown delivering?** US carriers block unregistered texts from our US
   number. The registration is submitted and waiting. Voice, email and the dashboard are
   unaffected.
-- **What would you do next?** Scope analytics per organisation, add a contact or sign-up
-  form behind "Start a Pilot", and bring the Features page in line with the reminders
-  positioning (it still describes the research agents).
+- **What would you do next?** Per-organisation escalations, a contact or sign-up form behind
+  "Start a Pilot", and a real mapping of Twilio numbers to organisations for shared numbers.
 
 ## Run it yourself before the session
 

@@ -140,7 +140,7 @@ def summarise_call(turns: list[dict], client=None, model: str | None = None) -> 
     return result
 
 
-def finalize_call(call_sid: str, caller: str, memory, client=None) -> dict | None:
+def finalize_call(call_sid: str, caller: str, memory, client=None, org_id: int | None = None) -> dict | None:
     """Summarise and store one call exactly once. Safe to call repeatedly
     (goodbye and the status callback both fire it). Returns the stored record,
     or None if there was nothing to summarise or it was already done."""
@@ -152,5 +152,5 @@ def finalize_call(call_sid: str, caller: str, memory, client=None) -> dict | Non
     if not turns:
         return None
     result = summarise_call(turns, client=client)
-    save_call_summary(call_sid, caller, result["summary"], result["sentiment"], result["priority"], len(turns))
+    save_call_summary(call_sid, caller, result["summary"], result["sentiment"], result["priority"], len(turns), org_id)
     return result

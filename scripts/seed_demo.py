@@ -4,6 +4,11 @@ scripts/seed_demo.py — load a demo account and sample data for the poster
 session, through the app's own HTTP API (so it exercises the real code paths).
 
     python3 scripts/seed_demo.py [base_url]        # default http://localhost:8000
+    python3 scripts/seed_demo.py --with-sample-analytics   # also add random sample
+                                                          # delivery records (labelled
+                                                          # as sample data on the dashboard)
+
+By default the analytics tab starts empty and fills from real traffic only.
 
 Safe by design:
   * every phone number is a fictional US 555-01xx number (reserved for fiction)
@@ -28,7 +33,9 @@ DEMO_ORG = "Demo Dental Clinic"
 # Public deployments set DEMO_PASSWORD so the well-known default is never live.
 DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD") or "AgentFactory-Demo-2026"
 
-BASE = (sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000").rstrip("/")
+_ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
+WITH_SAMPLE_ANALYTICS = "--with-sample-analytics" in sys.argv[1:]
+BASE = (_ARGS[0] if _ARGS else "http://localhost:8000").rstrip("/")
 
 CONTACTS = [
     ("+15555550101", "Alex Rivera",   "alex.rivera@example.com",   "sms",   "opted_in"),
@@ -119,8 +126,11 @@ def main():
         s, _ = call("POST", "/crm/api/templates", TEMPLATE)
     print(f"template: {'ready' if s in (200, 201) else f'skipped ({s})'}")
 
-    s, r = call("POST", "/analytics/seed-demo-data?count=40")
-    print(f"analytics demo data: {'loaded' if s == 200 else f'skipped ({s})'}")
+    if WITH_SAMPLE_ANALYTICS:
+        s, r = call("POST", "/analytics/seed-demo-data?count=40")
+        print(f"analytics sample data: {'loaded' if s == 200 else f'skipped ({s})'} (labelled as sample on the dashboard)")
+    else:
+        print("analytics: left empty, it fills from real traffic (use --with-sample-analytics for sample records)")
     print(f"\nOpen {BASE}/login and sign in as {DEMO_EMAIL}")
 
 

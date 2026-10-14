@@ -37,6 +37,7 @@ from twilio.twiml.voice_response import Gather, VoiceResponse
 from fastapi.responses import JSONResponse
 
 from agent.call_summary import finalize_call
+from auth.sms_routing import resolve_org_by_twilio_number
 from agent.receptionist import Receptionist
 from app.web_ui.activity_db import log_activity, log_delivery_event, update_delivery_status
 from app.web_ui.dashboard_routes import log_escalation
@@ -67,7 +68,32 @@ GOODBYE_WORDS = {"goodbye", "bye", "hang up", "end call", "that's all", "no than
 log = logging.getLogger("agent_factory.twilio")
 
 
-def _summarise_call_later(call_sid: str, caller: str) -> None:
+def _activity_intent(result: dict) -> str:
+    """The intent recorded in the activity log. A booking that really went through is
+    logged as appointment_booked so the Booked tile counts bookings, not questions."""
+    if result.get("booked") is True:
+        return "appointment_booked"
+    return result.get("intent", "")
+
+
+def _org_for(*numbers: str) -> int | None:
+    """Which organisation owns this conversation? Looked up from our Twilio number
+    (the To of an inbound call or text, the From of an outbound status callback).
+    None when nothing matches, which the dashboards read as the default
+    organisation's legacy data rather than guessing (PROJ-501)."""
+    for number in numbers:
+        if not number:
+            continue
+        try:
+            org = resolve_org_by_twilio_number(number)
+        except Exception:  # noqa: BLE001 - a lookup problem must never break a call
+            org = None
+        if org is not None:
+            return org
+    return None
+
+
+def _summarise_call_later(call_sid: str, caller: str, org_id: int | None = None) -> None:
     """Tag a finished call with a summary, sentiment and priority (PROJ-477).
     Runs in a thread so the Claude call never delays the TwiML reply Twilio is
     waiting on; any failure is logged and never reaches the caller."""
@@ -76,7 +102,7 @@ def _summarise_call_later(call_sid: str, caller: str) -> None:
 
     def _run() -> None:
         try:
-            finalize_call(call_sid, caller, _receptionist.memory)
+            finalize_call(call_sid, caller, _receptionist.memory, org_id=org_id)
         except Exception:  # noqa: BLE001
             log.exception("post-call summary failed for %s", call_sid)
 
@@ -186,8 +212,9 @@ async def sms_webhook(
     log_activity(
         channel="sms",
         caller=From or "unknown",
-        intent=result.get("intent", ""),
+        intent=_activity_intent(result),
         summary=reply[:200],
+        org_id=_org_for(To),
     )
 
     twiml = MessagingResponse()
@@ -295,6 +322,7 @@ async def voice_reply(
     SpeechResult: str = Form(default=""),
     CallSid: str = Form(default=""),
     From: str = Form(default=""),
+    To: str = Form(default=""),
 ) -> Response:
     """
     Receive Twilio's SpeechResult, query the AI Receptionist, and speak
@@ -354,7 +382,7 @@ async def voice_reply(
             del _call_lang[CallSid]
         resp.say(goodbye_phrases.get(lang_code, goodbye_phrases["en-AU"]), voice=voice, language=lang)
         resp.hangup()
-        _summarise_call_later(CallSid, From)
+        _summarise_call_later(CallSid, From, _org_for(To))
         return Response(content=str(resp), media_type="application/xml")
 
     # Empty transcript fallback
@@ -380,8 +408,9 @@ async def voice_reply(
     log_activity(
         channel="voice",
         caller=CallSid or "unknown",
-        intent=result.get("intent", ""),
+        intent=_activity_intent(result),
         summary=reply[:200],
+        org_id=_org_for(To),
     )
 
     # Trim to ~250 words for voice suitability
@@ -480,6 +509,7 @@ async def twilio_status_callback(
             reminder_type="voice_call" if channel == "voice" else "sms_reminder",
             status=status,
             metadata={"from": From, "error_code": ErrorCode, "error_message": ErrorMessage},
+            org_id=_org_for(To, From),
         )
         if ErrorCode or ErrorMessage or status in ("failed", "undelivered"):
             update_delivery_status(msg_id, status, ErrorCode, ErrorMessage)
@@ -491,12 +521,13 @@ async def twilio_status_callback(
             caller=To or "unknown",
             intent="delivery_failure",
             summary=f"Delivery failed for {msg_id}: {ErrorMessage or ErrorCode or status}",
+            org_id=_org_for(To, From),
         )
 
     # A completed inbound call that never said goodbye (caller just hung up)
     # still gets its post-call summary (PROJ-477).
     if channel == "voice" and status.lower() == "completed":
-        _summarise_call_later(CallSid or msg_id, From or To)
+        _summarise_call_later(CallSid or msg_id, From or To, _org_for(To, From))
 
     return Response(content="<Response/>", media_type="application/xml")
 

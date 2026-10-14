@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from auth.rbac import require_admin
+from auth.rbac import require_admin, require_org_member
 
 from app.web_ui.activity_db import (
     add_email_suppression,
@@ -65,6 +65,7 @@ async def list_delivery_history(
     status: Optional[str] = Query(default=None, description="Filter by status: queued, sent, delivered, failed, bounced, undelivered"),
     channel: Optional[str] = Query(default=None, description="Filter by channel: sms, email, voice"),
     search: Optional[str] = Query(default=None, description="Search recipient, message_id, or error"),
+    identity: dict = Depends(require_org_member),
 ):
     """
     Return paginated delivery history records per reminder.
@@ -76,13 +77,14 @@ async def list_delivery_history(
         status=status,
         channel=channel,
         search=search,
+        org_id=identity["org_id"],
     )
 
 
 @router.get("/history/{delivery_id}")
-async def get_delivery_record(delivery_id: str):
+async def get_delivery_record(delivery_id: str, identity: dict = Depends(require_org_member)):
     """Fetch single delivery record by numerical ID or message_id (PROJ-434)."""
-    record = get_delivery_by_id(delivery_id)
+    record = get_delivery_by_id(delivery_id, identity["org_id"])
     if not record:
         raise HTTPException(status_code=404, detail=f"Delivery record '{delivery_id}' not found.")
     return record
@@ -94,7 +96,8 @@ async def retry_delivery(delivery_id: str, identity: dict = Depends(require_admi
     Retry a failed or bounced delivery message.
     Increments retry count and sets status back to queued (PROJ-434).
     """
-    record = get_delivery_by_id(delivery_id)
+    org_id = identity["org_id"]
+    record = get_delivery_by_id(delivery_id, org_id)
     if not record:
         raise HTTPException(status_code=404, detail=f"Delivery record '{delivery_id}' not found.")
 
@@ -104,12 +107,13 @@ async def retry_delivery(delivery_id: str, identity: dict = Depends(require_admi
             detail=f"Cannot retry: recipient '{record.get('recipient')}' is currently on the suppression list due to a previous bounce."
         )
 
-    updated = retry_delivery_message(delivery_id)
+    updated = retry_delivery_message(delivery_id, org_id)
     log_activity(
         channel=record.get("channel", "sms"),
         caller=record.get("recipient", "unknown"),
         intent="delivery_retry",
         summary=f"Manually retried reminder {record.get('message_id')} (attempt #{updated.get('retry_count', 1)})",
+        org_id=org_id,
     )
     return {"status": "retrying", "record": updated}
 
@@ -140,6 +144,7 @@ async def send_reminder(payload: SendReminderRequest, identity: dict = Depends(r
         reminder_type=payload.reminder_type,
         status="sent",
         metadata=meta,
+        org_id=identity["org_id"],
     )
 
     log_activity(
@@ -147,6 +152,7 @@ async def send_reminder(payload: SendReminderRequest, identity: dict = Depends(r
         caller=recipient,
         intent=f"reminder_{payload.reminder_type}",
         summary=f"Sent {payload.reminder_type} reminder to {recipient} [{msg_id}]",
+        org_id=identity["org_id"],
     )
 
     return {"status": "sent", "message_id": msg_id, "record": record}
@@ -203,6 +209,10 @@ async def handle_email_bounce(request: Request):
         is_hard = "hard" in event_type or "reject" in event_type or "complaint" in event_type or "550" in diag_code
         status = "bounced" if ("bounce" in event_type or is_hard) else "failed"
 
+        # The bounce belongs to whichever organisation sent the original message.
+        existing = get_delivery_by_id(msg_id) if msg_id else None
+        event_org = existing.get("org_id") if existing else None
+
         # Update delivery tracking record if message_id provided
         if msg_id:
             update_delivery_status(
@@ -234,6 +244,7 @@ async def handle_email_bounce(request: Request):
             caller=recipient or "unknown",
             intent="email_bounce",
             summary=f"Email bounce ({event_type}) for {recipient}: {reason[:100]}",
+            org_id=event_org,
         )
 
         processed.append({"recipient": recipient, "status": status, "suppressed": is_hard})
