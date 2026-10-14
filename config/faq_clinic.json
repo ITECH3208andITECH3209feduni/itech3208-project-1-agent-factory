@@ -76,7 +76,7 @@
   },
   {
     "question": "Do you handle dental emergencies?",
-    "answer": "Yes. For a toothache, a broken or knocked-out tooth, or swelling, say \"I'd like to talk to a person\" and I will flag your message for our team, or book the earliest time you can see in the calendar. If you have severe swelling affecting your breathing or swallowing, or heavy bleeding, call 000 now.",
+    "answer": "Yes. Tell me about a toothache, a broken or knocked-out tooth, swelling or bleeding and I will flag it as urgent for our team straight away, and I can book the earliest time you give me. If you have severe swelling affecting your breathing or swallowing, or heavy bleeding, call 000 now.",
     "tags": [
       "emergency",
       "urgent",

@@ -47,6 +47,24 @@ clearly wants deep product or paper research, gently point them at the
 research yourself.
 Keep replies to 2-4 sentences unless the question genuinely needs more."""
 
+CLINIC_SYSTEM_PROMPT = """You are the front-desk AI receptionist for {name}, a dental clinic.
+Be warm, brief, and helpful. You help with opening hours, services, booking
+and moving appointments, and getting a message to the team. You are not a
+dentist: never diagnose, never recommend medicines or treatment, and never
+quote prices. For pain, swelling or an emergency, tell the person to ask for a
+person (or to call 000 if it is severe). If you do not know something about the
+clinic, say so and offer to flag the message for the team.
+Keep replies to 2-4 sentences unless the question genuinely needs more."""
+
+
+def _system_prompt() -> str:
+    import os
+
+    if os.environ.get("BRAND_MODE", "").strip().lower() == "clinic":
+        return CLINIC_SYSTEM_PROMPT.format(name=os.environ.get("BRAND_NAME", "").strip() or "the clinic")
+    return RECEPTIONIST_SYSTEM_PROMPT
+
+
 APPOINTMENT_EXTRACT_PROMPT = """Extract appointment details from the user's message.
 Today's date/time is: {now} ({timezone}).
 
@@ -67,6 +85,16 @@ _ESCALATE_KEYWORDS = {
     "human", "person", "representative", "manager", "escalate",
     "someone else", "real person", "speak to someone", "talk to someone",
 }
+# A dental emergency is flagged for the team straight away, whatever else is asked.
+_URGENT_KEYWORDS = (
+    "emergency", "urgent", "toothache", "tooth ache", "tooth pain", "severe pain",
+    "knocked out", "knocked-out", "broken tooth", "swelling", "swollen", "bleeding", "abscess",
+)
+_CALLBACK_PHRASES = (
+    "call me back", "call back", "callback", "ring me", "phone me", "give me a call", "call me",
+)
+_PHONE_RE = re.compile(r"\+?\d[\d\s\-()]{7,}\d")
+
 _APPOINTMENT_KEYWORDS = {
     "book", "appointment", "schedule", "meeting", "reserve",
     "reservation", "consult", "consultation", "book me", "set up a call",
@@ -89,6 +117,7 @@ class Receptionist:
         self.memory = SessionMemory()
         self._pending_bookings: dict[str, dict] = {}
         self._pending_reschedules: dict[str, dict] = {}
+        self._pending_callbacks: dict[str, float] = {}
 
     # ── Main entry point ─────────────────────────────────────────
     def handle(
@@ -132,6 +161,31 @@ class Receptionist:
             self.memory.save_context(message, "receptionist_general", answer, session_id=session_id)
             return {"answer": answer, "intent": "general"}
 
+        # 0b. Call-backs and emergencies go to the team before anything else, so
+        # "book me a call back" or "emergency booking" are not mistaken for an
+        # ordinary appointment or a FAQ question.
+        callback = self._handle_callback(message, session_id, contact_channel, contact_address)
+        if callback:
+            self.memory.save_context(message, "receptionist_escalate", callback["answer"], session_id=session_id)
+            return callback
+
+        urgent_notice = ""
+        if self._is_urgent(message):
+            self._log_escalation(
+                message, session_id, label="URGENT", priority="high",
+                contact=self._callback_number(message, contact_channel, contact_address),
+            )
+            urgent_notice = (
+                "I'm sorry you're dealing with this. I've flagged it as urgent for our team "
+                "and they will follow up as soon as possible. If you have severe swelling "
+                "affecting your breathing or swallowing, heavy bleeding, or a head injury, "
+                "call 000 now."
+            )
+            if not (pending or self._wants_appointment(message)):
+                answer = urgent_notice + " If you would like the earliest time we have, tell me a day and time and I will book it."
+                self.memory.save_context(message, "receptionist_escalate", answer, session_id=session_id)
+                return {"answer": answer, "intent": "escalate", "urgent": True}
+
         # 1. FAQ lookup first (PROJ-214: KB before skill routing)
         # With a booking open, "let me talk to a person" hands off straight
         # away instead of getting the FAQ blurb about how to ask for one.
@@ -165,6 +219,9 @@ class Receptionist:
         if pending or self._wants_appointment(message):
             combined = " ".join(pending["messages"] + [message]) if pending else message
             result = self._handle_appointment(combined, session_id, contact_channel, contact_address)
+            if urgent_notice:
+                result["answer"] = urgent_notice + "\n\n" + result["answer"]
+                result["urgent"] = True
             if result.get("needs_info"):
                 self._pending_bookings[self._pending_key(session_id)] = {
                     "messages": (pending["messages"] if pending else []) + [message],
@@ -207,13 +264,80 @@ class Receptionist:
         m = message.lower()
         return any(k in m for k in _APPOINTMENT_KEYWORDS)
 
+    # ── Urgent and call-back requests ────────────────────────────
+    @staticmethod
+    def _is_urgent(message: str) -> bool:
+        m = message.lower()
+        if "not urgent" in m or "non-urgent" in m or "non urgent" in m:
+            return False
+        return any(k in m for k in _URGENT_KEYWORDS)
+
+    @staticmethod
+    def _wants_callback(message: str) -> bool:
+        m = message.lower()
+        return any(k in m for k in _CALLBACK_PHRASES)
+
+    @staticmethod
+    def _callback_number(message: str, contact_channel: str | None, contact_address: str | None) -> str | None:
+        """The number to call back: the one in the message, else the caller's own
+        (Twilio always knows it for texts and calls)."""
+        found = _PHONE_RE.search(message or "")
+        if found:
+            return " ".join(found.group(0).split())
+        if contact_channel in ("sms", "voice") and contact_address:
+            return contact_address
+        return None
+
+    def _handle_callback(
+        self, message: str, session_id: str | None, contact_channel: str | None, contact_address: str | None
+    ) -> dict | None:
+        key = self._pending_key(session_id)
+        waiting = self._pending_callbacks.get(key)
+        if waiting and time.time() - waiting > _PENDING_BOOKING_TTL:
+            self._pending_callbacks.pop(key, None)
+            waiting = None
+
+        if not (waiting or self._wants_callback(message)):
+            return None
+
+        number = self._callback_number(message, contact_channel, contact_address)
+        if number is None:
+            self._pending_callbacks[key] = time.time()
+            return {
+                "answer": "Happy to arrange a call back. What number should our team call you on?",
+                "intent": "escalate",
+            }
+
+        self._pending_callbacks.pop(key, None)
+        self._log_escalation(
+            message, session_id, label="CALL BACK", priority="high" if self._is_urgent(message) else "normal",
+            contact=number,
+        )
+        return {
+            "answer": f"I've asked our team to call you back on {number}. They will ring you on the next working day, "
+            "or sooner if it is urgent. Is there anything else I can help with?",
+            "intent": "escalate",
+        }
+
     # ── Escalation logging ───────────────────────────────────────
-    def _log_escalation(self, message: str, session_id: str | None) -> None:
+    def _log_escalation(
+        self,
+        message: str,
+        session_id: str | None,
+        label: str | None = None,
+        priority: str = "normal",
+        contact: str | None = None,
+    ) -> None:
+        reason = message if not label else f"{label}: {message}" + (f" (call {contact})" if contact else "")
         entry = {
             "timestamp": datetime.now().isoformat(),
             "session_id": session_id or "unknown",
             "message": message,
+            "reason": reason,
+            "priority": priority,
         }
+        if contact:
+            entry["contact"] = contact
         try:
             import os
 
@@ -697,7 +821,7 @@ class Receptionist:
             resp = self.client.messages.create(
                 model=CLAUDE_MODEL,
                 max_tokens=250,
-                system=RECEPTIONIST_SYSTEM_PROMPT,
+                system=_system_prompt(),
                 messages=[
                     {
                         "role": "user",
