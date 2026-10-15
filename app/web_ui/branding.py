@@ -50,27 +50,3 @@ def page(path: str, *, dashboard: bool = False, headers: dict | None = None):
         if dashboard:
             html = html.replace("</body>", _OPEN_RECEPTIONIST + "</body>", 1)
     return HTMLResponse(html, headers=headers or _NO_CACHE)
-
-
-_BRAIN_LOGO = '<img src="img/logo.svg" alt="" width="36" height="36">'
-_TOOTH_LOGO = '<span style="font-size:30px;line-height:1" aria-hidden="true">\U0001F9B7</span>'
-
-
-def brand_site(html: str, home: bool = False) -> str:
-    """The information website, branded the same way as the app.
-
-    The home page reads naturally with the clinic name throughout. The other pages
-    describe the project itself ("Agent Factory is a capstone project..."), so only
-    the header, footer and tab title change there and the sentences stay true."""
-    name = brand_name()
-    if name == DEFAULT_NAME and not clinic_mode():
-        return html
-    safe = name.replace("&", "&amp;").replace("<", "&lt;")
-    if home:
-        html = html.replace(DEFAULT_NAME, safe)
-    else:
-        html = html.replace(f"<span>{DEFAULT_NAME}</span>", f"<span>{safe}</span>")
-        html = html.replace(f" \u2014 {DEFAULT_NAME}</title>", f" \u2014 {safe}</title>")
-    if clinic_mode():
-        html = html.replace(_BRAIN_LOGO, _TOOTH_LOGO)
-    return html

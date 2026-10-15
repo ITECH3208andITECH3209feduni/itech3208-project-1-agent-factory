@@ -48,6 +48,16 @@ from integrations.sms_consent import handle_inbound
 
 router = APIRouter()
 
+
+def _say_brand(phrases: dict) -> dict:
+    """The name callers hear: BRAND_NAME when set (the clinic demo), else Agent Factory."""
+    import os
+
+    name = os.environ.get("BRAND_NAME", "").strip()
+    if not name or name == "Agent Factory":
+        return phrases
+    return {lang: text.replace("Agent Factory", name) for lang, text in phrases.items()}
+
 # One shared receptionist — the memory module handles per-session context
 # via session_id. Was Orchestrator (generic query routing) until now;
 # Receptionist adds FAQ lookup, human escalation, and appointment
@@ -283,7 +293,7 @@ async def voice_greeting(request: Request) -> Response:
     if call_sid:
         _call_lang[call_sid] = lang_param
 
-    greetings = {
+    greetings = _say_brand({
         "en-AU": "Hello! Thank you for calling Agent Factory. How can I help you today?",
         "en-US": "Hello! Thank you for calling Agent Factory. How can I help you today?",
         "es-US": "¡Hola! Gracias por llamar a Agent Factory. ¿En qué puedo ayudarle?",
@@ -291,7 +301,7 @@ async def voice_greeting(request: Request) -> Response:
         "cmn-CN": "您好！感谢致电 Agent Factory。我今天可以怎么帮助您？",
         "fr-FR": "Bonjour ! Merci d'appeler Agent Factory. Comment puis-je vous aider aujourd'hui ?",
         "de-DE": "Hallo! Vielen Dank für Ihren Anruf bei Agent Factory. Wie kann ich Ihnen helfen?",
-    }
+    })
     fallbacks = {
         "en-AU": "Sorry, I didn't hear anything. Please call back when you're ready.",
         "en-US": "Sorry, I didn't hear anything. Please call back when you're ready.",
@@ -346,7 +356,7 @@ async def voice_reply(
         _call_lang[CallSid] = lang_code   # remember for subsequent turns
     voice, lang = resolve_voice(lang_code)
 
-    goodbye_phrases = {
+    goodbye_phrases = _say_brand({
         "en-AU": "Thank you for calling Agent Factory. Have a wonderful day. Goodbye!",
         "en-US": "Thank you for calling Agent Factory. Have a wonderful day. Goodbye!",
         "es-US": "Gracias por llamar a Agent Factory. ¡Que tenga un buen día!",
@@ -354,7 +364,7 @@ async def voice_reply(
         "cmn-CN": "感谢致电 Agent Factory。祝您有美好的一天，再见！",
         "fr-FR": "Merci d'avoir appelé Agent Factory. Bonne journée. Au revoir !",
         "de-DE": "Danke für Ihren Anruf bei Agent Factory. Einen schönen Tag noch. Auf Wiederhören!",
-    }
+    })
     retry_phrases = {
         "en-AU": "I'm sorry, I didn't catch that. Could you please repeat your question?",
         "en-US": "I'm sorry, I didn't catch that. Could you please repeat your question?",
