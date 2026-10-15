@@ -193,3 +193,36 @@ def test_language_controls_require_login():
     anon.cookies.clear()  # conftest signs test clients in by default
     assert anon.get("/twilio/voice/languages").status_code == 401
     assert anon.post("/twilio/voice/language", json={"language": "es-US"}).status_code == 401
+
+
+class TestCallerHearsTheBrandName:
+    """The greeting and goodbye say BRAND_NAME (the clinic demo), not Agent Factory."""
+
+    def _post(self, path, data):
+        client = TestClient(_make_twilio_app())
+        return client.post(path, data=data)
+
+    def test_greeting_uses_the_brand_name(self, monkeypatch):
+        monkeypatch.setenv("BRAND_NAME", "Bright Smile Dental")
+        text = self._post("/twilio/voice", {"CallSid": "CA1", "From": "+15550000001", "To": "+15550000002"}).text
+        assert "Bright Smile Dental" in text and "Agent Factory" not in text
+
+    def test_greeting_is_unchanged_without_a_brand_name(self, monkeypatch):
+        monkeypatch.delenv("BRAND_NAME", raising=False)
+        text = self._post("/twilio/voice", {"CallSid": "CA2", "From": "+15550000001", "To": "+15550000002"}).text
+        assert "Agent Factory" in text
+
+    def test_goodbye_uses_the_brand_name(self, monkeypatch):
+        monkeypatch.setenv("BRAND_NAME", "Bright Smile Dental")
+        text = self._post(
+            "/twilio/voice/reply",
+            {"CallSid": "CA3", "From": "+15550000001", "To": "+15550000002", "SpeechResult": "goodbye"},
+        ).text
+        assert "Bright Smile Dental" in text and "Agent Factory" not in text
+
+    def test_every_language_is_rebranded(self, monkeypatch):
+        from app.web_ui.twilio_routes import _say_brand
+
+        monkeypatch.setenv("BRAND_NAME", "Bright Smile Dental")
+        out = _say_brand({"es-US": "Gracias por llamar a Agent Factory.", "cmn-CN": "感谢致电 Agent Factory。"})
+        assert all("Bright Smile Dental" in v and "Agent Factory" not in v for v in out.values())

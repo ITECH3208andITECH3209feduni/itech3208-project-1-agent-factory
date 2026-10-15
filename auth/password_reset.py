@@ -154,7 +154,7 @@ def _send_via_smtp(to_email: str, reset_url: str) -> bool:
     )
 
     msg = EmailMessage()
-    msg["Subject"] = "Reset your Agent Factory password"
+    msg["Subject"] = f"Reset your {os.environ.get('BRAND_NAME', '').strip() or 'Agent Factory'} password"
     msg["From"] = sender
     msg["To"] = to_email
     msg.set_content(
