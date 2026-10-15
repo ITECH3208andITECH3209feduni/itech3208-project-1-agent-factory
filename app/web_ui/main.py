@@ -219,7 +219,7 @@ async def serve_showcase():
         return {"message": "Showcase site not found."}
     with open(site_index, encoding="utf-8") as fh:
         html = fh.read().replace("<head>", '<head>\n  <base href="/site/">', 1)
-    return HTMLResponse(branding.brand_site(html, home=True), headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
+    return HTMLResponse(html, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
 
 
 @app.get("/site/{page_name:path}", include_in_schema=False)
@@ -232,11 +232,7 @@ async def serve_site_page(page_name: str):
     root = os.path.realpath(_SITE_DIR)
     page_path = os.path.realpath(os.path.join(root, page_name))
     if page_path.startswith(root + os.sep) and os.path.isfile(page_path):
-        no_cache = {"Cache-Control": "no-store, no-cache, must-revalidate"}
-        if page_path.endswith(".html"):
-            with open(page_path, encoding="utf-8") as fh:
-                return HTMLResponse(branding.brand_site(fh.read()), headers=no_cache)
-        return FileResponse(page_path, headers=no_cache)
+        return FileResponse(page_path, headers={"Cache-Control": "no-store, no-cache, must-revalidate"})
     raise HTTPException(status_code=404, detail=f"Page '{page_name}' not found.")
 
 
