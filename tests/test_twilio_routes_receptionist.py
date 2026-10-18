@@ -26,10 +26,10 @@ def _stub_activity_and_consent(monkeypatch):
 def test_sms_webhook_calls_receptionist_with_contact_info(client, monkeypatch):
     captured = {}
 
-    def fake_handle(message, session_id=None, contact_channel=None, contact_address=None):
+    def fake_handle(message, session_id=None, contact_channel=None, contact_address=None, org_id=None):
         captured.update(
             message=message, session_id=session_id,
-            contact_channel=contact_channel, contact_address=contact_address,
+            contact_channel=contact_channel, contact_address=contact_address, org_id=org_id,
         )
         return {"answer": "Sure, here's the answer.", "intent": "faq"}
 
@@ -68,10 +68,10 @@ def test_sms_webhook_strips_markdown_from_receptionist_answer(client, monkeypatc
 def test_voice_reply_calls_receptionist_with_contact_info(client, monkeypatch):
     captured = {}
 
-    def fake_handle(message, session_id=None, contact_channel=None, contact_address=None):
+    def fake_handle(message, session_id=None, contact_channel=None, contact_address=None, org_id=None):
         captured.update(
             message=message, session_id=session_id,
-            contact_channel=contact_channel, contact_address=contact_address,
+            contact_channel=contact_channel, contact_address=contact_address, org_id=org_id,
         )
         return {"answer": "Your appointment is booked.", "intent": "appointment"}
 

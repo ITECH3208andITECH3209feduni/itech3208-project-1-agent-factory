@@ -549,6 +549,13 @@ body {
 .cal-row-time { font-size: 12px; color: var(--violet); font-weight: 600; margin-bottom: 2px; }
 .cal-row-summary { color: var(--text); }
 .cal-row-from { font-size: 11px; color: var(--text2); margin-top: 2px; }
+.cal-row-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.cal-status {
+  font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 6px;
+  text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap;
+}
+.cal-status-unconfirmed { background: rgba(245,158,11,0.15); color: var(--amber);   border: 1px solid rgba(245,158,11,0.3); }
+.cal-status-confirmed   { background: rgba(16,185,129,0.15); color: var(--emerald); border: 1px solid rgba(16,185,129,0.3); }
 
 /* ── Theme Customization (PROJ-442) ── */
 [data-theme="light"] {

@@ -59,6 +59,9 @@ AMAZON_HEADERS    = {
 
 # ── Memory / persistence ───────────────────────────────────────
 MEMORY_DB         = os.environ.get("MEMORY_DB") or os.path.join(_BASE_DIR, "outputs", "memory.db")
+# Receptionist bookings (agent/bookings.py). Defaults to the same folder as
+# memory.db, so on Render it lands in /data and is saved with everything else.
+BOOKINGS_DB       = os.environ.get("BOOKINGS_DB") or os.path.join(os.path.dirname(MEMORY_DB), "bookings.db")
 MEMORY_FILE       = os.path.join(_BASE_DIR, "outputs", "memory.json")  # kept for one-shot migration
 MAX_HISTORY_ITEMS = 50    # keep last N queries in memory
 
