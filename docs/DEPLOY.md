@@ -78,9 +78,14 @@ instances would overwrite each other's copy).
 1. Make a project Gmail account, turn on 2-step verification, then create an **App password** (Google Account → Security → App passwords). Use that 16-character password, never the normal one.
 2. Locally: `./scripts/set_gmail_smtp.sh` writes the `SMTP_*` values into `.env` without the password appearing on screen.
 3. Prove it from your machine: `python scripts/email_smoke.py --to <your address> --reminder`. It sends one direct email, then schedules a real reminder one minute out (in a throwaway store) and runs the reminder bridge until it is sent. Both should print `PASS`. Screenshot the output and the two received emails.
-4. On Render: **Environment** tab → set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USERNAME` and `SMTP_FROM_EMAIL` to the Gmail address, `SMTP_PASSWORD` to the app password, and `APP_BASE_URL` to the `https://<name>.onrender.com` address (reset links use it). Save; Render redeploys.
-5. Password reset on the live site: the demo login (`poster.demo@example.com`) is not a real inbox, so first register an organisation at `/register` with an email you can read. Then open `/forgot-password`, enter that address and follow the link in the email. Only accounts registered with an email can reset; username-only accounts have nowhere to send it.
-6. A reminder on the live site only sends **while the service is awake** (free plan). To film one arriving on time, schedule an email reminder a few minutes out and keep a tab open on the site until it arrives.
+4. **Render's free plan blocks outgoing SMTP** (ports 25, 465, 587, since September 2025), so Gmail SMTP works locally but every email from Render fails. On Render, send through Brevo's HTTPS API instead (free, 300 emails a day):
+   1. Create a free account at brevo.com.
+   2. **Senders, domains & dedicated IPs** → **Senders** → add the address in `SMTP_FROM_EMAIL` and click the link Brevo emails to it.
+   3. **SMTP & API** → **API keys** → generate a key.
+   4. On Render, **Environment** → add `BREVO_API_KEY` with that key (keep `SMTP_FROM_EMAIL` as the verified address). Save; Render redeploys. Booking confirmations, reminders and password resets then go through Brevo.
+5. On Render without Brevo (paid plans allow SMTP): **Environment** tab → set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USERNAME` and `SMTP_FROM_EMAIL` to the Gmail address, `SMTP_PASSWORD` to the app password, and `APP_BASE_URL` to the `https://<name>.onrender.com` address (reset links use it). Save; Render redeploys.
+6. Password reset on the live site: the demo login (`poster.demo@example.com`) is not a real inbox, so first register an organisation at `/register` with an email you can read. Then open `/forgot-password`, enter that address and follow the link in the email. Only accounts registered with an email can reset; username-only accounts have nowhere to send it.
+7. A reminder on the live site only sends **while the service is awake** (free plan). To film one arriving on time, schedule an email reminder a few minutes out and keep a tab open on the site until it arrives.
 
 ## Option B: Fly.io
 

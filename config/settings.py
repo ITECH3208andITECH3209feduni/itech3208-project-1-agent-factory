@@ -157,6 +157,14 @@ SMTP_PASSWORD   = _smtp_env("SMTP_PASSWORD", squeeze="gmail" in SMTP_HOST.lower(
 SMTP_FROM_EMAIL = _smtp_env("SMTP_FROM_EMAIL")
 SMTP_USE_TLS    = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
 
+# Email over HTTPS instead of SMTP. Render's free plan blocks outgoing SMTP
+# (ports 25, 465 and 587) since September 2025, so SMTP mail from the hosted
+# demo always fails. With BREVO_API_KEY set, email goes through Brevo's API on
+# port 443 (free: 300 emails a day). The sender is SMTP_FROM_EMAIL, which must
+# be a verified sender in Brevo. Leave it unset to keep using SMTP.
+BREVO_API_KEY   = _smtp_env("BREVO_API_KEY")
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "").strip()
+
 # ── Reminders Engine (PROJ-395) ─────────────────────────────────
 # NOTE: Dhiman's contacts/accounts data contract (PROJ-404) isn't
 # merged into this branch yet, so the reminders store below defines
@@ -181,8 +189,8 @@ def validate_env(strict: bool = False) -> list[str]:
         problems.append("ANTHROPIC_API_KEY is not set — Claude features are disabled.")
     if not (TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN and TWILIO_FROM_NUMBER):
         problems.append("TWILIO_* is incomplete — SMS and voice delivery are disabled.")
-    if not (SMTP_HOST and SMTP_FROM_EMAIL):
-        problems.append("SMTP_HOST / SMTP_FROM_EMAIL not set — email delivery is disabled.")
+    if not (SMTP_FROM_EMAIL and (SMTP_HOST or BREVO_API_KEY)):
+        problems.append("SMTP_FROM_EMAIL plus SMTP_HOST or BREVO_API_KEY not set — email delivery is disabled.")
 
     if strict and problems:
         raise RuntimeError("Environment validation failed:\n  - " + "\n  - ".join(problems))

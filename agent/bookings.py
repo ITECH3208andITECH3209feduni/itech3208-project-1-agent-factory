@@ -300,6 +300,7 @@ def notify(booking: dict, token: str, *, sms_channel=None, email_channel=None,
             log.exception("booking email crashed")
 
     set_notify_status(booking["id"], sms=outcome["sms"], email=outcome["email"], db_path=db_path)
+    log.info("booking %s confirmation messages: sms=%s, email=%s", booking["id"], outcome["sms"], outcome["email"])
     return outcome
 
 

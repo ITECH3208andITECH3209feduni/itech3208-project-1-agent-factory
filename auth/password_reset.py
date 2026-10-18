@@ -128,8 +128,33 @@ def set_password(user_id: int, password_hash: str) -> None:
 
 
 # ── Delivery ───────────────────────────────────────────────────
+def _reset_subject() -> str:
+    return f"Reset your {os.environ.get('BRAND_NAME', '').strip() or 'Agent Factory'} password"
+
+
+def _reset_body(reset_url: str) -> str:
+    return (
+        "Someone requested a password reset for this address.\n\n"
+        f"To choose a new password, open:\n{reset_url}\n\n"
+        f"The link expires in {RESET_TOKEN_MINUTES} minutes and can be used once.\n"
+        "If you didn't request this, you can ignore this email."
+    )
+
+
 def _send_via_smtp(to_email: str, reset_url: str) -> bool:
-    """Send through SMTP if credentials are configured."""
+    """Send through SMTP if credentials are configured, or through Brevo's
+    HTTPS API when BREVO_API_KEY is set (hosts that block SMTP, like Render's
+    free plan)."""
+    from config import settings as _settings
+
+    if _settings.BREVO_API_KEY and _settings.SMTP_FROM_EMAIL:
+        from agent.delivery.email_channel import send_via_brevo
+
+        result = send_via_brevo(to_email, _reset_subject(), _reset_body(reset_url))
+        if not result.ok:
+            log.error("Brevo send failed: %s", result.error)
+        return result.ok
+
     host = os.getenv("SMTP_HOST")
     if not host:
         return False
@@ -154,15 +179,10 @@ def _send_via_smtp(to_email: str, reset_url: str) -> bool:
     )
 
     msg = EmailMessage()
-    msg["Subject"] = f"Reset your {os.environ.get('BRAND_NAME', '').strip() or 'Agent Factory'} password"
+    msg["Subject"] = _reset_subject()
     msg["From"] = sender
     msg["To"] = to_email
-    msg.set_content(
-        "Someone requested a password reset for this address.\n\n"
-        f"To choose a new password, open:\n{reset_url}\n\n"
-        f"The link expires in {RESET_TOKEN_MINUTES} minutes and can be used once.\n"
-        "If you didn't request this, you can ignore this email."
-    )
+    msg.set_content(_reset_body(reset_url))
 
     try:
         # Same EHLO fix as EmailChannel: a reverse-DNS hostname makes Gmail drop
