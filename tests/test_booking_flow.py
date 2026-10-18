@@ -61,7 +61,9 @@ def test_phone_booking_asks_for_name_phone_email_then_reads_back(r, db, sent):
     ask_email = _voice(r, "this number")
     assert ask_email["expect"] == "email" and "dot" in ask_email["answer"]
 
-    readback = _voice(r, "jane dot citizen at gmail dot com")
+    check = _voice(r, "jane dot citizen at gmail dot com")
+    assert check["expect"] == "email_check" and "jane.citizen@gmail.com. Is that right?" in check["answer"]
+    readback = _voice(r, "yes")
     assert readback["expect"] == "confirm"
     for part in ("check-up on Monday 4 March at 10 am", "Jane Citizen", "0400 111 222",
                  "jane.citizen@gmail.com", "Is that correct?"):
@@ -338,8 +340,11 @@ def test_calls_read_phone_numbers_digit_by_digit():
 def test_calls_spell_out_email_addresses():
     from app.web_ui.twilio_routes import _speakable
 
-    assert _speakable("email Jane.Citizen@gmail.com.") == "email jane dot citizen at gmail dot com."
-    assert _speakable("anna_lee-x@outlook.com.au") == "anna underscore lee dash x at outlook dot com dot au"
+    assert _speakable("email Jane.Citizen@gmail.com.") == (
+        "email J, A, N, E, dot, C, I, T, I, Z, E, N, at gmail dot com.")
+    assert _speakable("anna_lee-x@outlook.com.au") == (
+        "A, N, N, A, underscore, L, E, E, dash, X, at outlook dot com dot au")
+    assert _speakable("sam11@icloud.com") == "S, A, M, one, one, at icloud dot com"
 
 
 def test_calls_still_read_times_dates_and_prices_normally():
@@ -520,3 +525,46 @@ def test_seed_links_the_twilio_number_to_the_demo_clinic(monkeypatch, tmp_path):
     monkeypatch.setattr(seed, "call", lambda method, path, body=None: (200, {"id": other}))
     seed.link_twilio_number()  # already taken by the demo clinic: left alone
     assert resolve_org_by_twilio_number("+61399990000") == demo
+
+
+
+# ── On a call, the email is checked before going on ──────────
+
+def test_misheard_email_can_be_corrected_on_a_call(r):
+    for msg in ("book a check-up", "Sam Lee", "this number"):
+        _voice(r, msg, sid="CAmail")
+    heard = _voice(r, "s dilraj sarni 11 at gmail dot com", sid="CAmail")
+    assert heard["expect"] == "email_check" and "sdilrajsarni11@gmail.com" in heard["answer"]
+    again = _voice(r, "no", sid="CAmail")
+    assert again["expect"] == "email" and "say your email again" in again["answer"]
+    fixed = _voice(r, "dilraj saini 11 at gmail dot com", sid="CAmail")
+    assert fixed["expect"] == "email_check" and "dilrajsaini11@gmail.com" in fixed["answer"]
+    readback = _voice(r, "yes", sid="CAmail")
+    assert readback["expect"] == "confirm" and "dilrajsaini11@gmail.com" in readback["answer"]
+
+
+def test_saying_the_right_email_instead_of_no_replaces_it(r):
+    for msg in ("book a check-up", "Sam Lee", "this number", "sam lee at gmail dot com"):
+        _voice(r, msg, sid="CAfix")
+    fixed = _voice(r, "it's sam dot lee at gmail dot com", sid="CAfix")
+    assert fixed["expect"] == "email_check" and "sam.lee@gmail.com" in fixed["answer"]
+
+
+def test_web_chat_does_not_double_check_a_typed_email(r):
+    for msg in ("book a check-up", "Sam Lee", "0412 345 678"):
+        r.handle(msg, session_id="webmail")
+    out = r.handle("sam@example.com", session_id="webmail")
+    assert out["expect"] == "confirm"
+
+
+def test_email_check_question_gets_yes_no_hints_on_a_call(monkeypatch):
+    import app.web_ui.twilio_routes as twilio_routes
+
+    monkeypatch.setattr(twilio_routes, "log_activity", lambda **kw: None)
+    monkeypatch.setattr(twilio_routes._receptionist, "handle", lambda message, **kw: {
+        "answer": "I have your email as sam@example.com. Is that right?", "intent": "appointment",
+        "needs_info": True, "expect": "email_check"})
+    c = TestClient(__import__("app.web_ui.main", fromlist=["app"]).app)
+    xml = c.post("/twilio/voice/reply", data={"SpeechResult": "sam at example dot com", "CallSid": "CAh",
+                                              "From": "+61400111222", "To": "+61300000000"}).text
+    assert "S, A, M, at example dot com" in xml and 'hints="yes, no' in xml

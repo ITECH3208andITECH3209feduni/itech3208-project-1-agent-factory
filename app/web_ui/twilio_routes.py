@@ -196,9 +196,13 @@ _TRIPLE_ZERO_RE = re.compile(r"(?<![\d])(?<!\d[ -])000(?![ -]?\d)")
 _DIGIT_NAMES = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
 _NUMBER_IN_TEXT = re.compile(r"\+?\(?\d[\d \-()]{6,}\d")
 _ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}")
-# Email addresses are read as "jane dot citizen at gmail dot com".
+# Email addresses: the part before the @ is spelled out letter by letter
+# ("J, A, N, E, dot, C, I, T, I, Z, E, N"), because a misheard address bounces and
+# a run-together word hides the mistake. The domain is read as words
+# ("at gmail dot com").
 _EMAIL_IN_TEXT = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
 _EMAIL_SYMBOLS = {".": " dot ", "@": " at ", "_": " underscore ", "-": " dash ", "+": " plus "}
+_SPELL_SYMBOLS = {".": "dot", "_": "underscore", "-": "dash", "+": "plus"}
 
 
 def _say_digits(group: str) -> str:
@@ -235,8 +239,12 @@ def _spoken_number(match: re.Match) -> str:
 
 
 def _spoken_email(match: re.Match) -> str:
-    out = "".join(_EMAIL_SYMBOLS.get(c, c) for c in match.group(0).lower())
-    return re.sub(r"\s+", " ", out).strip()
+    local, _, domain = match.group(0).lower().partition("@")
+    spelled = ", ".join(
+        _DIGIT_NAMES[int(c)] if c.isdigit() else _SPELL_SYMBOLS.get(c, c.upper()) for c in local
+    )
+    domain_words = "".join(_EMAIL_SYMBOLS.get(c, c) for c in domain)
+    return re.sub(r"\s+", " ", f"{spelled}, at {domain_words}").strip()
 
 
 def _speakable(text: str) -> str:
@@ -256,6 +264,7 @@ _SPEECH_HINTS = {
     "email": "at, dot, underscore, dash, gmail dot com, outlook dot com, hotmail dot com, "
              "yahoo dot com, icloud dot com, bigpond dot com, no email",
     "confirm": "yes, no, correct, that's right",
+    "email_check": "yes, no, correct, that's right, at, dot",
 }
 
 
@@ -276,7 +285,7 @@ def _gather_opts(lang: str, stage: str | None = None) -> dict:
     }
     if stage:
         opts["timeout"] = 8
-    if stage in ("phone", "email"):
+    if stage in ("phone", "email", "email_check"):
         opts["speech_timeout"] = "3"
     if stage in _SPEECH_HINTS:
         opts["hints"] = _SPEECH_HINTS[stage]
