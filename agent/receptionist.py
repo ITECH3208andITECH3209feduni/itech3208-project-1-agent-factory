@@ -137,7 +137,7 @@ _CANCEL_BOOKING_PHRASES = (
 # ── Collecting the patient's details for a booking ───────────────
 # After the day and time are known, the receptionist asks for a name, a
 # phone number and an email, reads them back, and only books on a "yes".
-_COLLECT_STAGES = ("name", "phone", "email", "confirm", "change")
+_COLLECT_STAGES = ("name", "phone", "email", "email_check", "confirm", "change")
 
 _QUESTION_START = re.compile(
     r"^(what|where|when|how|why|who|which|can|could|do|does|is|are|will|should|would)\b", re.I
@@ -953,8 +953,34 @@ class Receptionist:
                 example = " For example: john dot smith at gmail dot com." if contact_channel == "voice" else ""
                 return self._ask(state, "Sorry, I didn't get that email address. Could you say it again?" + example
                                  + " Or say no email to skip it.", session_id, message)
+            if email and contact_channel == "voice":
+                # Speech recognition mishears addresses ("sdilrajsarni11" for
+                # "dilrajsaini11"), and a wrong address bounces. On a call, spell
+                # it back and check it before going on.
+                state["pending_email"] = email
+                state["stage"] = "email_check"
+                return self._ask(state, f"I have your email as {email}. Is that right?", session_id, message)
             state["email"] = email
             return self._next_question(state, session_id, message, contact_channel, own_number)
+
+        if stage == "email_check":
+            answer = _yes_or_no(message)
+            if answer == "yes":
+                state["email"] = state.pop("pending_email", "")
+                return self._next_question(state, session_id, message, contact_channel, own_number)
+            # A corrected address said instead of "no" is taken as the new answer.
+            corrected = _parse_email(message)
+            if corrected:
+                state["pending_email"] = corrected
+                return self._ask(state, f"Thanks. I have your email as {corrected}. Is that right?",
+                                 session_id, message)
+            if answer == "no":
+                state.pop("pending_email", None)
+                state["stage"] = "email"
+                return self._ask(state, "Sorry about that. Please say your email again, slowly, for example: "
+                                 "john dot smith at gmail dot com. Or say no email to skip it.", session_id, message)
+            return self._ask(state, f"I have your email as {state.get('pending_email', '')}. Is that right?",
+                             session_id, message)
 
         if stage == "confirm":
             answer = _yes_or_no(message)
