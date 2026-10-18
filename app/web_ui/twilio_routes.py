@@ -183,9 +183,61 @@ _EMOJI_RE = re.compile(
 _TRIPLE_ZERO_RE = re.compile(r"(?<![\d])(?<!\d[ -])000(?![ -]?\d)")
 
 
+# Phone numbers are read one digit at a time, in the groups people write them
+# in, with a short pause between groups: "zero four one two, three four five,
+# six seven eight". Otherwise Polly says "four hundred and twelve".
+_DIGIT_NAMES = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
+_NUMBER_IN_TEXT = re.compile(r"\+?\(?\d[\d \-()]{6,}\d")
+_ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}")
+# Email addresses are read as "jane dot citizen at gmail dot com".
+_EMAIL_IN_TEXT = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+")
+_EMAIL_SYMBOLS = {".": " dot ", "@": " at ", "_": " underscore ", "-": " dash ", "+": " plus "}
+
+
+def _say_digits(group: str) -> str:
+    return " ".join(_DIGIT_NAMES[int(c)] for c in group if c.isdigit())
+
+
+def _spoken_number(match: re.Match) -> str:
+    raw = match.group(0)
+    digits = re.sub(r"\D", "", raw)
+    if len(digits) < 8 or _ISO_DATE.match(raw):
+        return raw  # times, years, prices and dates are read normally
+    prefix = ""
+    if raw.startswith("+61") and len(digits) == 11:
+        local = "0" + digits[2:]  # +61 4xx xxx xxx is read the Australian way
+        groups = [local[:4], local[4:7], local[7:]]
+    else:
+        if raw.startswith("+"):
+            prefix = "plus "
+        groups = [g for g in re.split(r"[ ()-]+", raw.lstrip("+")) if g]
+        if len(groups) == 1:
+            run = groups[0]
+            if len(run) == 10:
+                sizes = (4, 3, 3)
+            elif prefix and run.startswith("1") and len(run) == 11:
+                sizes = (1, 3, 3, 4)  # +1 555 010 0199
+            else:
+                sizes = (3,) * ((len(run) + 2) // 3)
+            groups, i = [], 0
+            for size in sizes:
+                if i < len(run):
+                    groups.append(run[i:i + size])
+                    i += size
+    return prefix + ", ".join(_say_digits(g) for g in groups)
+
+
+def _spoken_email(match: re.Match) -> str:
+    out = "".join(_EMAIL_SYMBOLS.get(c, c) for c in match.group(0).lower())
+    return re.sub(r"\s+", " ", out).strip()
+
+
 def _speakable(text: str) -> str:
-    """Plain text for text-to-speech: no Markdown, no emoji, 000 said as triple zero."""
+    """Plain text for text-to-speech: no Markdown, no emoji, 000 said as triple
+    zero, phone numbers digit by digit and email addresses spelled out."""
     text = _EMOJI_RE.sub("", _strip_markdown(text))
+    text = _EMAIL_IN_TEXT.sub(_spoken_email, text)
+    text = _NUMBER_IN_TEXT.sub(_spoken_number, text)
     text = _TRIPLE_ZERO_RE.sub("triple zero", text)
     return re.sub(r"[ \t]{2,}", " ", text).strip()
 

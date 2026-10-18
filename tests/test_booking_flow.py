@@ -323,7 +323,30 @@ def test_calls_say_triple_zero():
     from app.web_ui.twilio_routes import _speakable
 
     assert _speakable("If it's severe, call 000 now.") == "If it's severe, call triple zero now."
-    assert _speakable("Ring 1800 000 123 for billing.") == "Ring 1800 000 123 for billing."
+
+
+def test_calls_read_phone_numbers_digit_by_digit():
+    from app.web_ui.twilio_routes import _speakable
+
+    assert _speakable("phone 0400 111 222.") == "phone zero four zero zero, one one one, two two two."
+    assert _speakable("call you back on +61400111222") == "call you back on zero four zero zero, one one one, two two two"
+    assert _speakable("Ring 1800 000 123.") == "Ring one eight zero zero, zero zero zero, one two three."
+    assert _speakable("(03) 9123 4567") == "zero three, nine one two three, four five six seven"
+    assert _speakable("+15550100199") == "plus one, five five five, zero one zero, zero one nine nine"
+
+
+def test_calls_spell_out_email_addresses():
+    from app.web_ui.twilio_routes import _speakable
+
+    assert _speakable("email Jane.Citizen@gmail.com.") == "email jane dot citizen at gmail dot com."
+    assert _speakable("anna_lee-x@outlook.com.au") == "anna underscore lee dash x at outlook dot com dot au"
+
+
+def test_calls_still_read_times_dates_and_prices_normally():
+    from app.web_ui.twilio_routes import _speakable
+
+    for text in ("at 10:30 on 26 October 2026", "it costs $1,250", "booked for 2026-10-26 10:00", "Room 12"):
+        assert _speakable(text) == text
 
 
 def test_booking_question_on_a_call_is_not_followed_by_anything_else(monkeypatch):
