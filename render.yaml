@@ -78,3 +78,7 @@ services:
         sync: false
       - key: SMTP_FROM_EMAIL
         sync: false
+      # Render's free plan blocks outgoing SMTP, so email goes through Brevo's
+      # HTTPS API instead (free). SMTP_FROM_EMAIL must be a verified Brevo sender.
+      - key: BREVO_API_KEY
+        sync: false
