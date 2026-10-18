@@ -178,10 +178,26 @@ _EMOJI_RE = re.compile(
 )
 
 
+# Australia's emergency number. Polly reads "000" as "oh oh oh"; callers expect
+# "triple zero". Digits that are part of a longer number (1800 000 123) are left alone.
+_TRIPLE_ZERO_RE = re.compile(r"(?<![\d])(?<!\d[ -])000(?![ -]?\d)")
+
+
 def _speakable(text: str) -> str:
-    """Plain text for text-to-speech: no Markdown, no emoji."""
+    """Plain text for text-to-speech: no Markdown, no emoji, 000 said as triple zero."""
     text = _EMOJI_RE.sub("", _strip_markdown(text))
+    text = _TRIPLE_ZERO_RE.sub("triple zero", text)
     return re.sub(r"[ \t]{2,}", " ", text).strip()
+
+
+# Hints help Twilio's speech recognition while a booking asks for a phone
+# number or an email address.
+_SPEECH_HINTS = {
+    "phone": "zero, oh, double, triple, this number",
+    "email": "at, dot, underscore, dash, gmail dot com, outlook dot com, hotmail dot com, "
+             "yahoo dot com, icloud dot com, bigpond dot com, no email",
+    "confirm": "yes, no, correct, that's right",
+}
 
 
 # ── SMS ────────────────────────────────────────────────────────
@@ -215,7 +231,7 @@ async def sms_webhook(
 
     result = _receptionist.handle(
         Body or "Hello", session_id=From,
-        contact_channel="sms", contact_address=From,
+        contact_channel="sms", contact_address=From, org_id=_org_for(To),
     )
     reply = _strip_markdown(result["answer"])[:1600]  # Twilio SMS limit
 
@@ -411,7 +427,7 @@ async def voice_reply(
 
     result = _receptionist.handle(
         query, session_id=CallSid,
-        contact_channel="voice", contact_address=From,
+        contact_channel="voice", contact_address=From, org_id=_org_for(To),
     )
     reply = _speakable(result["answer"])
 
@@ -428,17 +444,24 @@ async def voice_reply(
     if len(words) > 250:
         reply = " ".join(words[:250]) + "."
 
-    resp.say(reply, voice=voice, language=lang)
-
-    # Loop back for a follow-up question (PROJ-470: translated prompt)
+    # Mid-booking the reply already ends in a question ("What's your full
+    # name?"), so the caller is not also asked "anything else?".
+    asking = bool(result.get("needs_info"))
+    gather_opts = {"hints": _SPEECH_HINTS[result.get("expect")]} if result.get("expect") in _SPEECH_HINTS else {}
     gather = Gather(
         input="speech",
         action="/twilio/voice/reply",
         method="POST",
         speech_timeout="auto",
         language=lang,
+        **gather_opts,
     )
-    gather.say(followup_phrases.get(lang_code, followup_phrases["en-AU"]), voice=voice, language=lang)
+    if asking:
+        gather.say(reply, voice=voice, language=lang)
+    else:
+        resp.say(reply, voice=voice, language=lang)
+        # Loop back for a follow-up question (PROJ-470: translated prompt)
+        gather.say(followup_phrases.get(lang_code, followup_phrases["en-AU"]), voice=voice, language=lang)
     resp.append(gather)
     resp.say(goodbye_phrases.get(lang_code, goodbye_phrases["en-AU"]), voice=voice, language=lang)
     resp.hangup()

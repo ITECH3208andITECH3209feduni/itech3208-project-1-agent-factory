@@ -5,7 +5,7 @@
 #
 # PROJ-387  GET /activity            — live interaction feed
 # PROJ-388  GET /escalations         — escalation queue
-# PROJ-389  GET /calendar/appointments — upcoming bookings (Google Cal)
+# PROJ-389  GET /calendar/appointments — upcoming bookings (receptionist + Google Cal)
 # PROJ-390  GET /activity/stats      — stat counters
 #
 # Assignees: Prabhjot Singh (387, 388) · Saifur Rahman Bhuiyan (389, 390)
@@ -20,6 +20,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from fastapi import APIRouter, Depends
 
+from agent import bookings
 from auth.rbac import require_org_member
 
 from app.web_ui.activity_db import get_recent, get_stats_today, start_of_today_utc
@@ -69,15 +70,29 @@ async def escalations():
 # ── PROJ-389 — Calendar appointments ──────────────────────────
 
 @router.get("/calendar/appointments")
-async def calendar_appointments():
+async def calendar_appointments(identity: dict = Depends(require_org_member)):
     """
-    Upcoming appointments from Google Calendar.
-    Falls back to [] if GOOGLE_CALENDAR_KEY_PATH is not configured.
+    Upcoming appointments for the caller's clinic: bookings the receptionist
+    made (each one Unconfirmed until the patient confirms from their link),
+    plus Google Calendar events when a calendar is connected.
     """
+    items = []
+    for b in bookings.list_upcoming(identity["org_id"]):
+        items.append({
+            "summary":  b["summary"],
+            "datetime": _fmt_dt(b["start_local"]),
+            "start":    b["start_local"],
+            "caller":   " · ".join(x for x in (b["name"], bookings.phone_text(b["phone"]), b["email"]) if x),
+            "status":   b["status"],
+            "booking_id": b["id"],
+        })
     try:
-        return _fetch_google_calendar()
+        google = _fetch_google_calendar()
     except Exception:
-        return []
+        google = []
+    for g in google:
+        g.setdefault("status", "calendar")
+    return items + google
 
 
 # ── Helpers ────────────────────────────────────────────────────

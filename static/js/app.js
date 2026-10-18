@@ -1078,12 +1078,20 @@ async function loadReceptCalendar() {
     if (!res.ok) throw new Error("no data");
     const items = await res.json();
     if (!items.length) { feed.innerHTML = '<p class="recept-empty">No upcoming appointments.</p>'; return; }
-    feed.innerHTML = items.map(i => `
+    // Receptionist bookings carry a status: word and colour, never colour alone.
+    const STATUS = { unconfirmed: "Unconfirmed", confirmed: "Booking confirmed" };
+    feed.innerHTML = items.map(i => {
+      const label = STATUS[i.status];
+      const pill = label ? `<span class="cal-status cal-status-${i.status}">${label}</span>` : "";
+      return `
       <div class="cal-row">
-        <div class="cal-row-time">${escapeHtml(i.datetime || i.time || "")}</div>
+        <div class="cal-row-head">
+          <div class="cal-row-time">${escapeHtml(i.datetime || i.time || "")}</div>${pill}
+        </div>
         <div class="cal-row-summary">${escapeHtml(i.summary || i.title || "")}</div>
         <div class="cal-row-from">${escapeHtml(i.caller || i.from || "")}</div>
-      </div>`).join("");
+      </div>`;
+    }).join("");
   } catch (_) { feed.innerHTML = '<p class="recept-empty">Calendar data loading…</p>'; }
 }
 

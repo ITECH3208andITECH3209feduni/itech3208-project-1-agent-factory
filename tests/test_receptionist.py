@@ -43,13 +43,16 @@ def test_escalation_intent_logs_and_replies(receptionist, tmp_path):
     assert entry["session_id"] == "alice"
 
 
-def test_appointment_intent_without_calendar_configured(receptionist):
+def test_booking_does_not_need_google_calendar(receptionist):
+    """Bookings are saved in the app (agent/bookings.py), so asking to book
+    starts the booking conversation even with no Google Calendar connected.
+    The full conversation is covered in tests/test_booking_flow.py."""
     result = receptionist.handle(
         "book me in for a consultation next Tuesday at 2pm", session_id="alice"
     )
     assert result["intent"] == "appointment"
-    assert result["booked"] is False
-    assert "isn't set up" in result["answer"] or "not" in result["answer"].lower()
+    assert result["booked"] is False and result["needs_info"] is True
+    assert "isn't set up" not in result["answer"]
 
 
 def test_general_conversation_fallback(receptionist, fake_anthropic_reply):
@@ -94,156 +97,8 @@ def test_history_persisted_after_general_reply(receptionist, fake_anthropic_repl
     assert history[0]["query"] == "what's up"
 
 
-def test_appointment_booking_failure_includes_ics_fallback_link(
-    receptionist, fake_anthropic_reply, monkeypatch
-):
-    """PROJ-294-298: even if Google Calendar booking fails (or a user
-    doesn't use Google at all), they should still get an .ics download
-    link so they can add the appointment to their own calendar."""
-    import agent.receptionist as receptionist_module
-    import json as _json
-
-    monkeypatch.setattr(receptionist_module, "calendar_configured", lambda: True)
-    monkeypatch.setattr(
-        receptionist_module,
-        "book_appointment",
-        lambda summary, start_iso, end_iso, timezone, **kwargs: {
-            "ok": False,
-            "error": "Calendar API error 403: forbidden",
-        },
-    )
-    fake_anthropic_reply(
-        _json.dumps(
-            {
-                "summary": "Consultation",
-                "start": "2026-08-11T14:00:00",
-                "end": "2026-08-11T14:30:00",
-                "clarify": None,
-            }
-        )
-    )
-
-    result = receptionist.handle(
-        "book me in for a consultation next tuesday at 2pm", session_id="alice"
-    )
-    assert result["intent"] == "appointment"
-    assert result["booked"] is False
-    assert "/calendar/ics?" in result["answer"]
-    assert "summary=Consultation" in result["answer"]
-
-
-def test_appointment_booking_success_also_includes_ics_link(
-    receptionist, fake_anthropic_reply, monkeypatch
-):
-    import agent.receptionist as receptionist_module
-    import json as _json
-
-    monkeypatch.setattr(receptionist_module, "calendar_configured", lambda: True)
-    monkeypatch.setattr(
-        receptionist_module,
-        "book_appointment",
-        lambda summary, start_iso, end_iso, timezone, **kwargs: {
-            "ok": True,
-            "event_url": "https://calendar.google.com/event?eid=xyz",
-        },
-    )
-    fake_anthropic_reply(
-        _json.dumps(
-            {
-                "summary": "Consultation",
-                "start": "2026-08-11T14:00:00",
-                "end": "2026-08-11T14:30:00",
-                "clarify": None,
-            }
-        )
-    )
-
-    result = receptionist.handle(
-        "book me in for a consultation next tuesday at 2pm", session_id="alice"
-    )
-    assert result["booked"] is True
-    assert "/calendar/ics?" in result["answer"]
-    assert "View event" in result["answer"]
-
-
-def test_appointment_booking_success_schedules_reminder_when_contact_known(
-    receptionist, fake_anthropic_reply, monkeypatch, tmp_path
-):
-    """PROJ-445/446: when the caller passes contact_channel/contact_address
-    (Twilio always knows the caller's number), a successful booking
-    also schedules a reminder ahead of the appointment."""
-    import agent.receptionist as receptionist_module
-    from agent.reminders.store import ReminderStore
-    import json as _json
-
-    monkeypatch.setattr(receptionist_module, "calendar_configured", lambda: True)
-    monkeypatch.setattr(
-        receptionist_module,
-        "book_appointment",
-        lambda summary, start_iso, end_iso, timezone, **kwargs: {
-            "ok": True,
-            "event_url": "https://calendar.google.com/event?eid=xyz",
-        },
-    )
-    test_store = ReminderStore(db_path=str(tmp_path / "reminders.db"))
-    monkeypatch.setattr(
-        "agent.reminders.booking_hooks.ReminderStore", lambda: test_store
-    )
-    fake_anthropic_reply(
-        _json.dumps(
-            {
-                "summary": "Consultation",
-                "start": "2026-08-11T14:00:00",
-                "end": "2026-08-11T14:30:00",
-                "clarify": None,
-            }
-        )
-    )
-
-    result = receptionist.handle(
-        "book me in for a consultation next tuesday at 2pm",
-        session_id="alice",
-        contact_channel="sms",
-        contact_address="+15551234567",
-    )
-    assert result["booked"] is True
-    assert "reminder" in result["answer"].lower()
-
-    due = test_store._conn.execute("SELECT COUNT(*) FROM reminders").fetchone()[0]
-    assert due == 1
-
-
-def test_appointment_booking_success_without_contact_info_skips_reminder(
-    receptionist, fake_anthropic_reply, monkeypatch
-):
-    """No contact_channel/contact_address passed (e.g. the web chat
-    tab, which has no phone/email on hand) — booking still succeeds,
-    just without an auto-reminder."""
-    import agent.receptionist as receptionist_module
-    import json as _json
-
-    monkeypatch.setattr(receptionist_module, "calendar_configured", lambda: True)
-    monkeypatch.setattr(
-        receptionist_module,
-        "book_appointment",
-        lambda summary, start_iso, end_iso, timezone, **kwargs: {"ok": True, "event_url": None},
-    )
-    fake_anthropic_reply(
-        _json.dumps(
-            {
-                "summary": "Consultation",
-                "start": "2026-08-11T14:00:00",
-                "end": "2026-08-11T14:30:00",
-                "clarify": None,
-            }
-        )
-    )
-
-    result = receptionist.handle(
-        "book me in for a consultation next tuesday at 2pm", session_id="alice"
-    )
-    assert result["booked"] is True
-    assert "reminder" not in result["answer"].lower()
+# The booking conversation (details, name, phone, email, read-back, saved as
+# unconfirmed, confirm link) is tested in tests/test_booking_flow.py.
 
 
 def _log(receptionist_module):

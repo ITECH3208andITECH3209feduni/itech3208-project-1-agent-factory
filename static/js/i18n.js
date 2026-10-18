@@ -164,6 +164,8 @@
     ["Escalation data loading…", "Cargando datos de escalaciones…", "एस्केलेशन डेटा लोड हो रहा है…", "正在加载升级数据…", "Chargement des données d'escalade…", "Eskalationsdaten werden geladen …"],
     ["No open escalations.", "No hay escalaciones abiertas.", "कोई खुला एस्केलेशन नहीं।", "没有未处理的升级事件。", "Aucune escalade ouverte.", "Keine offenen Eskalationen."],
     ["Loading appointments…", "Cargando citas…", "अपॉइंटमेंट लोड हो रहे हैं…", "正在加载预约…", "Chargement des rendez-vous…", "Termine werden geladen …"],
+    ["Unconfirmed", "Sin confirmar", "अपुष्ट", "未确认", "Non confirmé", "Unbestätigt"],
+    ["Booking confirmed", "Reserva confirmada", "बुकिंग की पुष्टि हुई", "预约已确认", "Réservation confirmée", "Buchung bestätigt"],
     ["No upcoming appointments.", "No hay citas próximas.", "कोई आगामी अपॉइंटमेंट नहीं।", "暂无即将到来的预约。", "Aucun rendez-vous à venir.", "Keine anstehenden Termine."],
 
     // ── personalisation panel ──

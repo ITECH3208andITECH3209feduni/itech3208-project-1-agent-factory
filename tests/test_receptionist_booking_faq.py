@@ -24,12 +24,14 @@ def receptionist(tmp_path, monkeypatch, fake_anthropic_reply):
     monkeypatch.setattr(receptionist_module, "calendar_configured", lambda: True)
     booked = []
 
-    def fake_book(summary, start_iso, end_iso, timezone):
+    def fake_book(summary, start_iso, end_iso, timezone, **kwargs):
         booked.append((summary, start_iso))
         return {"ok": True, "event_url": None}
 
     monkeypatch.setattr(receptionist_module, "book_appointment", fake_book)
     monkeypatch.setattr(receptionist_module, "create_reminder_for_booking", lambda **kw: {"ok": True})
+    monkeypatch.setattr(receptionist_module.bookings, "notify_in_background", lambda booking, token: None)
+    monkeypatch.setattr(receptionist_module.bookings, "BOOKINGS_DB", str(tmp_path / "bookings.db"))
 
     r = Receptionist()
     r.memory = memory_module.SessionMemory(db_path=str(tmp_path / "memory.db"))
@@ -64,12 +66,19 @@ def test_three_side_questions_then_the_booking_completes(receptionist):
     assert all(CLARIFY in a["answer"] for a in answers), "each answer steers back to the booking"
     assert receptionist.booked == [], "no booking yet"
 
-    done = receptionist.handle("Friday at 10am for the consultation", session_id=sid)
-    assert done["intent"] == "appointment" and done["booked"] is True
-    assert receptionist.booked == [("Consultation", "2026-10-16T10:00:00")]
+    details = receptionist.handle("Friday at 10am for the consultation", session_id=sid)
+    assert details["intent"] == "appointment" and details["booked"] is False
+    assert "full name" in details["answer"]
     # the earlier request and the new details were extracted together
     assert "book a consultation" in receptionist.extract_inputs[-1]
     assert "Friday at 10am" in receptionist.extract_inputs[-1]
+
+    receptionist.handle("Sam Lee", session_id=sid)
+    receptionist.handle("0412 345 678", session_id=sid)
+    receptionist.handle("no email", session_id=sid)
+    done = receptionist.handle("yes", session_id=sid)
+    assert done["booked"] is True and done["status"] == "unconfirmed"
+    assert receptionist.booked == [("Consultation - Sam Lee (unconfirmed)", "2026-10-16T10:00:00")]
 
 
 def test_faq_without_a_booking_in_progress_is_unchanged(receptionist):

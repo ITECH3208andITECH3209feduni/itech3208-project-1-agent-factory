@@ -128,8 +128,9 @@ Tests never use real Twilio or email credentials (`tests/conftest.py` blanks the
 - **Login gate:** `require_login` middleware in `app/web_ui/main.py` (default-deny). Public list is `_PUBLIC_EXACT` / `_PUBLIC_PREFIXES` in that file.
 - **Delivery** (`agent/delivery/`): SMS, voice, email behind one interface with exponential backoff and retriable vs non-retriable errors.
 - **Reminders engine** (`agent/reminders/`): SQLite store with atomic claiming (no double sends), timezone-safe recurrence, `scheduler.py`, and `web_bridge.py` (sends reminders created in the dashboard).
+- **Receptionist bookings** (`agent/bookings.py`, `app/web_ui/booking_routes.py`): asking to book (web chat, SMS or a call) collects the day and time, then name, phone and email, reads them back, and on "yes" saves an **unconfirmed** booking in `bookings.db` (next to `MEMORY_DB`, so `/data` on Render). The patient gets a text and an email with a link to `/booking/confirm/<token>` (public; only a hash of the token is stored). Opening the link shows the booking; only the Confirm button confirms it (link previews can't). Confirming schedules a reminder and the Calendar tab shows **Booking confirmed**. Google Calendar is optional and only mirrored when connected. Links use `APP_BASE_URL`, so it must be the public URL.
 - **Heartbeat:** both loops write `agent/reminders/heartbeat.py`; `GET /status/scheduler` is 200 while they tick, 503 if not.
-- **State:** all SQLite files in the Docker volume at `/data` (`AUTH_DB_PATH`, `AUTH_DB`, `MEMORY_DB`, `REMINDERS_DB`, `KB_DB`) plus the CRM JSON store at `CRM_STORE_DIR=/data/store`. One machine only, SQLite has a single writer.
+- **State:** all SQLite files in the Docker volume at `/data` (`AUTH_DB_PATH`, `AUTH_DB`, `MEMORY_DB`, `REMINDERS_DB`, `KB_DB`, and `bookings.db` beside `MEMORY_DB`) plus the CRM JSON store at `CRM_STORE_DIR=/data/store`. One machine only, SQLite has a single writer.
 - **Container:** `app/web_ui/Dockerfile`; `deploy/start.sh` runs web + scheduler + bridge together.
 
 ---

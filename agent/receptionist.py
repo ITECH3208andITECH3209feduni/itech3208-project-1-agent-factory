@@ -8,7 +8,11 @@
 #   1. FAQ knowledge base (agent/faq.py)      — fast, no API call
 #   2. Escalation keywords                    — "talk to a human" etc.
 #   3. Appointment booking                    — Claude extracts date/
-#                                                time, then Calendar API
+#                                                time, then name, phone
+#                                                and email are collected,
+#                                                read back, and saved as an
+#                                                unconfirmed booking
+#                                                (agent/bookings.py)
 #   4. General conversation                   — Claude, receptionist
 #                                                system prompt
 #
@@ -31,8 +35,10 @@ from agent.calendar_client import (
     update_appointment,
     is_configured as calendar_configured,
 )
+from agent import bookings
 from agent.faq import find_answer
 from agent.memory import SessionMemory
+from contracts.schemas import normalise_phone
 from agent.reminders.booking_hooks import (
     create_reminder_for_booking,
     reschedule_reminders_for_booking,
@@ -45,6 +51,10 @@ NOT the literature-search or Amazon-research specialist — if someone
 clearly wants deep product or paper research, gently point them at the
 "Amazon Seller AI" / "Literature AI" tabs instead of trying to do that
 research yourself.
+Never say an appointment is booked, confirmed, moved or cancelled: bookings are
+only made through the booking steps, which ask for the day and time, the
+person's name, phone number and email, and read them back. If someone wants to
+book, say you can do that and ask what day and time they would like.
 Keep replies to 2-4 sentences unless the question genuinely needs more."""
 
 CLINIC_SYSTEM_PROMPT = """You are the front-desk AI receptionist for {name}, a dental clinic.
@@ -54,6 +64,10 @@ dentist: never diagnose, never recommend medicines or treatment, and never
 quote prices. For pain, swelling or an emergency, tell the person to ask for a
 person (or to call 000 if it is severe). If you do not know something about the
 clinic, say so and offer to flag the message for the team.
+Never say an appointment is booked, confirmed, moved or cancelled: bookings are
+only made through the booking steps, which ask for the day and time, the
+person's name, phone number and email, and read them back. If someone wants to
+book, say you can do that and ask what day and time they would like.
 Keep replies to 2-4 sentences unless the question genuinely needs more."""
 
 
@@ -94,6 +108,15 @@ _CALLBACK_PHRASES = (
     "call me back", "call back", "callback", "ring me", "phone me", "give me a call", "call me",
 )
 _PHONE_RE = re.compile(r"\+?\d[\d\s\-()]{7,}\d")
+# "How do I book?" is a question for the FAQ; "can you book me in?" is a
+# request, and goes straight to the booking steps.
+_HOW_TO_BOOK = re.compile(r"\bhow (?:do|can|would|should) (?:i|we|you)\b|\bhow to\b|\bcan i book online\b")
+_BOOKING_REQUEST = re.compile(
+    r"\bbook(?:ing)? (?:me|us|a|an|in|my|for)\b"
+    r"|\b(?:make|schedule|arrange|set up|get|need|want|like|have) (?:an? |my |the )?"
+    r"(?:appointment|booking|check-?up|clean(?:ing)?|consult(?:ation)?|visit)\b"
+    r"|\bemergency booking\b|\bappointment for\b"
+)
 
 _APPOINTMENT_KEYWORDS = {
     "book", "appointment", "schedule", "meeting", "reserve",
@@ -111,6 +134,144 @@ _CANCEL_BOOKING_PHRASES = (
 )
 
 
+# ── Collecting the patient's details for a booking ───────────────
+# After the day and time are known, the receptionist asks for a name, a
+# phone number and an email, reads them back, and only books on a "yes".
+_COLLECT_STAGES = ("name", "phone", "email", "confirm", "change")
+
+_QUESTION_START = re.compile(
+    r"^(what|where|when|how|why|who|which|can|could|do|does|is|are|will|should|would)\b", re.I
+)
+_YES_START = re.compile(r"^(yes|yeah|yep|yup|correct|sure|ok|okay|perfect|right|confirm|confirmed)\b")
+_NO_RE = re.compile(r"\b(no|nope|nah|wrong|incorrect|not right|not correct|change|mistake)\b")
+_YES_RE = re.compile(
+    r"\b(yes|yeah|yep|yup|correct|that's right|that is right|sounds good|perfect|"
+    r"sure|ok|okay|all good|book it|go ahead|confirm)\b"
+)
+_NAME_LEAD = re.compile(
+    r"^(?:(?:hi|hello|yes|yeah|ok|okay|sure)[,.\s]+)?"
+    r"(?:my name is|my name's|the name is|name is|it's|it is|this is|i am|i'm|im|call me|"
+    r"put it under|under the name|under)\s+",
+    re.I,
+)
+_DIGIT_WORDS = {
+    "zero": "0", "oh": "0", "o": "0", "nought": "0", "one": "1", "two": "2",
+    "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7",
+    "eight": "8", "nine": "9",
+}
+_SAME_NUMBER = (
+    "this number", "same number", "this one", "same one", "calling from",
+    "texting from", "number i'm on", "number im on", "use my number",
+)
+_EMAIL_FOUND = re.compile(r"[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+")
+_EMAIL_OK = re.compile(r"^[a-z0-9._%+-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}$")
+_EMAIL_LEAD = re.compile(
+    r"^(?:(?:yes|yeah|ok|okay|sure)[,.\s]+)?(?:(?:my|the)\s+)?"
+    r"(?:email|e-mail)(?:\s+address)?\s+(?:is\s+)?|^(?:it's|it is)\s+",
+    re.I,
+)
+_NO_EMAIL = re.compile(
+    r"\b(no email|no e-mail|don't have (?:an )?email|do not have (?:an )?email|"
+    r"no thanks|skip|none|no)\b"
+)
+
+
+def _looks_like_question(message: str) -> bool:
+    m = message.strip()
+    return m.endswith("?") or bool(_QUESTION_START.match(m))
+
+
+def _yes_or_no(message: str) -> str | None:
+    m = re.sub(r"[^\w\s']", " ", message.lower()).strip()
+    if _YES_START.match(m) and not re.match(r"^(right|confirm)\b.*\b(no|not|wrong)\b", m):
+        return "yes"
+    if _NO_RE.search(m):
+        return "no"
+    if _YES_RE.search(m):
+        return "yes"
+    return None
+
+
+def _parse_name(message: str) -> str | None:
+    text = message.strip().strip(".!?,")
+    text = _NAME_LEAD.sub("", text).strip(" ,.!?")
+    text = re.sub(r"[,\s]+(?:please|thanks|thank you)$", "", text, flags=re.I).strip()
+    if not text or len(text) > 60 or re.search(r"[\d@]", text):
+        return None
+    words = text.split()
+    if len(words) > 5:
+        return None
+    return " ".join(w[0].upper() + w[1:] if w.islower() else w for w in words)
+
+
+def _spoken_digits(message: str) -> str:
+    """'zero four one two, double three...' -> '041233...'. Digits already
+    written as digits are kept as they are."""
+    out, repeat = [], 1
+    for tok in re.findall(r"\+|\d+|[a-z]+", message.lower()):
+        if tok in ("double", "triple"):
+            repeat = 2 if tok == "double" else 3
+            continue
+        if tok == "+":
+            out.append("+")
+        elif tok.isdigit():
+            out.append(tok[0] * repeat + tok[1:])
+        elif tok in _DIGIT_WORDS:
+            out.append(_DIGIT_WORDS[tok] * repeat)
+        else:
+            continue
+        repeat = 1
+    return "".join(out)
+
+
+def _parse_phone(message: str, own_number: str | None = None) -> str | None:
+    """A phone number in E.164 (+61412345678), or None if it doesn't look like
+    one. "This number" means the number the person is calling or texting from."""
+    m = message.lower()
+    written = re.sub(r"[^\d+]", "", message)
+    candidate = written if len(written.lstrip("+")) >= 8 else _spoken_digits(message)
+    if len(candidate.lstrip("+")) < 8:
+        if own_number and (any(p in m for p in _SAME_NUMBER) or _yes_or_no(message) == "yes"):
+            candidate = own_number
+        else:
+            return None
+    try:
+        phone = normalise_phone(candidate)
+    except ValueError:
+        return None
+    return phone if 9 <= len(phone.lstrip("+")) <= 15 else None
+
+
+def _parse_email(message: str) -> str | None:
+    text = message.strip().lower()
+    found = _EMAIL_FOUND.search(text)
+    if found and _EMAIL_OK.match(found.group(0)):
+        return found.group(0)
+    spoken = _EMAIL_LEAD.sub("", text).strip(" .")
+    spoken = re.sub(r"\s+at the rate(?: of)?\s+|\s+at\s+", "@", spoken)
+    spoken = re.sub(r"\s*\b(?:dot|full stop|period)\b\s*", ".", spoken)
+    spoken = re.sub(r"\s*\bunderscore\b\s*", "_", spoken)
+    spoken = re.sub(r"\s*\b(?:dash|hyphen)\b\s*", "-", spoken)
+    spoken = re.sub(r"\s*\bplus\b\s*", "+", spoken)
+    spoken = re.sub(r"\s+", "", spoken).strip(".")
+    return spoken if _EMAIL_OK.match(spoken) else None
+
+
+def _which_field(message: str) -> str | None:
+    m = message.lower()
+    if "email" in m or "e-mail" in m:
+        return "email"
+    if any(k in m for k in ("phone", "number", "mobile")):
+        return "phone"
+    if "name" in m:
+        return "name"
+    if any(k in m for k in ("time", "date", "day", "when", "appointment", "tomorrow", "week")) or re.search(
+        r"\d|monday|tuesday|wednesday|thursday|friday|saturday|sunday", m
+    ):
+        return "time"
+    return None
+
+
 class Receptionist:
     def __init__(self):
         self.client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -126,8 +287,11 @@ class Receptionist:
         session_id: str | None = None,
         contact_channel: str | None = None,
         contact_address: str | None = None,
+        org_id: int | None = None,
     ) -> dict:
         """Returns {"answer": str, "intent": str, ...extra fields}.
+        org_id is the clinic the conversation belongs to; bookings are saved
+        under it so they show in that clinic's Calendar tab.
         contact_channel/contact_address (e.g. "sms"/"+15551234567") are
         optional — when the caller can supply them (Twilio always
         knows the caller's number), a successful appointment booking
@@ -137,10 +301,16 @@ class Receptionist:
         if not message:
             return {"answer": "Sorry, I didn't catch that — could you say that again?", "intent": "general"}
 
-        pending_reschedule = self._get_pending_reschedule(
+        pending = self._get_pending(session_id)
+        # Mid-booking, the reply is a name, number, email or yes/no, so it
+        # skips reschedule, call-back, FAQ and (for an email address) hand-off checks.
+        stage = pending.get("stage", "details") if pending else None
+        collecting = stage in _COLLECT_STAGES
+
+        pending_reschedule = None if collecting else self._get_pending_reschedule(
             session_id, contact_channel, contact_address
         )
-        if self._wants_reschedule(message) or pending_reschedule:
+        if (self._wants_reschedule(message) and not collecting) or pending_reschedule:
             result = self._handle_reschedule(
                 message, session_id, contact_channel, contact_address
             )
@@ -152,8 +322,6 @@ class Receptionist:
             )
             return result
 
-        pending = self._get_pending(session_id)
-
         # 0. Walking away from a half-finished booking (PROJ-478)
         if pending and self._cancels_booking(message):
             self._pending_bookings.pop(self._pending_key(session_id), None)
@@ -164,7 +332,9 @@ class Receptionist:
         # 0b. Call-backs and emergencies go to the team before anything else, so
         # "book me a call back" or "emergency booking" are not mistaken for an
         # ordinary appointment or a FAQ question.
-        callback = self._handle_callback(message, session_id, contact_channel, contact_address)
+        callback = None if collecting else self._handle_callback(
+            message, session_id, contact_channel, contact_address
+        )
         if callback:
             self.memory.save_context(message, "receptionist_escalate", callback["answer"], session_id=session_id)
             return callback
@@ -189,7 +359,15 @@ class Receptionist:
         # 1. FAQ lookup first (PROJ-214: KB before skill routing)
         # With a booking open, "let me talk to a person" hands off straight
         # away instead of getting the FAQ blurb about how to ask for one.
-        faq_hit = None if (pending and self._wants_human(message)) else find_answer(message)
+        lowered = message.lower()
+        booking_request = (not pending and bool(_BOOKING_REQUEST.search(lowered))
+                           and not _HOW_TO_BOOK.search(lowered))
+        # With a booking open, only a real question ("where do I park?") is a
+        # side question for the FAQ; "a check-up at 10am" is the next detail.
+        faq_hit = None if (
+            collecting or booking_request
+            or (pending and (self._wants_human(message) or not _looks_like_question(message)))
+        ) else find_answer(message)
         if faq_hit:
             answer = faq_hit["answer"]
             result = {"intent": "faq", "faq_score": faq_hit["score"]}
@@ -202,7 +380,7 @@ class Receptionist:
             return result
 
         # 2. Escalation
-        if self._wants_human(message):
+        if self._wants_human(message) and stage != "email":
             self._pending_bookings.pop(self._pending_key(session_id), None)
             answer = (
                 "I've flagged this conversation for our team — someone will "
@@ -217,19 +395,12 @@ class Receptionist:
         # is the next piece of it ("Friday at 10 for a check-up"), so earlier
         # booking messages are combined with this one (PROJ-478).
         if pending or self._wants_appointment(message):
-            combined = " ".join(pending["messages"] + [message]) if pending else message
-            result = self._handle_appointment(combined, session_id, contact_channel, contact_address)
+            result = self._booking_step(
+                message, pending, session_id, contact_channel, contact_address, org_id
+            )
             if urgent_notice:
                 result["answer"] = urgent_notice + "\n\n" + result["answer"]
                 result["urgent"] = True
-            if result.get("needs_info"):
-                self._pending_bookings[self._pending_key(session_id)] = {
-                    "messages": (pending["messages"] if pending else []) + [message],
-                    "ask": result["answer"],
-                    "ts": time.time(),
-                }
-            else:
-                self._pending_bookings.pop(self._pending_key(session_id), None)
             return result
 
         # 4. General conversation fallback
@@ -704,79 +875,194 @@ class Receptionist:
             "reminders_updated": reminder_update.get("updated", 0),
         }
 
-    def _handle_appointment(
+    def _booking_step(
         self,
         message: str,
+        pending: dict | None,
         session_id: str | None,
-        contact_channel: str | None = None,
-        contact_address: str | None = None,
+        contact_channel: str | None,
+        contact_address: str | None,
+        org_id: int | None,
     ) -> dict:
-        if not calendar_configured():
-            answer = (
-                "I'd love to book that for you, but calendar booking isn't set "
-                "up on this server yet — please contact us directly to schedule."
-            )
-            self.memory.save_context(message, "receptionist_appointment", answer, session_id=session_id)
-            return {"answer": answer, "intent": "appointment", "booked": False}
+        """One turn of the booking conversation. The order is: what and when,
+        then name, phone number and email, then a read-back. Nothing is saved
+        until the person says yes."""
+        state = dict(pending) if pending else {"messages": [], "stage": "details"}
+        state.setdefault("messages", [])
+        stage = state.get("stage", "details")
+        own_number = contact_address if contact_channel in ("voice", "sms") else None
 
-        extracted = self._extract_appointment(message)
+        # A question in the middle of the details ("where do I park?") gets an
+        # answer, then the same question is asked again.
+        if stage in ("name", "phone", "email") and _looks_like_question(message):
+            hit = find_answer(message)
+            lead = hit["answer"] + "\n\n" if hit else "Sorry, I just need this to finish the booking. "
+            return self._ask(state, state.get("ask") or "", session_id, message, prefix=lead)
 
-        if extracted.get("clarify"):
-            answer = extracted["clarify"]
-            self.memory.save_context(message, "receptionist_appointment", answer, session_id=session_id)
-            return {"answer": answer, "intent": "appointment", "booked": False, "needs_info": True}
+        if stage == "details":
+            combined = " ".join(state["messages"] + [message])
+            extracted = self._extract_appointment(combined)
+            state["messages"] = state["messages"] + [message]
+            if extracted.get("clarify"):
+                return self._ask(state, extracted["clarify"], session_id, message)
+            state["details"] = {k: extracted[k] for k in ("summary", "start", "end")}
+            return self._next_question(state, session_id, message, contact_channel, own_number)
 
-        calendar_identity = {}
-        if contact_channel and contact_address:
-            calendar_identity = {
-                "contact_channel": contact_channel,
-                "contact_address": contact_address,
-            }
-        result = book_appointment(
-            summary=extracted["summary"],
-            start_iso=extracted["start"],
-            end_iso=extracted["end"],
-            timezone=TIMEZONE,
-            **calendar_identity,
+        if stage == "name":
+            name = _parse_name(message)
+            if not name:
+                return self._ask(state, "Sorry, I didn't catch that. What name should I put the booking under?",
+                                 session_id, message)
+            state["name"] = name
+            return self._next_question(state, session_id, message, contact_channel, own_number)
+
+        if stage == "phone":
+            phone = _parse_phone(message, own_number)
+            if not phone:
+                return self._ask(state, "Sorry, I didn't get that number. Could you say the phone number again, "
+                                 "digit by digit?", session_id, message)
+            state["phone"] = phone
+            return self._next_question(state, session_id, message, contact_channel, own_number)
+
+        if stage == "email":
+            email = _parse_email(message)
+            if email is None and _NO_EMAIL.search(message.lower()):
+                email = ""
+            if email is None:
+                example = " For example: john dot smith at gmail dot com." if contact_channel == "voice" else ""
+                return self._ask(state, "Sorry, I didn't get that email address. Could you say it again?" + example
+                                 + " Or say no email to skip it.", session_id, message)
+            state["email"] = email
+            return self._next_question(state, session_id, message, contact_channel, own_number)
+
+        if stage == "confirm":
+            answer = _yes_or_no(message)
+            if answer == "yes":
+                return self._finish_booking(state, session_id, message, contact_channel, contact_address, org_id)
+            if answer == "no":
+                state["stage"] = "change"
+                return self._ask(state, "No problem. What would you like to change: the day and time, your name, "
+                                 "your phone number or your email?", session_id, message)
+            return self._ask(state, self._readback(state), session_id, message)
+
+        if stage == "change":
+            field = _which_field(message)
+            if field == "time":
+                summary = state["details"]["summary"]
+                state.pop("details", None)
+                state["messages"] = [f"Booking a {summary}."]
+                state["stage"] = "details"
+                if re.search(r"\d|monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|next",
+                             message.lower()):
+                    return self._booking_step(message, state, session_id, contact_channel, contact_address, org_id)
+                return self._ask(state, "Sure. What day and time would you like instead?", session_id, message)
+            if field in ("name", "phone", "email"):
+                state.pop(field, None)
+                # "change my email to anna@example.com" carries the new value already
+                parsed = {"name": None, "phone": _parse_phone(message), "email": _parse_email(message)}[field]
+                if parsed:
+                    state[field] = parsed
+                    return self._next_question(state, session_id, message, contact_channel, own_number)
+                return self._next_question(state, session_id, message, contact_channel, own_number)
+            return self._ask(state, "What would you like to change: the day and time, your name, your phone "
+                             "number or your email?", session_id, message)
+
+        # Unknown stage (should not happen): start again cleanly.
+        self._pending_bookings.pop(self._pending_key(session_id), None)
+        return self._booking_step(message, None, session_id, contact_channel, contact_address, org_id)
+
+    def _next_question(self, state: dict, session_id, message, contact_channel, own_number) -> dict:
+        details = state["details"]
+        when = bookings.when_text(details["start"])
+        if "name" not in state:
+            state["stage"] = "name"
+            return self._ask(state, f"Great, that's a {bookings.in_sentence(details['summary'])} on {when}. "
+                             "What's your full name?",
+                             session_id, message)
+        if "phone" not in state:
+            state["stage"] = "phone"
+            first = state["name"].split()[0]
+            question = f"Thanks, {first}. What's the best phone number to reach you?"
+            if own_number:
+                verb = "calling" if contact_channel == "voice" else "texting"
+                question += f" You can say this number to use the one you're {verb} from."
+            return self._ask(state, question, session_id, message)
+        if "email" not in state:
+            state["stage"] = "email"
+            question = "And your email address, so I can send the confirmation there too?"
+            if contact_channel == "voice":
+                question += " For example: john dot smith at gmail dot com."
+            question += " If you'd rather not, just say no email."
+            return self._ask(state, question, session_id, message)
+        state["stage"] = "confirm"
+        return self._ask(state, self._readback(state), session_id, message)
+
+    @staticmethod
+    def _readback(state: dict) -> str:
+        details = state["details"]
+        email = state.get("email") or ""
+        return (
+            "Let me check I have that right: "
+            f"{bookings.in_sentence(details['summary'])} on {bookings.when_text(details['start'])}, "
+            f"for {state['name']}, phone {bookings.phone_text(state['phone'])}, "
+            + (f"email {email}" if email else "no email")
+            + ". Is that correct?"
         )
-        ics_link = self._ics_link(extracted)
 
-        if result["ok"]:
-            answer = f"Booked: **{extracted['summary']}** at {extracted['start'].replace('T', ' ')}."
-            if result.get("event_url"):
-                answer += f" [View event]({result['event_url']})"
-            answer += f" · [Add to your own calendar]({ics_link})"
-
-            # PROJ-445/446: auto-schedule a reminder ahead of the
-            # appointment when we know how to reach the caller back.
-            # A failure here never undoes the booking — it's already
-            # confirmed on the calendar either way.
-            if contact_channel and contact_address:
-                reminder_result = create_reminder_for_booking(
-                    summary=extracted["summary"],
-                    start_iso=extracted["start"],
-                    contact_channel=contact_channel,
-                    contact_address=contact_address,
-                    booking_id=result.get("event_id"),
-                )
-                if reminder_result["ok"]:
-                    answer += " We'll send you a reminder before it starts."
-        else:
-            # Calendar booking failed (or isn't configured) — the .ics
-            # download still lets the user add it to their own
-            # calendar themselves (PROJ-294-298).
-            answer = (
-                f"I couldn't book that on our calendar — {result['error']} "
-                f"You can still [add it to your own calendar]({ics_link}) and "
-                "we'll follow up to confirm."
-            )
-
+    def _ask(self, state: dict, question: str, session_id, message, prefix: str = "") -> dict:
+        state["ask"] = question
+        state["ts"] = time.time()
+        self._pending_bookings[self._pending_key(session_id)] = state
+        answer = prefix + question
         self.memory.save_context(message, "receptionist_appointment", answer, session_id=session_id)
         return {
-            "answer": answer,
-            "intent": "appointment",
-            "booked": result["ok"],
-            "event_url": result.get("event_url"),
+            "answer": answer, "intent": "appointment", "booked": False,
+            "needs_info": True, "expect": state.get("stage", "details"),
+        }
+
+    def _finish_booking(self, state, session_id, message, contact_channel, contact_address, org_id) -> dict:
+        details = state["details"]
+        booking, token = bookings.create_booking(
+            summary=details["summary"], start_local=details["start"], end_local=details["end"],
+            name=state["name"], phone=state["phone"], email=state.get("email") or "",
+            org_id=org_id, channel=contact_channel or "web", session_id=session_id,
+        )
+        self._pending_bookings.pop(self._pending_key(session_id), None)
+        bookings.notify_in_background(booking, token)
+
+        # Optional: mirror to Google Calendar when the clinic has connected one.
+        event_url = None
+        if calendar_configured():
+            identity = {}
+            if contact_channel and contact_address:
+                identity = {"contact_channel": contact_channel, "contact_address": contact_address}
+            try:
+                mirrored = book_appointment(
+                    summary=f"{details['summary']} - {state['name']} (unconfirmed)",
+                    start_iso=details["start"], end_iso=details["end"], timezone=TIMEZONE, **identity,
+                )
+                event_url = mirrored.get("event_url") if mirrored.get("ok") else None
+            except Exception:  # noqa: BLE001 - the booking is already saved
+                event_url = None
+
+        first = state["name"].split()[0]
+        sent = "a text and an email" if state.get("email") else "a text"
+        answer = (
+            f"All done, {first}. Your {bookings.in_sentence(details['summary'])} on "
+            f"{bookings.when_text(details['start'])} "
+            f"is booked, but not confirmed yet. I'm sending you {sent} with a link to confirm it. "
+            "Once you confirm, it's locked in."
+        )
+        if not contact_channel:
+            # Web chat: show the link straight away, plus the .ics download.
+            answer += (
+                f" [Confirm the appointment]({bookings.confirm_url(token)})"
+                f" · [Add to your own calendar]({self._ics_link(details)})"
+            )
+        self.memory.save_context(message, "receptionist_appointment", answer, session_id=session_id)
+        return {
+            "answer": answer, "intent": "appointment", "booked": True,
+            "booking_id": booking["id"], "status": booking["status"], "event_url": event_url,
         }
 
     def _ics_link(self, extracted: dict) -> str:
