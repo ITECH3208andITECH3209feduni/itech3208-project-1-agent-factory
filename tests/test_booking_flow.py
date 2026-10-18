@@ -407,3 +407,116 @@ def test_a_detail_that_mentions_a_faq_word_is_still_a_detail(r, tmp_path, monkey
     out = r.handle("a check-up at 10am please", session_id="d")
     assert out["expect"] == "name", "the detail completed the booking details"
     assert "a check-up at 10am" in seen[-1]
+
+
+# ── A call that doesn't hear the answer ───────────────────────
+
+@pytest.fixture
+def call_client(tmp_path, monkeypatch):
+    import app.web_ui.twilio_routes as twilio_routes
+
+    monkeypatch.setattr(twilio_routes, "log_activity", lambda **kw: None)
+    monkeypatch.setattr(twilio_routes, "_summarise_call_later", lambda *a, **kw: None)
+    monkeypatch.setattr(receptionist_module, "ESCALATION_LOG", str(tmp_path / "esc.jsonl"))
+    rec = twilio_routes._receptionist
+    rec._pending_bookings.clear()
+    twilio_routes._unheard.clear()
+    c = TestClient(__import__("app.web_ui.main", fromlist=["app"]).app)
+    yield c, rec, twilio_routes
+    rec._pending_bookings.clear()
+    twilio_routes._unheard.clear()
+
+
+def _open_booking(rec, sid, stage="name", ask="What's your full name?"):
+    import time
+
+    rec._pending_bookings[sid] = {"stage": stage, "ask": ask, "ts": time.time(), "messages": [],
+                                  "details": {"summary": "Check-up", "start": "2030-03-04T10:00:00",
+                                              "end": "2030-03-04T10:30:00"}}
+
+
+def _post(c, speech, sid="CAhear"):
+    return c.post("/twilio/voice/reply", data={"SpeechResult": speech, "CallSid": sid,
+                                               "From": "+61400111222", "To": "+61300000000"}).text
+
+
+def test_unheard_booking_answer_is_asked_again_not_hung_up(call_client):
+    c, rec, _ = call_client
+    _open_booking(rec, "CAhear")
+    xml = _post(c, "")
+    assert "Sorry, I didn't hear that. What's your full name?" in xml
+    assert 'actionOnEmptyResult="true"' in xml and 'timeout="8"' in xml
+    assert rec.booking_question("CAhear") == "What's your full name?", "the booking is still open"
+
+
+def test_after_repeated_silence_the_team_is_asked_to_call_back(call_client):
+    import json
+
+    c, rec, _ = call_client
+    _open_booking(rec, "CAhear")
+    _post(c, "")
+    _post(c, "")
+    xml = _post(c, "")
+    assert "asked the team to call you back on zero four zero zero, one one one, two two two" in xml
+    assert "<Hangup" in xml
+    assert rec.booking_question("CAhear") is None
+    rows = [json.loads(line) for line in open(receptionist_module.ESCALATION_LOG, encoding="utf-8")]
+    assert rows[-1]["reason"].startswith("BOOKING CALL-BACK:") and rows[-1]["contact"] == "+61400111222"
+    assert "Check-up on Monday 4 March at 10 am" in rows[-1]["reason"]
+
+
+def test_silence_after_anything_else_still_ends_the_call(call_client):
+    c, _, _ = call_client
+    xml = _post(c, "", sid="CAdone")
+    assert "Goodbye" in xml and "<Hangup" in xml and "didn't hear" not in xml
+
+
+def test_no_thanks_mid_booking_is_an_answer_not_a_goodbye(call_client, monkeypatch):
+    c, rec, _ = call_client
+    _open_booking(rec, "CAmail", stage="email", ask="And your email address?")
+    seen = []
+    monkeypatch.setattr(rec, "handle", lambda message, **kw: seen.append(message) or {
+        "answer": "Let me check I have that right.", "intent": "appointment", "needs_info": True, "expect": "confirm"})
+    xml = _post(c, "no thanks", sid="CAmail")
+    assert seen == ["no thanks"] and "<Hangup" not in xml.split("</Gather>")[0]
+
+
+def test_phone_and_email_questions_allow_pauses(call_client, monkeypatch):
+    c, rec, _ = call_client
+    monkeypatch.setattr(rec, "handle", lambda message, **kw: {
+        "answer": "What's the best phone number?", "intent": "appointment", "needs_info": True, "expect": "phone"})
+    xml = _post(c, "Sam Lee", sid="CAph")
+    assert 'speechTimeout="3"' in xml and 'timeout="8"' in xml
+
+
+# ── The demo clinic owns the Twilio number ────────────────────
+
+def test_seed_links_the_twilio_number_to_the_demo_clinic(monkeypatch, tmp_path):
+    import importlib.util
+    import pathlib
+
+    import auth.db
+    from auth.db import init_db
+    from auth.sms_routing import init_sms_routing, resolve_org_by_twilio_number
+    from auth.tenancy import create_org, init_tenancy
+
+    monkeypatch.setattr(auth.db, "DB_PATH", str(tmp_path / "auth_users.db"))  # its own database
+    init_db()
+    init_tenancy()
+
+    spec = importlib.util.spec_from_file_location(
+        "seed_demo", pathlib.Path(__file__).resolve().parent.parent / "scripts" / "seed_demo.py")
+    seed = importlib.util.module_from_spec(spec)
+    monkeypatch.setenv("DEMO_PASSWORD", "test-only")
+    spec.loader.exec_module(seed)
+
+    init_sms_routing()
+    demo, other = create_org("Demo Clinic Test"), create_org("Someone Else Test")
+    monkeypatch.setenv("TWILIO_FROM_NUMBER", "+61399990000")
+    monkeypatch.setattr(seed, "call", lambda method, path, body=None: (200, {"id": demo}))
+    seed.link_twilio_number()
+    assert resolve_org_by_twilio_number("+61399990000") == demo
+
+    monkeypatch.setattr(seed, "call", lambda method, path, body=None: (200, {"id": other}))
+    seed.link_twilio_number()  # already taken by the demo clinic: left alone
+    assert resolve_org_by_twilio_number("+61399990000") == demo

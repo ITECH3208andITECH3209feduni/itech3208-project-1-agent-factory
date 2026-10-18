@@ -109,6 +109,7 @@ def create_booking(
              email or "", UNCONFIRMED, _hash(token), channel or "web", session_id, now),
         )
         booking = _row(conn.execute("SELECT * FROM bookings WHERE id = ?", (cur.lastrowid,)).fetchone())
+    log.info("booking %s saved (unconfirmed) for organisation %s via %s", booking["id"], org_id, channel)
     return booking, token
 
 

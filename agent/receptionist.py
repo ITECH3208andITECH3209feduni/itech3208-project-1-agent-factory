@@ -409,6 +409,27 @@ class Receptionist:
         return {"answer": answer, "intent": "general"}
 
     # ── Booking in progress (PROJ-478) ───────────────────────────
+    def booking_question(self, session_id: str | None) -> str | None:
+        """The question a half-finished booking is waiting on, or None."""
+        pending = self._get_pending(session_id)
+        return pending.get("ask") if pending else None
+
+    def booking_stage(self, session_id: str | None) -> str | None:
+        pending = self._get_pending(session_id)
+        return pending.get("stage", "details") if pending else None
+
+    def hand_booking_to_team(self, session_id: str | None, contact: str | None) -> None:
+        """The call couldn't finish the booking (Twilio kept hearing nothing):
+        drop it and flag a call-back with whatever was collected."""
+        pending = self._pending_bookings.pop(self._pending_key(session_id), None) or {}
+        details = pending.get("details") or {}
+        parts = ["Caller wanted to book but the call couldn't hear their answers"]
+        if details:
+            parts.append(f"{details.get('summary')} on {bookings.when_text(details.get('start', ''))}")
+        if pending.get("name"):
+            parts.append(f"name {pending['name']}")
+        self._log_escalation("; ".join(parts), session_id, label="BOOKING CALL-BACK", contact=contact)
+
     @staticmethod
     def _pending_key(session_id: str | None) -> str:
         return session_id or "_default"

@@ -80,6 +80,38 @@ def call(method, path, body=None):
             return e.code, raw
 
 
+def link_twilio_number() -> None:
+    """Calls and texts to our Twilio number belong to the demo clinic, so its
+    calendar, activity and delivery history show them. Without this, a second
+    organisation on the same install (anyone who registers) leaves calls with
+    no organisation, and they never appear on the demo dashboard."""
+    number = (os.environ.get("TWILIO_FROM_NUMBER") or os.environ.get("TWILIO_PHONE_NUMBER") or "").strip()
+    if not number:
+        print("twilio number: not set, nothing to link")
+        return
+    s, org = call("GET", "/orgs/me")
+    if s != 200 or not isinstance(org, dict) or "id" not in org:
+        print(f"twilio number: not linked (could not read the demo organisation, {s})")
+        return
+    try:
+        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+        from auth.db import get_conn
+        from auth.sms_routing import init_sms_routing, set_org_twilio_number
+
+        init_sms_routing()
+        with get_conn() as conn:
+            taken = conn.execute(
+                "SELECT id FROM organisations WHERE twilio_number = ? AND id != ?", (number, org["id"])
+            ).fetchone()
+        if taken:
+            print("twilio number: already linked to another organisation, left as it is")
+            return
+        set_org_twilio_number(org["id"], number)
+        print("twilio number: linked to the demo clinic")
+    except Exception as exc:  # noqa: BLE001 - the demo still works without the link
+        print(f"twilio number: not linked ({exc})")
+
+
 def main():
     # An organisation owner who signs in with an email, like a real visitor would.
     call("POST", "/orgs/register", {"org_name": DEMO_ORG, "email": DEMO_EMAIL, "password": DEMO_PASSWORD})
@@ -87,6 +119,7 @@ def main():
     if s != 200:
         sys.exit(f"Could not log in the demo user ({s}): {body}")
     print(f"logged in as {DEMO_EMAIL}")
+    link_twilio_number()
 
     s, existing = call("GET", "/crm/api/contacts")
     if s != 200:
