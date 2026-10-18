@@ -70,10 +70,14 @@ _receptionist = Receptionist()
 _call_lang: dict[str, str] = {}
 # Operator default (set via POST /twilio/voice/language)
 _operator_default_lang: str = DEFAULT_LANG
+# Booking answers Twilio didn't hear, per call  {CallSid: count}
+_unheard: dict[str, int] = {}
+MAX_UNHEARD = 2  # ask again this many times, then hand the booking to the team
 
 POLLY_VOICE = "Polly.Joanna"  # kept for SMS/status-callback references
 POLLY_LANG = DEFAULT_LANG      # kept for non-voice paths
 GOODBYE_WORDS = {"goodbye", "bye", "hang up", "end call", "that's all", "no thanks"}
+_BOOKING_GOODBYES = {"goodbye", "hang up", "end call"}
 
 log = logging.getLogger("agent_factory.twilio")
 
@@ -100,6 +104,9 @@ def _org_for(*numbers: str) -> int | None:
             org = None
         if org is not None:
             return org
+    if any(numbers):
+        log.info("No organisation owns the number(s) ending %s; saving with no organisation",
+                 ", ".join(n[-3:] for n in numbers if n))
     return None
 
 
@@ -250,6 +257,30 @@ _SPEECH_HINTS = {
              "yahoo dot com, icloud dot com, bigpond dot com, no email",
     "confirm": "yes, no, correct, that's right",
 }
+
+
+def _gather_opts(lang: str, stage: str | None = None) -> dict:
+    """Twilio <Gather> settings for the next answer.
+
+    actionOnEmptyResult makes Twilio call us back even when it heard nothing,
+    so a missed answer gets the question again instead of a hang-up. While a
+    booking asks for details the caller gets longer to start talking, and
+    longer pauses for reading out a phone number or an email address."""
+    opts = {
+        "input": "speech",
+        "action": "/twilio/voice/reply",
+        "method": "POST",
+        "speech_timeout": "auto",
+        "language": lang,
+        "action_on_empty_result": True,
+    }
+    if stage:
+        opts["timeout"] = 8
+    if stage in ("phone", "email"):
+        opts["speech_timeout"] = "3"
+    if stage in _SPEECH_HINTS:
+        opts["hints"] = _SPEECH_HINTS[stage]
+    return opts
 
 
 # ── SMS ────────────────────────────────────────────────────────
@@ -433,15 +464,6 @@ async def voice_reply(
         "fr-FR": "Merci d'avoir appelé Agent Factory. Bonne journée. Au revoir !",
         "de-DE": "Danke für Ihren Anruf bei Agent Factory. Einen schönen Tag noch. Auf Wiederhören!",
     })
-    retry_phrases = {
-        "en-AU": "I'm sorry, I didn't catch that. Could you please repeat your question?",
-        "en-US": "I'm sorry, I didn't catch that. Could you please repeat your question?",
-        "es-US": "Lo siento, no le entendí. ¿Podría repetir su pregunta?",
-        "hi-IN": "मुझे माफ़ करें, मैं समझ नहीं पाया। क्या आप अपना प्रश्न दोहरा सकते हैं?",
-        "cmn-CN": "对不起，我没听清楚。您能重复一下您的问题吗？",
-        "fr-FR": "Désolé, je n'ai pas compris. Pourriez-vous répéter votre question ?",
-        "de-DE": "Entschuldigung, ich habe das nicht verstanden. Könnten Sie Ihre Frage wiederholen?",
-    }
     followup_phrases = {
         "en-AU": "Is there anything else I can help you with?",
         "en-US": "Is there anything else I can help you with?",
@@ -454,8 +476,10 @@ async def voice_reply(
 
     resp = VoiceResponse()
 
-    # Goodbye detection
-    if any(kw in query.lower() for kw in GOODBYE_WORDS):
+    # Goodbye detection. Mid-booking, "no thanks" is an answer (no email), so
+    # only an explicit goodbye ends the call.
+    goodbye_words = _BOOKING_GOODBYES if _receptionist.booking_question(CallSid) else GOODBYE_WORDS
+    if any(kw in query.lower() for kw in goodbye_words):
         if CallSid in _call_lang:
             del _call_lang[CallSid]
         resp.say(goodbye_phrases.get(lang_code, goodbye_phrases["en-AU"]), voice=voice, language=lang)
@@ -463,20 +487,40 @@ async def voice_reply(
         _summarise_call_later(CallSid, From, _org_for(To))
         return Response(content=str(resp), media_type="application/xml")
 
-    # Empty transcript fallback
+    # Nothing heard. Mid-booking, ask the same question again instead of hanging
+    # up; after a few tries, ask the team to ring back and finish the booking.
+    # Otherwise (silence after "anything else?") the caller is done.
     if not query:
-        resp.say(retry_phrases.get(lang_code, retry_phrases["en-AU"]), voice=voice, language=lang)
-        gather = Gather(
-            input="speech",
-            action="/twilio/voice/reply",
-            method="POST",
-            speech_timeout="auto",
-            language=lang,
-        )
-        resp.append(gather)
+        question = _receptionist.booking_question(CallSid)
+        if question:
+            misses = _unheard.get(CallSid, 0) + 1
+            _unheard[CallSid] = misses
+            if misses <= MAX_UNHEARD:
+                gather = Gather(**_gather_opts(lang, _receptionist.booking_stage(CallSid)))
+                gather.say(_speakable("Sorry, I didn't hear that. " + question), voice=voice, language=lang)
+                resp.append(gather)
+                resp.say(goodbye_phrases.get(lang_code, goodbye_phrases["en-AU"]), voice=voice, language=lang)
+                resp.hangup()
+                return Response(content=str(resp), media_type="application/xml")
+            _receptionist.hand_booking_to_team(CallSid, From)
+            _unheard.pop(CallSid, None)
+            resp.say(_speakable(
+                "I'm having trouble hearing you, so I've asked the team to call you back on "
+                f"{From} to finish your booking." if From else
+                "I'm having trouble hearing you, so I've asked the team to follow up on your booking."
+            ), voice=voice, language=lang)
+            resp.say(goodbye_phrases.get(lang_code, goodbye_phrases["en-AU"]), voice=voice, language=lang)
+            resp.hangup()
+            _summarise_call_later(CallSid, From, _org_for(To))
+            return Response(content=str(resp), media_type="application/xml")
+
+        _call_lang.pop(CallSid, None)
+        resp.say(goodbye_phrases.get(lang_code, goodbye_phrases["en-AU"]), voice=voice, language=lang)
         resp.hangup()
+        _summarise_call_later(CallSid, From, _org_for(To))
         return Response(content=str(resp), media_type="application/xml")
 
+    _unheard.pop(CallSid, None)
     result = _receptionist.handle(
         query, session_id=CallSid,
         contact_channel="voice", contact_address=From, org_id=_org_for(To),
@@ -499,15 +543,7 @@ async def voice_reply(
     # Mid-booking the reply already ends in a question ("What's your full
     # name?"), so the caller is not also asked "anything else?".
     asking = bool(result.get("needs_info"))
-    gather_opts = {"hints": _SPEECH_HINTS[result.get("expect")]} if result.get("expect") in _SPEECH_HINTS else {}
-    gather = Gather(
-        input="speech",
-        action="/twilio/voice/reply",
-        method="POST",
-        speech_timeout="auto",
-        language=lang,
-        **gather_opts,
-    )
+    gather = Gather(**_gather_opts(lang, result.get("expect") if asking else None))
     if asking:
         gather.say(reply, voice=voice, language=lang)
     else:
