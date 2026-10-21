@@ -24,6 +24,7 @@
     ["Recent", "Recientes", "हाल के", "最近", "Récents", "Zuletzt"],
     ["Personalise UI & Theme", "Personalizar interfaz y tema", "इंटरफ़ेस और थीम अनुकूलित करें", "个性化界面与主题", "Personnaliser l'interface et le thème", "Oberfläche & Design anpassen"],
     ["Information Website", "Sitio web informativo", "जानकारी वेबसाइट", "信息网站", "Site d'information", "Informationswebsite"],
+    ["Sign out", "Cerrar sesión", "साइन आउट", "退出登录", "Se déconnecter", "Abmelden"],
 
     // ── welcome screen ──
     ["Your AI-powered research platform. Pick an agent to get started.", "Tu plataforma de investigación con IA. Elige un agente para empezar.", "आपका AI-संचालित शोध प्लेटफ़ॉर्म। शुरू करने के लिए एक एजेंट चुनें।", "由 AI 驱动的研究平台。选择一个智能体开始使用。", "Votre plateforme de recherche propulsée par l'IA. Choisissez un agent pour commencer.", "Ihre KI-gestützte Recherche-Plattform. Wählen Sie einen Agenten, um zu starten."],

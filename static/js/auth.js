@@ -86,15 +86,16 @@ const Auth = {
   },
 
   async logout() {
+    // Always tell the server: it deletes the HttpOnly session cookie, which
+    // scripts cannot remove. (This used to run only when a refresh token was
+    // stored, so an email sign-in stayed valid on the server after "logging out".)
     const refresh = this.refreshToken;
-    if (refresh) {
-      // Revoke server-side so the refresh token can't be reused.
-      await fetch("/auth/logout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refresh_token: refresh }),
-      }).catch(() => {});
-    }
+    await fetch("/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(refresh ? { refresh_token: refresh } : {}),
+    }).catch(() => {});
     this.clear();
     window.location.href = "/login";
   },
