@@ -111,6 +111,9 @@
         <a href="/showcase" target="_blank" style="background: rgba(99,102,241,0.12); border: 1px solid rgba(99,102,241,0.25); border-radius: 8px; padding: 7px 12px; color: #a5b4fc; font-size: 11px; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 6px;">
           <span>🌐</span> Information Website ↗
         </a>
+        <button id="sign-out-btn" type="button" onclick="Auth.logout()" title="Sign out of this dashboard" style="background: transparent; border: 1px solid var(--border); border-radius: 8px; padding: 7px 12px; color: var(--text2); font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 6px; text-align: left;">
+          <span>🚪</span> Sign out
+        </button>
       </div>
       <div class="model-badge">
         <span class="model-dot"></span>
@@ -491,9 +494,9 @@
   </main>
 </div>
 
-<script src="/static/js/auth.js"></script>
+<script src="/static/js/auth.js?v=2"></script>
 <script>requireAuth();</script>
-<script src="/static/js/i18n.js?v=5"></script>
+<script src="/static/js/i18n.js?v=6"></script>
 <script src="/static/js/app.js?v=18"></script>
 
 <!-- ══ WELCOME OVERLAY ══ -->

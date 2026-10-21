@@ -285,34 +285,40 @@
   },
   {
     "question": "How do I see appointments? What is the Calendar tab?",
-    "answer": "The Calendar tab lists upcoming appointments from the business Google Calendar. Appointments the receptionist books by text, call or chat appear there. It needs the Google Calendar connection to be set up on the server; without it the receptionist tells patients that online booking is not set up.",
+    "answer": "The Calendar tab lists upcoming appointments the receptionist has booked, with the patient's name, phone and email. Each one shows Unconfirmed until the patient presses Confirm on the link in their text or email, then Booking confirmed. If the business Google Calendar is connected, its events are listed too.",
     "tags": [
-      "calendar",
       "appointments",
+      "booked",
       "bookings",
-      "upcoming",
+      "calendar",
+      "confirmed",
+      "diary",
       "google",
       "schedule",
-      "diary",
-      "booked",
       "see",
-      "tab"
+      "status",
+      "tab",
+      "unconfirmed",
+      "upcoming"
     ]
   },
   {
     "question": "How do patients book an appointment?",
-    "answer": "They tell the receptionist the day, time and reason, by text, phone call or web chat, for example: book me a check-up next Tuesday at 2pm. It adds the booking to the calendar. If they texted or phoned, a reminder is scheduled automatically (a text for SMS bookings, a voice call for phone bookings). Web chat can't create a reminder because it does not know their number.",
+    "answer": "They ask the receptionist by phone, text or web chat, for example: book me a check-up next Tuesday at 2pm. It then asks for their name, phone number and email (on a call it spells the email back to check it), reads everything back and books only when they say yes. They get a text and an email with a link to confirm; the Calendar shows the booking as Unconfirmed until they do. Confirming schedules a reminder.",
     "tags": [
-      "patients",
+      "appointment",
       "book",
       "booking",
-      "appointment",
-      "how",
-      "receptionist",
-      "text",
       "call",
       "chat",
-      "customers"
+      "confirm",
+      "customers",
+      "email",
+      "how",
+      "link",
+      "patients",
+      "receptionist",
+      "text"
     ]
   },
   {
@@ -417,17 +423,21 @@
   },
   {
     "question": "How do I change my password or sign out?",
-    "answer": "On the sign-in page choose Forgot password and enter your email; you will be sent a link to set a new one. If email is not set up on the server, ask your administrator.",
+    "answer": "To sign out, press Sign out at the bottom of the left sidebar; it ends your session and returns you to the sign-in page. To change your password, choose Forgot password on the sign-in page and enter your email; you will be sent a link to set a new one. If email is not set up on the server, ask your administrator.",
     "tags": [
-      "password",
+      "account",
+      "change",
+      "exit",
       "forgot",
+      "leave",
+      "log",
+      "login",
+      "logout",
+      "out",
+      "password",
       "reset",
       "sign",
-      "login",
-      "log",
-      "out",
-      "account",
-      "change"
+      "signout"
     ]
   },
   {
